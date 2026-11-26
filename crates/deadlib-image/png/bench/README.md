@@ -7,6 +7,8 @@ the lock file pins the reference implementations and their dependencies.
 Decoder measurements and remaining performance gaps are in [RESULTS.md](RESULTS.md).
 Encoder measurements and their recorded baseline are in
 [ENCODE_RESULTS.md](ENCODE_RESULTS.md).
+The current default Fast/Adaptive results and implementation analysis are in
+[FAST_ADAPTIVE.md](FAST_ADAPTIVE.md).
 
 The expanded cross-codec comparison is in
 [results/windows-x86_64-20261126-contenders](results/windows-x86_64-20261126-contenders/README.md).

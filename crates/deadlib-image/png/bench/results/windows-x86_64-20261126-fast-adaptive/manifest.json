@@ -1,0 +1,87 @@
+{
+  "date": "2026-11-26",
+  "before_production_png_tree": "85e2f5d11b7bd983c68aab9e41425bc723be90fb",
+  "candidate_commit": "a54ea29ad6b80328a0c9126594e69d1ceaca0c1a",
+  "candidate_png_src_tree": "e2ad4f65ea3b0d4aa3cf4096ef6c947a420f088f",
+  "candidate_image_src_tree": "84ac2724cc93666263e5fb04a35af0a21a4e5891",
+  "cpu": "Intel Xeon E5-2696 v4 Windows x86-64 / AVX2",
+  "compilers": "rustc 1.100.0 (0ef1bc386), LLVM 23.1.5",
+  "reference": "png 0.18.1 + fdeflate 0.3.7",
+  "build": "Bench release, LTO, one codegen unit, static CRT",
+  "cycles": {
+    "batches": 5,
+    "min_batch_ms": 20,
+    "packed_ab_min_batch_ms": 35,
+    "before_min_batch_ms": 15,
+    "comparison_cpu": 2,
+    "writer_harness_cpu": 0
+  },
+  "binary_sha256": {
+    "compare-gate.exe": "fa4b7b8a6ee066cf51d80acd663035e5a635cc4978b2717f89658a9fc4f2457e",
+    "encode-gate.exe": "2d836303319e206fe129131714b9408484b759ad2830116a8c9f5262cf379f20",
+    "compare-profile4.exe": "7cc1392ec4434d12abcc8369cf46888ef5cf745668802defd9ebdd863401df38",
+    "encode-before.exe": "7afb57d70230125f10513546bd997c88574f62e4448cd441e9dc953e25feedab"
+  },
+  "test_counts": {
+    "passed": 222,
+    "ignored": 21
+  },
+  "evidence_uncompressed": {
+    "animation-run1.tsv": {
+      "bytes": 7445,
+      "sha256": "795619279154d726800eb0e49bab35407cc632bf905c8f4eee1391520f03547e"
+    },
+    "animation-run2.tsv": {
+      "bytes": 7445,
+      "sha256": "86fb998879b6ae5101b8ab3f8c25d19df210684fb53289231ab1cc58f2536b48"
+    },
+    "encode-run1.tsv": {
+      "bytes": 26939,
+      "sha256": "baf376627dab8e06ac739fe8a77bfc126501575a52e079f5cf5f8b091e482f64"
+    },
+    "encode-run2.tsv": {
+      "bytes": 26941,
+      "sha256": "424d8189c58447f77c51debf934ee394a8c66e4aa23ed077eb56b91cb53ae556"
+    },
+    "packed-gate-2.tsv": {
+      "bytes": 2538,
+      "sha256": "19178c9630b5657d32f594a535070adeddfd928573da74f6afeee37c9c4e25c4"
+    },
+    "packed-gate-3.tsv": {
+      "bytes": 2537,
+      "sha256": "77500ec39bd2b6b630310b5a97daa557e9de449cdc22d59f56e086819df8128a"
+    },
+    "packed-profile4-1.tsv": {
+      "bytes": 2539,
+      "sha256": "c1b6d74026a6c5f1c80a7eb3cce920be54d5e8c5d9d5f4ce207b1ad6a3b38131"
+    },
+    "packed-profile4-4.tsv": {
+      "bytes": 2537,
+      "sha256": "ce286e79ef215bff400b3394214f5a7866afa0cb0339b9ff903a15f6df23f4c6"
+    },
+    "writer-run1.tsv": {
+      "bytes": 9792,
+      "sha256": "fe61bb5eb9af1cbdf761ae2347ff9679ceba5076c3d9d203bdb2c2898ec318da"
+    },
+    "writer-run2.tsv": {
+      "bytes": 9793,
+      "sha256": "e2aceb72329a8a77913f68d1dcf7d87ff0ef1a1cd1cf69d9c206cf48f4432ea9"
+    },
+    "summary.json": {
+      "bytes": 10897,
+      "sha256": "d16fc2a34079afa3ccb8a36005bad4dd3d9b7f108b433d948db8ca4dd9417907"
+    },
+    "inputs.json": {
+      "bytes": 21058,
+      "sha256": "e3782cb2836920751baea4af1852516a4aeb968afe092fcb696cd8ef7644bc25"
+    },
+    "before.tsv": {
+      "bytes": 13113,
+      "sha256": "658fe3bd753793692c9fd0533a00274dad7d4abb92b623001bf71d1f560d5fe8"
+    },
+    "gate-tests.log": {
+      "bytes": 30847,
+      "sha256": "e4714021c694a6f3c7a615c95733eddc23cf62af7ab35d725f5664455abe20bf"
+    }
+  }
+}
