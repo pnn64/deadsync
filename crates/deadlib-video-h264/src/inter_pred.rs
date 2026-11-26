@@ -286,6 +286,48 @@ pub(crate) fn predict_integer_bi_luma(
     true
 }
 
+/// Copy an in-bounds full-pel macroblock in an 8-bit 4:2:0 frame.
+pub(crate) fn predict_integer_uni_420(
+    pic: &DecodedPicture,
+    mv: [i16; 2],
+    (x, y): (usize, usize),
+    (width, height): (usize, usize),
+    [out_y, out_u, out_v]: [&mut [u8]; 3],
+) -> bool {
+    if (mv[0] | mv[1]) & 7 != 0
+        || pic.width as usize != width
+        || pic.height as usize != height
+        || pic.sample_bytes != 1
+        || pic.chroma_422
+    {
+        return false;
+    }
+    let (Some(x), Some(y)) = (
+        x.checked_add_signed(isize::from(mv[0] >> 2)),
+        y.checked_add_signed(isize::from(mv[1] >> 2)),
+    ) else {
+        return false;
+    };
+    if x + 16 > width || y + 16 > height {
+        return false;
+    }
+
+    fn copy<const BLOCK: usize>(src: &[u8], dst: &mut [u8], stride: usize) {
+        for row in 0..BLOCK {
+            let offset = row * stride;
+            dst[offset..offset + BLOCK].copy_from_slice(&src[offset..offset + BLOCK]);
+        }
+    }
+
+    pic.wait_luma((y + 16) * width);
+    copy::<16>(&pic.luma()[y * width + x..], out_y, width);
+    let cw = width / 2;
+    let offset = (y / 2) * cw + x / 2;
+    copy::<8>(&pic.chroma(0)[offset..], out_u, cw);
+    copy::<8>(&pic.chroma(1)[offset..], out_v, cw);
+    true
+}
+
 /// Blend all three planes of a frame macroblock when both references land
 /// on integer 4:2:0 samples. The reference rows are published together.
 #[cfg(target_arch = "x86_64")]

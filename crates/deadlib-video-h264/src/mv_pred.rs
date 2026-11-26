@@ -275,6 +275,19 @@ impl WeightContext<'_> {
         }
     }
 
+    /// Whether explicit P-slice weights leave reference zero unchanged.
+    pub(crate) fn p_skip_is_unweighted(&self) -> bool {
+        self.use_weight != 1
+            || self.wt.is_none_or(|weights| {
+                weights.l0.first().is_none_or(|reference| {
+                    reference.luma_offset == 0
+                        && reference.luma_weight == 1 << weights.luma_log2_weight_denom
+                        && reference.chroma_offset == [0; 2]
+                        && reference.chroma_weight == [1 << weights.chroma_log2_weight_denom; 2]
+                })
+            })
+    }
+
     fn apply_uni<P: Pixel>(
         &self,
         pred: &mut [P],

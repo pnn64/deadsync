@@ -596,38 +596,57 @@ impl<P: Pixel, const MBAFF: bool> SliceContext<'_, P, MBAFF> {
             },
         );
         if let Some(ref_pic) = ref_pic_list.first() {
-            let (mc_y, ref_stride, ref_y_off, _, _, _) =
-                self.mc_params(mb_idx, mb_y, ref_pic.width as usize, 0i8);
-            // Luma MC
-            let mut luma_pred = [P::default(); 256];
-            P::luma_mc(
-                ref_pic,
-                mb_x as i32,
-                mc_y,
-                mvp_x as i32,
-                mvp_y as i32,
-                16,
-                16,
-                &mut luma_pred,
-                ref_stride,
-                ref_y_off,
-            );
-            if use_weight == 1 {
-                wctx.apply_uni(&mut luma_pred, 0, 0, false, 0);
+            let copied = P::BYTES == 1
+                && !MBAFF
+                && !self.field_pic_flag
+                && !sp.monochrome
+                && !self.chroma_422()
+                && sp.wctx.p_skip_is_unweighted()
+                && crate::inter_pred::predict_integer_uni_420(
+                    ref_pic,
+                    [mvp_x, mvp_y],
+                    (mb_x, mb_y),
+                    (self.width as usize, self.height as usize),
+                    [
+                        &mut self.frame.y[self.ly_offset + mb_x..],
+                        &mut self.frame.u[self.lc_offset + mb_x / 2..],
+                        &mut self.frame.v[self.lc_offset + mb_x / 2..],
+                    ],
+                );
+            if !copied {
+                let (mc_y, ref_stride, ref_y_off, _, _, _) =
+                    self.mc_params(mb_idx, mb_y, ref_pic.width as usize, 0i8);
+                // Luma MC
+                let mut luma_pred = [P::default(); 256];
+                P::luma_mc(
+                    ref_pic,
+                    mb_x as i32,
+                    mc_y,
+                    mvp_x as i32,
+                    mvp_y as i32,
+                    16,
+                    16,
+                    &mut luma_pred,
+                    ref_stride,
+                    ref_y_off,
+                );
+                if use_weight == 1 {
+                    wctx.apply_uni(&mut luma_pred, 0, 0, false, 0);
+                }
+                for (r, row) in luma_pred.as_chunks::<16>().0.iter().enumerate() {
+                    let o = self.ly_offset + r * self.ly_stride + mb_x;
+                    P::store_row(&mut self.frame.y, o, row);
+                }
+                self.predict_chroma_part(
+                    mb_idx,
+                    mb_x,
+                    mb_y,
+                    sp,
+                    (0, 0, 16, 16),
+                    Some((ref_pic, 0, [mvp_x, mvp_y])),
+                    None,
+                );
             }
-            for (r, row) in luma_pred.as_chunks::<16>().0.iter().enumerate() {
-                let o = self.ly_offset + r * self.ly_stride + mb_x;
-                P::store_row(&mut self.frame.y, o, row);
-            }
-            self.predict_chroma_part(
-                mb_idx,
-                mb_x,
-                mb_y,
-                sp,
-                (0, 0, 16, 16),
-                Some((ref_pic, 0, [mvp_x, mvp_y])),
-                None,
-            );
         }
         // Store MVs and ref indices
         for blk in 0..16 {
