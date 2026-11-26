@@ -58,7 +58,7 @@ type CompiledSongLua<S> = crate::CompiledSongLua<
 const MAGIC: &[u8; 14] = b"DeadBakeCache\0";
 /// Bump when the entry layout below changes. Changes to baked types need no
 /// bump: they change the build identity.
-const FORMAT: u32 = 1;
+const FORMAT: u32 = 2;
 const BUILD: &str = env!("DEADSYNC_SONG_LUA_BAKE_BUILD");
 const ENTRY_EXTENSION: &str = "bake";
 const DEFAULT_ENTRIES_PER_SONG: usize = 8;
@@ -114,21 +114,25 @@ impl BakeCache {
         self.directory.join(format!("{:016x}", hasher.finish()))
     }
 
-    /// Everything that invalidates all of a song's entries at once.
-    fn fixed_key(&self, song_dir: &Path) -> [u8; 16] {
-        let mut low = XxHash64::with_seed(0);
-        let mut high = XxHash64::with_seed(0x9e37_79b9_7f4a_7c15);
-        for hasher in [&mut low, &mut high] {
-            hasher.write_u32(FORMAT);
-            write_text(hasher, BUILD);
-            write_text(hasher, &self.host_build);
-            hash_folder(hasher, song_dir, song_dir, 0);
+    fn fixed_inputs(&self, song_dir: &Path) -> FixedInputs {
+        let mut files = Vec::new();
+        folder_files(song_dir, song_dir, 0, &mut files);
+        FixedInputs {
+            builds: [text_hash(BUILD), text_hash(&self.host_build)],
+            files,
         }
-        let mut key = [0; 16];
-        key[..8].copy_from_slice(&low.finish().to_le_bytes());
-        key[8..].copy_from_slice(&high.finish().to_le_bytes());
-        key
     }
+}
+
+/// Everything that invalidates all of a song's entries at once (the fixed
+/// key). Each entry keeps its copy, so a miss can name the part that changed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FixedInputs {
+    /// This crate's build identity, then the host's.
+    builds: [u64; 2],
+    /// Every path under the song folder, relative and in walk order, with
+    /// the identity of what is there.
+    files: Vec<BakeInput>,
 }
 
 /// What the cache did for one preparation.
@@ -176,16 +180,19 @@ where
         return (prepared, BakeCacheStatus::Bypassed);
     }
     let lookup_started = Instant::now();
-    let fixed = cache.fixed_key(&context.song_dir);
+    let fixed = cache.fixed_inputs(&context.song_dir);
     let session = session_inputs(song, context, host_inputs);
     let directory = cache.song_directory(&context.song_dir);
-    if let Some(prepared) = load(&directory, &fixed, &session) {
-        log::info!(
-            "Song Lua bake cache hit for '{}' in {:.1} ms",
-            song.title,
-            lookup_started.elapsed().as_secs_f64() * 1000.0,
-        );
-        return (prepared, BakeCacheStatus::Hit);
+    match load(&directory, &fixed, &session) {
+        Ok(prepared) => {
+            log::info!(
+                "Song Lua bake cache hit for '{}' in {:.1} ms",
+                song.title,
+                lookup_started.elapsed().as_secs_f64() * 1000.0,
+            );
+            return (prepared, BakeCacheStatus::Hit);
+        }
+        Err(miss) => log::info!("Song Lua bake cache miss for '{}': {miss}", song.title),
     }
     // A compile error may be transient (a file mid-copy), and its fallback
     // output is not what a clean bake of the same inputs produces.
@@ -274,6 +281,12 @@ fn unstorable<S>(
 fn write_text(hasher: &mut XxHash64, text: &str) {
     hasher.write_u64(text.len() as u64);
     hasher.write(text.as_bytes());
+}
+
+fn text_hash(text: &str) -> u64 {
+    let mut hasher = XxHash64::with_seed(0);
+    write_text(&mut hasher, text);
+    hasher.finish()
 }
 
 /// Hash a value's `Debug` text without building the string. Derived `Debug`
@@ -585,15 +598,92 @@ fn observed_input(name: &str) -> Option<u64> {
     Some(value as i64 as u64)
 }
 
-fn inputs_match(stored: &[BakeInput], session: &HashMap<&str, u64>) -> bool {
-    stored.iter().all(|(name, value)| {
-        let current = if name.starts_with(HOST_ANSWER) || name.starts_with(EXTERNAL_FILE) {
-            observed_input(name)
-        } else {
-            session.get(name.as_str()).copied()
-        };
-        current == Some(*value)
-    })
+/// Names of the stored inputs whose current value differs; empty when the
+/// entry is for this session.
+fn input_differences<'a>(stored: &'a [BakeInput], session: &HashMap<&str, u64>) -> Vec<&'a str> {
+    stored
+        .iter()
+        .filter(|(name, value)| {
+            let current = if name.starts_with(HOST_ANSWER) || name.starts_with(EXTERNAL_FILE) {
+                observed_input(name)
+            } else {
+                session.get(name.as_str()).copied()
+            };
+            current != Some(*value)
+        })
+        .map(|(name, _)| name.as_str())
+        .collect()
+}
+
+/// At most this many names are listed in one explanation.
+const LISTED_NAMES: usize = 6;
+
+fn list_names(names: impl ExactSizeIterator<Item = impl fmt::Display>) -> String {
+    let total = names.len();
+    let mut text = String::new();
+    for (index, name) in names.take(LISTED_NAMES).enumerate() {
+        if index > 0 {
+            text.push_str(", ");
+        }
+        let _ = write!(text, "{name}");
+    }
+    if total > LISTED_NAMES {
+        let _ = write!(text, " and {} more", total - LISTED_NAMES);
+    }
+    text
+}
+
+/// Why an entry written with `stored` no longer applies to `current`.
+fn fixed_change(stored: &FixedInputs, current: &FixedInputs) -> String {
+    let mut parts = Vec::new();
+    if stored.builds[0] != current.builds[0] {
+        parts.push("the song-Lua baker was rebuilt".to_owned());
+    }
+    if stored.builds[1] != current.builds[1] {
+        parts.push("the game code that feeds the baker was rebuilt".to_owned());
+    }
+    let before: HashMap<&str, u64> = stored
+        .files
+        .iter()
+        .map(|(name, id)| (name.as_str(), *id))
+        .collect();
+    let after: HashMap<&str, u64> = current
+        .files
+        .iter()
+        .map(|(name, id)| (name.as_str(), *id))
+        .collect();
+    // Edits first: they are the usual cause and the most useful to name.
+    let mut changes: Vec<String> = current
+        .files
+        .iter()
+        .filter(|(name, id)| before.get(name.as_str()).is_some_and(|old| old != id))
+        .map(|(name, _)| format!("{name} changed"))
+        .collect();
+    changes.extend(
+        current
+            .files
+            .iter()
+            .filter(|(name, _)| !before.contains_key(name.as_str()))
+            .map(|(name, _)| format!("{name} added")),
+    );
+    changes.extend(
+        stored
+            .files
+            .iter()
+            .filter(|(name, _)| !after.contains_key(name.as_str()))
+            .map(|(name, _)| format!("{name} removed")),
+    );
+    if !changes.is_empty() {
+        parts.push(format!(
+            "song files changed: {}",
+            list_names(changes.iter())
+        ));
+    }
+    if parts.is_empty() {
+        // The same files and builds, listed in another order.
+        parts.push("the song folder was listed in a different order".to_owned());
+    }
+    parts.join("; ")
 }
 
 fn modified_nanos(metadata: &fs::Metadata) -> u128 {
@@ -649,11 +739,19 @@ fn file_stamp(path: &Path) -> u64 {
     hasher.finish()
 }
 
+/// Identity recorded for a folder, and for one that could not be listed.
+const FOLDER: u64 = 2;
+const UNLISTABLE_FOLDER: u64 = 0;
+
 /// Names and identities of everything under a folder, in a stable order.
-/// Scripts can load any of it, so all of it is identity.
-fn hash_folder(hasher: &mut XxHash64, root: &Path, directory: &Path, depth: usize) {
+/// Scripts can load any of it, so all of it is identity. Folders end in `/`.
+fn folder_files(root: &Path, directory: &Path, depth: usize, files: &mut Vec<BakeInput>) {
     let Ok(entries) = fs::read_dir(directory) else {
-        hasher.write_u8(0);
+        let name = directory
+            .strip_prefix(root)
+            .unwrap_or(directory)
+            .to_string_lossy();
+        files.push((format!("{name}/"), UNLISTABLE_FOLDER));
         return;
     };
     let mut entries: Vec<_> = entries
@@ -665,32 +763,38 @@ fn hash_folder(hasher: &mut XxHash64, root: &Path, directory: &Path, depth: usiz
         let Ok(metadata) = fs::metadata(&path) else {
             continue;
         };
-        let name = path.strip_prefix(root).unwrap_or(&path).to_string_lossy();
-        write_text(hasher, &name);
+        let name = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .into_owned();
         if metadata.is_dir() {
-            hasher.write_u8(2);
+            files.push((format!("{name}/"), FOLDER));
             // Bounded so a link cycle cannot walk forever.
             if depth < MAX_FOLDER_DEPTH {
-                hash_folder(hasher, root, &path, depth + 1);
+                folder_files(root, &path, depth + 1, files);
             }
         } else {
-            hash_file(hasher, &path, &metadata, is_script_like(&path));
+            let mut hasher = XxHash64::with_seed(0);
+            hash_file(&mut hasher, &path, &metadata, is_script_like(&path));
+            files.push((name, hasher.finish()));
         }
     }
-    hasher.write_u8(3);
 }
 
 // ---------------------------------------------------------------------------
 // Entry files
 //
-// magic, format, fixed key, input count, inputs (name length, name, value),
+// magic, format, the two build identities, file count, files
+// (name length, name, identity), input count, inputs (the same layout),
 // decoded length, packed length, hash of the decoded bytes, hash of all of the
 // above; then the zstd-compressed bincode payload. Integers are little
 // endian. Everything before the payload is uncompressed so an entry for
-// another session is rejected without touching its payload.
+// another session is rejected without touching its payload. The builds and
+// files are compared whole rather than as a hash, so a miss can name them.
 
 struct Header {
-    fixed: [u8; 16],
+    fixed: FixedInputs,
     inputs: Vec<BakeInput>,
     decoded_bytes: u64,
     packed_bytes: u64,
@@ -722,6 +826,35 @@ impl<R: Read> Checked<R> {
     fn u64(&mut self) -> io::Result<u64> {
         self.bytes().map(u64::from_le_bytes)
     }
+
+    fn named_values(&mut self) -> io::Result<Vec<BakeInput>> {
+        let count = self.u32()?;
+        if count > MAX_INPUTS {
+            return Err(invalid("too many recorded inputs"));
+        }
+        let mut values = Vec::with_capacity(count as usize);
+        for _ in 0..count {
+            let length = self.u32()? as usize;
+            if length > MAX_INPUT_NAME_BYTES {
+                return Err(invalid("recorded input name is too long"));
+            }
+            let mut name = vec![0; length];
+            self.reader.read_exact(&mut name)?;
+            self.hasher.write(&name);
+            let name = String::from_utf8(name).map_err(|_| invalid("input name is not UTF-8"))?;
+            values.push((name, self.u64()?));
+        }
+        Ok(values)
+    }
+}
+
+fn write_named_values(out: &mut Vec<u8>, values: &[BakeInput]) {
+    out.extend_from_slice(&(values.len() as u32).to_le_bytes());
+    for (name, value) in values {
+        out.extend_from_slice(&(name.len() as u32).to_le_bytes());
+        out.extend_from_slice(name.as_bytes());
+        out.extend_from_slice(&value.to_le_bytes());
+    }
 }
 
 impl Header {
@@ -736,23 +869,9 @@ impl Header {
         if checked.u32()? != FORMAT {
             return Err(invalid("unsupported bake cache format"));
         }
-        let fixed = checked.bytes()?;
-        let count = checked.u32()?;
-        if count > MAX_INPUTS {
-            return Err(invalid("too many recorded inputs"));
-        }
-        let mut inputs = Vec::with_capacity(count as usize);
-        for _ in 0..count {
-            let length = checked.u32()? as usize;
-            if length > MAX_INPUT_NAME_BYTES {
-                return Err(invalid("recorded input name is too long"));
-            }
-            let mut name = vec![0; length];
-            checked.reader.read_exact(&mut name)?;
-            checked.hasher.write(&name);
-            let name = String::from_utf8(name).map_err(|_| invalid("input name is not UTF-8"))?;
-            inputs.push((name, checked.u64()?));
-        }
+        let builds = [checked.u64()?, checked.u64()?];
+        let files = checked.named_values()?;
+        let inputs = checked.named_values()?;
         let decoded_bytes = checked.u64()?;
         let packed_bytes = checked.u64()?;
         let decoded_hash = checked.u64()?;
@@ -766,7 +885,7 @@ impl Header {
             return Err(invalid("bake cache header is damaged"));
         }
         Ok(Self {
-            fixed,
+            fixed: FixedInputs { builds, files },
             inputs,
             decoded_bytes,
             packed_bytes,
@@ -778,13 +897,11 @@ impl Header {
         let start = out.len();
         out.extend_from_slice(MAGIC);
         out.extend_from_slice(&FORMAT.to_le_bytes());
-        out.extend_from_slice(&self.fixed);
-        out.extend_from_slice(&(self.inputs.len() as u32).to_le_bytes());
-        for (name, value) in &self.inputs {
-            out.extend_from_slice(&(name.len() as u32).to_le_bytes());
-            out.extend_from_slice(name.as_bytes());
-            out.extend_from_slice(&value.to_le_bytes());
+        for build in self.fixed.builds {
+            out.extend_from_slice(&build.to_le_bytes());
         }
+        write_named_values(out, &self.fixed.files);
+        write_named_values(out, &self.inputs);
         out.extend_from_slice(&self.decoded_bytes.to_le_bytes());
         out.extend_from_slice(&self.packed_bytes.to_le_bytes());
         out.extend_from_slice(&self.decoded_hash.to_le_bytes());
@@ -808,15 +925,15 @@ fn is_entry(path: &Path) -> bool {
 enum Entry<T> {
     /// Valid, and for this session.
     Match(T),
-    /// Valid, but for another session of the same song.
-    OtherSession,
+    /// Valid, but for another session of the same song: these inputs differ.
+    OtherSession(Vec<String>),
     /// From another build, an older song folder, or damaged.
     Stale(String),
 }
 
 fn read_entry<S>(
     path: &Path,
-    fixed: &[u8; 16],
+    fixed: &FixedInputs,
     session: &HashMap<&str, u64>,
 ) -> Entry<PreparedGameplaySongLua<S>>
 where
@@ -832,10 +949,11 @@ where
         Err(error) => return stale(&error),
     };
     if header.fixed != *fixed {
-        return stale(&"written by another build or for different song files");
+        return Entry::Stale(fixed_change(&header.fixed, fixed));
     }
-    if !inputs_match(&header.inputs, session) {
-        return Entry::OtherSession;
+    let differences = input_differences(&header.inputs, session);
+    if !differences.is_empty() {
+        return Entry::OtherSession(differences.into_iter().map(str::to_owned).collect());
     }
     let mut packed = Vec::new();
     if let Err(error) = reader.take(header.packed_bytes).read_to_end(&mut packed) {
@@ -861,19 +979,23 @@ where
     }
 }
 
+/// The stored bake for this session, or why there is none.
 fn load<S>(
     directory: &Path,
-    fixed: &[u8; 16],
+    fixed: &FixedInputs,
     session: &[BakeInput],
-) -> Option<PreparedGameplaySongLua<S>>
+) -> Result<PreparedGameplaySongLua<S>, String>
 where
     S: Decode<()> + 'static,
 {
-    let entries = fs::read_dir(directory).ok()?;
+    const NOTHING_STORED: &str = "no bake is stored for this song yet";
+    let entries = fs::read_dir(directory).map_err(|_| NOTHING_STORED.to_owned())?;
     let session: HashMap<&str, u64> = session
         .iter()
         .map(|(name, value)| (name.as_str(), *value))
         .collect();
+    let mut other_sessions: Vec<Vec<String>> = Vec::new();
+    let mut stale: Vec<String> = Vec::new();
     for path in entries.filter_map(Result::ok).map(|entry| entry.path()) {
         if !is_entry(&path) {
             continue;
@@ -884,22 +1006,46 @@ where
                 if let Ok(file) = File::options().write(true).open(&path) {
                     let _ = file.set_modified(SystemTime::now());
                 }
-                return Some(prepared);
+                return Ok(prepared);
             }
-            Entry::OtherSession => {}
+            Entry::OtherSession(differences) => other_sessions.push(differences),
             Entry::Stale(reason) => {
                 log::debug!("Removing bake cache entry {}: {reason}", path.display());
                 let _ = fs::remove_file(&path);
+                stale.push(reason);
             }
         }
     }
-    None
+    Err(miss_reason(other_sessions, stale).unwrap_or_else(|| NOTHING_STORED.to_owned()))
+}
+
+/// One line saying why no entry applied: the stored session closest to this
+/// one and what differs from it, then why any outdated entries were dropped.
+fn miss_reason(mut other_sessions: Vec<Vec<String>>, mut stale: Vec<String>) -> Option<String> {
+    let mut parts = Vec::new();
+    other_sessions.sort_by_key(Vec::len);
+    if let Some(closest) = other_sessions.first() {
+        let stored = match other_sessions.len() {
+            1 => "the stored bake".to_owned(),
+            count => format!("the closest of {count} stored bakes"),
+        };
+        parts.push(format!(
+            "{stored} had different {}",
+            list_names(closest.iter())
+        ));
+    }
+    stale.sort_unstable();
+    stale.dedup();
+    if !stale.is_empty() {
+        parts.push(format!("dropped outdated bakes: {}", stale.join("; ")));
+    }
+    (!parts.is_empty()).then(|| parts.join("; "))
 }
 
 fn store<S: Encode>(
     cache: &BakeCache,
     directory: &Path,
-    fixed: &[u8; 16],
+    fixed: &FixedInputs,
     inputs: &[BakeInput],
     prepared: &PreparedGameplaySongLua<S>,
 ) -> Result<usize, String> {
@@ -912,7 +1058,7 @@ fn store<S: Encode>(
     let packed = zstd::bulk::compress(&decoded, COMPRESSION_LEVEL)
         .map_err(|error| format!("compression failed: {error}"))?;
     let header = Header {
-        fixed: *fixed,
+        fixed: fixed.clone(),
         inputs: inputs.to_vec(),
         decoded_bytes: decoded.len() as u64,
         packed_bytes: packed.len() as u64,
@@ -972,5 +1118,98 @@ fn evict(directory: &Path, keep: usize) {
         for (_, path) in stored.drain(..stored.len() - keep) {
             let _ = fs::remove_file(path);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn named(values: &[(&str, u64)]) -> Vec<BakeInput> {
+        values
+            .iter()
+            .map(|(name, value)| ((*name).to_owned(), *value))
+            .collect()
+    }
+
+    fn fixed(builds: [u64; 2], files: &[(&str, u64)]) -> FixedInputs {
+        FixedInputs {
+            builds,
+            files: named(files),
+        }
+    }
+
+    #[test]
+    fn a_fixed_change_names_the_rebuilt_side_and_each_file() {
+        let stored = fixed([1, 2], &[("a.lua", 1), ("gone.png", 2), ("same.png", 3)]);
+        let current = fixed([1, 9], &[("a.lua", 5), ("same.png", 3), ("new.png", 4)]);
+        assert_eq!(
+            fixed_change(&stored, &current),
+            "the game code that feeds the baker was rebuilt; \
+             song files changed: a.lua changed, new.png added, gone.png removed",
+        );
+        let rebuilt = fixed(
+            [7, 2],
+            &stored
+                .files
+                .iter()
+                .map(|(n, v)| (n.as_str(), *v))
+                .collect::<Vec<_>>(),
+        );
+        assert_eq!(
+            fixed_change(&stored, &rebuilt),
+            "the song-Lua baker was rebuilt"
+        );
+    }
+
+    #[test]
+    fn long_file_lists_are_shortened() {
+        let names: Vec<String> = (0..9).map(|index| format!("{index}.png")).collect();
+        let current = FixedInputs {
+            builds: [0, 0],
+            files: names.iter().map(|name| (name.clone(), 0)).collect(),
+        };
+        assert_eq!(
+            fixed_change(&fixed([0, 0], &[]), &current),
+            "song files changed: 0.png added, 1.png added, 2.png added, 3.png added, \
+             4.png added, 5.png added and 3 more",
+        );
+    }
+
+    #[test]
+    fn a_session_miss_names_what_differs_from_the_closest_bake() {
+        let stored = named(&[("p1.speedmod", 1), ("p1.mini", 2), ("style_name", 3)]);
+        let session = HashMap::from([("p1.speedmod", 4), ("p1.mini", 2), ("style_name", 3)]);
+        assert_eq!(input_differences(&stored, &session), ["p1.speedmod"]);
+
+        let far = vec!["p1.speedmod".to_owned(), "p1.mini".to_owned()];
+        let near = vec!["p2.enabled".to_owned()];
+        assert_eq!(
+            miss_reason(vec![far, near], Vec::new()).as_deref(),
+            Some("the closest of 2 stored bakes had different p2.enabled"),
+        );
+        assert_eq!(miss_reason(Vec::new(), Vec::new()), None);
+        assert_eq!(
+            miss_reason(Vec::new(), vec!["x".to_owned(), "x".to_owned()]).as_deref(),
+            Some("dropped outdated bakes: x"),
+        );
+    }
+
+    #[test]
+    fn the_header_keeps_the_fixed_inputs() {
+        let header = Header {
+            fixed: fixed([3, 4], &[("lua/", FOLDER), ("lua/a.lua", 7)]),
+            inputs: named(&[("p1.mini", 5)]),
+            decoded_bytes: 10,
+            packed_bytes: 8,
+            decoded_hash: 6,
+        };
+        let mut bytes = Vec::new();
+        header.write(&mut bytes);
+        let read = Header::read(&mut bytes.as_slice()).unwrap();
+        assert_eq!(read.fixed, header.fixed);
+        assert_eq!(read.inputs, header.inputs);
+        bytes[20] ^= 1;
+        assert!(Header::read(&mut bytes.as_slice()).is_err());
     }
 }
