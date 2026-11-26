@@ -8,9 +8,10 @@ const ENTRIES: usize = 32;
 const BYTE_LIMIT: usize = 4 * 1024 * 1024;
 const MIN_SOURCE: usize = 256;
 
+#[derive(Debug)]
 pub(super) struct Preamble {
-    digits: Range<usize>,
-    value: f64,
+    pub(super) digits: Range<usize>,
+    pub(super) value: f64,
     function: bool,
 }
 
@@ -73,6 +74,15 @@ impl Preamble {
         if source.len() < MIN_SOURCE {
             return None;
         }
+        Self::scan_prefix(source)
+    }
+
+    pub(super) fn reader_function(source: &[u8]) -> Option<Self> {
+        let preamble = Self::scan_prefix(source)?;
+        preamble.function.then_some(preamble)
+    }
+
+    fn scan_prefix(source: &[u8]) -> Option<Self> {
         let mut prefix = Prefix {
             bytes: source,
             pos: 0,
@@ -149,7 +159,7 @@ impl Preamble {
         })
     }
 
-    fn function_target(&self, base: &ProgramData) -> Option<(usize, usize)> {
+    pub(super) fn function_target(&self, base: &ProgramData) -> Option<(usize, usize)> {
         let entry = &base.prototypes[base.entry as usize];
         let first = entry.code.first()?;
         if first.op != Op::Closure || first.b != 0 {

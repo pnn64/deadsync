@@ -348,6 +348,9 @@ impl Parser {
     pub(crate) fn nesting(&self) -> usize {
         usize::from(self.depth)
     }
+    pub(crate) fn has_closed_function(&self) -> bool {
+        !self.ast.stacks.is_empty()
+    }
     pub(crate) fn shift_native_depth(&mut self, change: u16) {
         self.base_depth = self.base_depth.wrapping_add(change);
     }

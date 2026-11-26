@@ -8,6 +8,7 @@ mod constructor_templates;
 mod eof;
 mod literal_tables;
 mod reader;
+mod reader_intervals;
 mod source_templates;
 
 /// A genuine, non-callable collector object for an unfinished/retained prototype.
@@ -60,6 +61,7 @@ pub(super) struct Spare {
     parser: crate::parser::Spare,
     compiler: crate::compiler::Spare,
     source_templates: source_templates::Templates,
+    reader_intervals: reader_intervals::Cache,
     constructors: constructor_templates::Templates,
     literal_tables: literal_tables::Templates,
     recent_sources: [Option<(SourceKey, u64)>; 8],
@@ -403,6 +405,7 @@ pub(super) struct Loading {
     pub(super) binary_mode: bool,
     source: Buffer<u8>,
     captured: Option<CapturedInput>,
+    trace: reader_intervals::Trace,
     pub(super) name: Box<[u8]>,
     awaiting: bool,
     closed: bool,
@@ -418,6 +421,7 @@ pub(super) fn storage_bytes(jobs: &Buffer<Loading>) -> usize {
                 j.source.capacity()
                     + j.name.len()
                     + j.parser.heap_bytes()
+                    + j.trace.storage_bytes()
                     + j.native.as_ref().map_or(0, |r| {
                         r.active.capacity() * size_of::<(Option<TableId>, ParserPrototypeId)>()
                             + r.prototypes.capacity() * size_of::<ParserPrototypeId>()
@@ -447,6 +451,23 @@ pub(super) fn message(name: &[u8], error: &Error, binary: bool) -> Result<Vec<u8
 impl Loading {
     pub(super) fn source(&self) -> &[u8] {
         &self.source
+    }
+    pub(super) fn root_storage_bytes(&self) -> usize {
+        self.native.as_ref().unwrap().storage_bytes() + self.trace.storage_bytes()
+    }
+    pub(super) fn replayed_interval(
+        &self,
+    ) -> Option<(crate::memory::Shared<reader_intervals::Plan>, usize)> {
+        self.trace.replayed_interval()
+    }
+    pub(super) fn record_interval(&mut self, events: &[crate::parser::NativeRootEvent]) {
+        self.trace.record(
+            &self.source,
+            self.native_depth,
+            self.parser.nesting(),
+            self.closed,
+            events,
+        );
     }
     pub(super) fn shift_native_depth(&mut self, change: u16) {
         self.native_depth = (self.native_depth as u16).wrapping_add(change) as usize;
@@ -506,7 +527,41 @@ impl Loading {
         if let Some(roots) = &mut self.native {
             roots.started = true;
         }
+        let first = matches!(self.trace, reader_intervals::Trace::Waiting);
+        if first {
+            self.trace = if !self.closed
+                && self.parser.reusable()
+                && self.parser.native_roots_enabled()
+                && !crate::memory::compilation::active()
+                && self.parse_locale == crate::locale::revision()
+            {
+                spare
+                    .reader_intervals
+                    .begin(&self.source, &self.name, self.native_depth)
+            } else {
+                reader_intervals::Trace::None
+            };
+            if matches!(self.trace, reader_intervals::Trace::Replay(_)) {
+                return Ok(None);
+            }
+        }
+        if let reader_intervals::Trace::Replay(playback) = &mut self.trace {
+            if playback.step(&self.source, self.closed, self.native_depth) {
+                return if self.closed {
+                    playback.publish().map(Some)
+                } else {
+                    Ok(None)
+                };
+            }
+            let reader_intervals::Trace::Replay(playback) = std::mem::take(&mut self.trace) else {
+                unreachable!("active reader playback");
+            };
+            playback.reconstruct(&mut self.parser, &self.source, self.native_depth)?;
+        }
         let Some(mut ast) = self.parser.resume(&self.source, self.closed)? else {
+            if first && !self.parser.has_closed_function() {
+                self.trace = reader_intervals::Trace::None;
+            }
             return Ok(None);
         };
         if !self.parser.reusable()
@@ -615,6 +670,7 @@ impl Vm {
                     binary_mode: false,
                     source: self.try_take_buffer(0)?,
                     captured: None,
+                    trace: reader_intervals::Trace::None,
                     name: name.try_boxed()?,
                     awaiting: false,
                     closed: false,
@@ -924,6 +980,7 @@ impl Vm {
                     binary_mode: false,
                     source: self.try_take_buffer(0)?,
                     captured: None,
+                    trace: reader_intervals::Trace::None,
                     name: name.try_into_boxed_slice()?,
                     awaiting: false,
                     closed: false,
@@ -1023,9 +1080,10 @@ impl Vm {
             .iter()
             .filter(|j| j.owner < end)
             .map(|j| {
-                j.decoder
-                    .as_ref()
-                    .map_or_else(|| j.parser.nesting(), |d| d.nesting())
+                j.decoder.as_ref().map_or_else(
+                    || j.trace.nesting().unwrap_or_else(|| j.parser.nesting()),
+                    |d| d.nesting(),
+                )
             })
             .sum()
     }
@@ -1067,7 +1125,8 @@ impl Vm {
             frame.vararg_count = 3;
             frame.pc = 1;
             self.frames[owner] = frame;
-            self.start_native_load(owner, &name, self.native_depth(owner + 1), None)?;
+            let index = self.start_native_load(owner, &name, self.native_depth(owner + 1), None)?;
+            self.loads[index].trace = reader_intervals::Trace::Waiting;
         }
         let index = self.loads.len() - 1;
         debug_assert_eq!(self.loads[index].owner, owner);
@@ -1196,7 +1255,8 @@ impl Vm {
         self.reserve_registers(call + 1)?;
         self.resize_registers(self.registers.len().max(call + 1));
         self.registers[call] = self.registers[frame.base];
-        if let Some(actual) = self.start_call(call, 0, 1, false)? {
+        // Preparing the result slot leaves the checked C depth valid.
+        if let Some(actual) = self.start_lua_call(call, 0, 1, false)? {
             self.finish_call(call, actual, 1);
         }
         Ok(None)
@@ -1373,6 +1433,12 @@ impl Vm {
         if has_parser_roots {
             self.retain_load_prototypes(index, function)?;
         }
+        let job = &mut self.loads[index];
+        self.compile_spare.reader_intervals.remember(
+            &job.source,
+            std::mem::take(&mut job.trace),
+            &program,
+        );
         self.end_native_load(owner);
         let result = frame.base + frame.argc();
         self.reserve_registers(result + 1)?;

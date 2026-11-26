@@ -23,16 +23,17 @@ impl Vm {
         top: &mut usize,
         limit_base: usize,
     ) -> Result<(), Error> {
-        let storage_before = self.loads[index].native.as_ref().unwrap().storage_bytes();
         let job = &mut self.loads[index];
+        let storage_before = job.root_storage_bytes();
         let binary = job.binary_mode;
         let text_started = !binary && job.native.as_ref().is_some_and(|roots| roots.started);
-        let recycle = text_started && job.parser.reusable();
+        let replayed = job.replayed_interval();
+        let recycle = replayed.is_none() && text_started && job.parser.reusable();
         let mut events = if binary {
             job.decoder
                 .as_mut()
                 .map_or_else(Vec::new, |decoder| decoder.take_native_events())
-        } else if text_started {
+        } else if replayed.is_none() && text_started {
             job.parser.take_native_events()
         } else {
             Vec::new()
@@ -52,8 +53,11 @@ impl Vm {
                 }
             }
         }
+        let interval: &[NativeRootEvent] = replayed
+            .as_ref()
+            .map_or(events.as_slice(), |(plan, index)| plan.events(*index));
         let result = (|| -> Result<(), Error> {
-            for event in events.drain(..) {
+            for event in interval {
                 if matches!(
                     event,
                     NativeRootEvent::Open | NativeRootEvent::OpenWithoutTable
@@ -126,7 +130,7 @@ impl Vm {
                     .expect("active parser prototype");
                 if let NativeRootEvent::Anchor(text) = event {
                     if let Some(table) = table {
-                        let key = self.intern_parser_text(index, &text)?;
+                        let key = self.intern_parser_text(index, text)?;
                         if self.tables[slot_index(table.0)].get_string(key) == Value::Nil {
                             // The string key is valid and the scalar-overwrite
                             // path would repeat the lookup before a miss.
@@ -185,16 +189,16 @@ impl Vm {
                             let value = match event {
                                 NativeRootEvent::Constant(Constant::Nil) => Value::Nil,
                                 NativeRootEvent::Constant(Constant::Boolean(value)) => {
-                                    Value::Boolean(value)
+                                    Value::Boolean(*value)
                                 }
                                 NativeRootEvent::Constant(Constant::Number(value)) => {
-                                    Value::Number(value)
+                                    Value::Number(*value)
                                 }
                                 NativeRootEvent::Constant(Constant::String(bytes)) => {
-                                    self.try_intern(&bytes)?
+                                    self.try_intern(bytes)?
                                 }
                                 NativeRootEvent::ConstantText(text) => {
-                                    Value::String(self.intern_parser_text(index, &text)?)
+                                    Value::String(self.intern_parser_text(index, text)?)
                                 }
                                 _ => unreachable!("parser roots own their string constants"),
                             };
@@ -220,7 +224,7 @@ impl Vm {
                         NativeRootEvent::Source(bytes) => {
                             let string = self
                                 .strings
-                                .try_intern(&bytes)
+                                .try_intern(bytes)
                                 .map_err(|_| self.memory_failure())?;
                             let value = Value::String(string);
                             self.reserve_gc_barrier(Value::ParserPrototype(id), value)?;
@@ -230,7 +234,7 @@ impl Vm {
                         NativeRootEvent::DebugString(bytes) => {
                             let string = self
                                 .strings
-                                .try_intern(&bytes)
+                                .try_intern(bytes)
                                 .map_err(|_| self.memory_failure())?;
                             let value = Value::String(string);
                             self.reserve_gc_barrier(Value::ParserPrototype(id), value)?;
@@ -254,10 +258,14 @@ impl Vm {
             }
             Ok(())
         })();
+        if result.is_ok() && replayed.is_none() {
+            self.loads[index].record_interval(&events);
+        }
+        events.clear();
         if recycle {
             self.loads[index].parser.recycle_native_events(events);
         }
-        let storage_after = self.loads[index].native.as_ref().unwrap().storage_bytes();
+        let storage_after = self.loads[index].root_storage_bytes();
         self.gc_note_control(storage_after.saturating_sub(storage_before));
         result
     }
