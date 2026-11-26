@@ -325,3 +325,11 @@ The full run including the crop and B-skip changes matched FFmpeg in all five ou
 | SRPG10 | FFmpeg packed | 27.67 | 36.14 | 18.63 | 3.151 |
 
 The early-delivery surface prototype emits a ready surface before reserving space for the next picture. A consumer can drop the surface during the callback so its buffer is available for the next decode. This reclaimed one coded picture on each clip, and emitted planes still matched FFmpeg. Two allocation runs requested 44.62 MB on SRPG9 and 29.24 MB on SRPG10, 1.75% below and 0.84% above native FFmpeg. [Early-delivery allocation samples](results/windows-x86_64-20261126/surface-early-allocations.csv)
+
+In five rotating cycle rounds, early delivery used 35.19 and 24.68 Mcycles/frame, equivalent to 28.41 and 40.52 frames per billion cycles. Native FFmpeg used 33.85 and 24.13 Mcycles/frame. The median of the per-round cycle gaps was 4.82% on SRPG9 and 1.97% on SRPG10. [Early-delivery cycle samples](results/windows-x86_64-20261126/surface-early-cycles.csv)
+
+## Horizontal quarter-pel interpolation
+
+An SSSE3 prototype used overlapping row loads and aligned byte shifts to filter a horizontal quarter-pel block. FFmpeg also uses aligned byte shifts to reuse the input window for its horizontal six-tap filter. The prototype matched FFmpeg on both bundled clips, temporal-direct progressive and MBAFF multislice, constrained CAVLC and the resolution change. [FFmpeg horizontal quarter-pel filter](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/x86/h264_qpel_8bit.asm)
+
+Across 12 rotating paired rounds its median cycle changes relative to `c270f4779` were +0.08% and ?0.78%, with mixed results across runs. The existing decoder's median gaps against packed FFmpeg were +0.58% and +0.08%. Distribution-free median intervals with 96.1% coverage span ?1.51% to +1.93% and ?2.84% to +3.29%, respectively. The intervals assume independent rounds. The prototype stays out of the decoder. [Paired cycle samples](results/windows-x86_64-20261126/horizontal-qpel-paired.csv)
