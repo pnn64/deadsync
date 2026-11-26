@@ -431,3 +431,18 @@ In a diagnostic run with one sampled macroblock per 32, direct full-pel YUV pred
 | Compact B-skip partition iteration | ?0.58% | +1.21% |
 
 Each comparison used ten rotating rounds. The geometry and coefficient-mask candidates ran on logical CPU 14. The two B-skip candidates ran on logical CPU 2. [Geometry and coefficient samples](results/windows-x86_64-20261126/deblock-and-fullpel-paired.csv) ? [B-skip samples](results/windows-x86_64-20261126/b-skip-chroma-paired.csv)
+
+`2b7748a9f` adds the coefficient mask after the slice geometry optimization. The two changes matched FFmpeg in both output modes across the 1080p clips, temporal-direct multislice and MBAFF, constrained CAVLC, low-QP and resolution-change fixtures. Native output also matched High 10, High 4:2:2 and cropped fixtures. A three-worker threaded decode matched the supported reference streams tested. [Combined opening-excerpt measurements](results/windows-x86_64-20261126/fullpel-and-coefficients)
+
+| Clip | Output mode | Mcycles/frame | Frames/billion cycles | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Deadlib packed | 36.49 | 27.41 | 11.71 | 3.271 |
+| SRPG9 | FFmpeg packed | 37.29 | 26.81 | 18.91 | 3.255 |
+| SRPG9 | Deadlib surface | 33.80 | 29.59 | 7.39 | 0.283 |
+| SRPG9 | FFmpeg native | 34.29 | 29.16 | 17.91 | 0.289 |
+| SRPG10 | Deadlib packed | 26.40 | 37.88 | 9.33 | 3.157 |
+| SRPG10 | FFmpeg packed | 28.60 | 34.97 | 18.63 | 3.151 |
+| SRPG10 | Deadlib surface | 23.17 | 43.16 | 5.43 | 0.168 |
+| SRPG10 | FFmpeg native | 24.98 | 40.04 | 17.63 | 0.184 |
+
+Fourteen rotating cycle rounds on logical CPU 2 put the paired cycle medians below FFmpeg in all four comparisons. The 98.71% interval for SRPG9 native output was ?2.08% to +1.06%. The other three intervals fit below the 1% upper margin. Both independent allocation rounds on logical CPU 6 agreed. [Paired summary](results/windows-x86_64-20261126/fullpel-and-coefficients/paired-summary.csv)
