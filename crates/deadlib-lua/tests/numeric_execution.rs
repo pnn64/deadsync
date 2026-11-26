@@ -74,3 +74,37 @@ fn numeric_leaf_calls_preserve_results_and_observable_fallbacks() {
         "#,
     );
 }
+
+#[test]
+fn two_result_numeric_leaf_preserves_discarded_operations_and_hooks() {
+    check(
+        br#"
+        local function pair(a, b) return a + 1, -b end
+        local first, second, absent = pair(41, 2)
+        assert(first == 42 and second == -2 and absent == nil)
+        first, second = pair(41, 0)
+        assert(first == 42 and 1 / second == -math.huge)
+
+        local negations = 0
+        local special = setmetatable({}, {__unm = function()
+            assert(debug.getinfo(2, 'f').func == pair)
+            negations = negations + 1
+            return 10
+        end})
+        first = pair(41, special)
+        assert(first == 42 and negations == 1)
+        assert(not pcall(function() local discarded = pair(41) end))
+
+        local calls, returns = 0, 0
+        debug.sethook(function(event)
+            if debug.getinfo(2, 'f').func == pair then
+                if event == 'call' then calls = calls + 1 end
+                if event == 'return' then returns = returns + 1 end
+            end
+        end, 'cr')
+        first, second = pair(41, -21)
+        debug.sethook()
+        return first == 42 and second == 21 and calls == 1 and returns == 1
+        "#,
+    );
+}

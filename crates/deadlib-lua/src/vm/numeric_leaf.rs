@@ -1,7 +1,7 @@
-//! Numeric Lua functions whose result fits in a single straight-line operation.
+//! Numeric Lua functions with one or two straight-line results.
 
 use super::{FunctionId, Value, Vm, slot_index};
-use crate::bytecode::{Op, PrototypeBody, RK};
+use crate::bytecode::{Instruction, Op, PrototypeBody, RK};
 
 #[derive(Clone, Copy)]
 pub(super) enum Input {
@@ -16,15 +16,8 @@ pub(super) enum Expression {
     Binary(Op, Input, Input),
 }
 
-#[derive(Clone, Copy)]
-pub(super) struct Leaf {
-    pub registers: usize,
-    pub expression: Expression,
-    line: u32,
-}
-
-impl Leaf {
-    fn evaluate(&self, arguments: &[Value]) -> Option<f64> {
+impl Expression {
+    fn evaluate(self, arguments: &[Value]) -> Option<f64> {
         let operand = |input| match input {
             Input::Constant(value) => Some(value),
             Input::Argument(index) => match *arguments.get(index)? {
@@ -32,14 +25,22 @@ impl Leaf {
                 _ => None,
             },
         };
-        match self.expression {
-            Expression::Value(input) => operand(input),
-            Expression::Negate(input) => Some(-operand(input)?),
-            Expression::Binary(op, left, right) => {
+        match self {
+            Self::Value(input) => operand(input),
+            Self::Negate(input) => Some(-operand(input)?),
+            Self::Binary(op, left, right) => {
                 Some(Vm::number_op(op, operand(left)?, operand(right)?))
             }
         }
     }
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct Leaf {
+    pub registers: usize,
+    pub first: Expression,
+    pub second: Option<Expression>,
+    line: u32,
 }
 
 /// One live closure's decoded body. The generational ID includes its identity
@@ -77,48 +78,70 @@ impl Vm {
             return None;
         }
         let constants = program.bound_constants(closure.prototype);
-        let operand = |index| {
-            if index < u32::from(*params) {
-                Some(Input::Argument(index as usize))
-            } else if index >= RK {
-                let Value::Number(number) = constants[(index - RK) as usize] else {
-                    return None;
-                };
-                Some(Input::Constant(number))
-            } else {
-                None
-            }
-        };
-        let first = code[0];
-        let (expression, return_pc) = if first.op == Op::Return {
-            if first.c != 1 || u16::from(first.a) >= *params {
-                return None;
-            }
-            (Expression::Value(Input::Argument(usize::from(first.a))), 0)
-        } else {
-            let second = *code.get(1)?;
-            if second.op != Op::Return || second.c != 1 || second.a != first.a {
-                return None;
-            }
-            let expression = match first.op {
-                Op::Load if first.b == 0 => {
-                    let Value::Number(value) = constants[first.c as usize] else {
+        let decode = |instruction: Instruction, written: Option<u8>| {
+            let operand = |index| {
+                if index < u32::from(*params) {
+                    (written.map(u32::from) != Some(index))
+                        .then_some(Input::Argument(index as usize))
+                } else if index >= RK {
+                    let Value::Number(number) = constants[(index - RK) as usize] else {
+                        return None;
+                    };
+                    Some(Input::Constant(number))
+                } else {
+                    None
+                }
+            };
+            let left = u32::from(instruction.b);
+            let right = instruction.c;
+            Some(match instruction.op {
+                Op::Load if instruction.b == 0 => {
+                    let Value::Number(value) = constants[right as usize] else {
                         return None;
                     };
                     Expression::Value(Input::Constant(value))
                 }
-                Op::Move if first.c == 0 => Expression::Value(operand(u32::from(first.b))?),
-                Op::Neg => Expression::Negate(operand(u32::from(first.b))?),
-                Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow => {
-                    Expression::Binary(first.op, operand(u32::from(first.b))?, operand(first.c)?)
+                Op::Move if right == 0 => Expression::Value(operand(left)?),
+                Op::Neg => Expression::Negate(operand(left)?),
+                op @ (Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow) => {
+                    Expression::Binary(op, operand(left)?, operand(right)?)
                 }
                 _ => return None,
-            };
-            (expression, 1)
+            })
+        };
+        let first = code[0];
+        let (first, second, return_pc) = if first.op == Op::Return {
+            if !matches!(first.c, 1 | 2) || u32::from(first.a) + first.c > u32::from(*params) {
+                return None;
+            }
+            let argument = |index| Expression::Value(Input::Argument(index));
+            let start = usize::from(first.a);
+            (
+                argument(start),
+                (first.c == 2).then(|| argument(start + 1)),
+                0,
+            )
+        } else {
+            let expression = decode(first, None)?;
+            let next = *code.get(1)?;
+            if next.op == Op::Return && next.c == 1 && next.a == first.a {
+                (expression, None, 1)
+            } else {
+                let ret = *code.get(2)?;
+                if ret.op != Op::Return
+                    || ret.c != 2
+                    || ret.a != first.a
+                    || u16::from(next.a) != u16::from(first.a) + 1
+                {
+                    return None;
+                }
+                (expression, Some(decode(next, Some(first.a))?), 2)
+            }
         };
         Some(Leaf {
             registers: usize::from(*registers),
-            expression,
+            first,
+            second,
             line: prototype.instruction_line(return_pc),
         })
     }
@@ -142,7 +165,7 @@ impl Vm {
         checkpoint_ready: bool,
         call: usize,
         count: usize,
-        keep_result: bool,
+        wanted: usize,
         error_line: &mut u32,
     ) -> bool {
         let Value::Function(function) = self.registers[call] else {
@@ -152,8 +175,18 @@ impl Vm {
             return false;
         };
         let arguments = &self.registers[call + 1..call + 1 + count];
-        let Some(result) = leaf.evaluate(arguments) else {
+        let Some(first) = leaf.first.evaluate(arguments) else {
             return false;
+        };
+        // Even a discarded result can invoke a metamethod or fail. Only
+        // publish the call after checking all of the callee's operations.
+        let second = if let Some(expression) = leaf.second {
+            let Some(second) = expression.evaluate(arguments) else {
+                return false;
+            };
+            Value::Number(second)
+        } else {
+            Value::Nil
         };
         let (registers, line) = (leaf.registers, leaf.line);
         let ready = if checkpoint_ready {
@@ -164,10 +197,13 @@ impl Vm {
         if !ready {
             return false;
         }
-        if keep_result {
-            self.registers[call] = Value::Number(result);
+        if wanted != 0 {
+            self.registers[call] = Value::Number(first);
         }
-        self.top = call + usize::from(keep_result);
+        if wanted == 2 {
+            self.registers[call + 1] = second;
+        }
+        self.top = call + wanted;
         *error_line = line;
         true
     }

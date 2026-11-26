@@ -2555,12 +2555,12 @@ impl Vm {
                                 {
                                     self.try_inline_substring(a, checkpoint_ready)
                                 }
-                                Value::Function(_) if i.c <= 1 => self.try_numeric_leaf_call(
+                                Value::Function(_) if i.c <= 2 => self.try_numeric_leaf_call(
                                     &mut numeric_call_cache,
                                     checkpoint_ready,
                                     a,
                                     usize::from(i.b),
-                                    i.c == 1,
+                                    c,
                                     error_line,
                                 ),
                                 _ => false,

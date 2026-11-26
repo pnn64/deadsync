@@ -290,6 +290,9 @@ impl Body<'_> {
             _ => return None,
         };
         let leaf = self.vm.numeric_leaf(function)?;
+        if leaf.second.is_some() {
+            return None;
+        }
         let mut argument = |input| match input {
             Input::Constant(number) => Series::constant(Value::Number(number)),
             Input::Argument(index) if index < count => {
@@ -298,7 +301,7 @@ impl Body<'_> {
             }
             Input::Argument(_) => None,
         };
-        let result = match leaf.expression {
+        let result = match leaf.first {
             Expression::Value(input) => argument(input)?,
             Expression::Negate(index) => argument(index)?.negate(),
             Expression::Binary(op, left, right) => {
