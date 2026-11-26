@@ -282,7 +282,57 @@ pub(crate) fn predict_integer_bi_luma(
     let (Some(a), Some(b)) = (source(refs[0], x, y), source(refs[1], x, y)) else {
         return false;
     };
-    crate::simd::block_bi_weighted_16(a, b, out, stride, w0);
+    crate::simd::block_bi_weighted::<16>(a, b, out, stride, w0, 16);
+    true
+}
+
+/// Blend two integer-pel chroma predictions directly to a full frame MB.
+#[cfg(target_arch = "x86_64")]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn predict_integer_bi_chroma(
+    refs: [(&DecodedPicture, [i16; 2]); 2],
+    (x, y): (usize, usize),
+    (coded_width, coded_height): (usize, usize),
+    shift_y: usize,
+    out: [&mut [u8]; 2],
+    stride: usize,
+    w0: i32,
+) -> bool {
+    let width = coded_width / 2;
+    let height = 16usize >> shift_y;
+    let source = |pic: &DecodedPicture, mv: [i16; 2]| {
+        let dx = i32::from(mv[0]);
+        let dy = i32::from(mv[1]) << (1 - shift_y);
+        if (dx | dy) & 7 != 0
+            || pic.sample_bytes != 1
+            || pic.chroma_422 != (shift_y == 0)
+            || pic.width as usize != coded_width
+            || pic.height as usize != coded_height
+        {
+            return None;
+        }
+        let x = x.checked_add_signed((dx >> 3) as isize)?;
+        let y = y.checked_add_signed((dy >> 3) as isize)?;
+        if x + 8 > width || y + height > (coded_height >> shift_y) {
+            return None;
+        }
+        pic.wait_chroma((y + height) * width);
+        Some(y * width + x)
+    };
+
+    let (Some(a), Some(b)) = (source(refs[0].0, refs[0].1), source(refs[1].0, refs[1].1)) else {
+        return false;
+    };
+    for (plane, out) in out.into_iter().enumerate() {
+        crate::simd::block_bi_weighted::<8>(
+            (&refs[0].0.chroma(plane)[a..], width),
+            (&refs[1].0.chroma(plane)[b..], width),
+            out,
+            stride,
+            w0,
+            height,
+        );
+    }
     true
 }
 

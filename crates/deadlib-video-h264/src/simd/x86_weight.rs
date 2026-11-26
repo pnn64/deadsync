@@ -3,17 +3,19 @@
 use super::{bi_pred_avg, load8, scalar, store16, store8, widen8, widen8_hi};
 use core::arch::x86_64::*;
 
-/// Apply frame bi-prediction to a full luma macroblock with strided planes.
-pub(crate) fn block_bi_weighted_16(
+/// Apply frame bi-prediction to a full macroblock with strided planes.
+pub(crate) fn block_bi_weighted<const WIDTH: usize>(
     (a, stride_a): (&[u8], usize),
     (b, stride_b): (&[u8], usize),
     out: &mut [u8],
     stride_out: usize,
     w0: i32,
+    height: usize,
 ) {
-    assert!(a.len() >= 15 * stride_a + 16);
-    assert!(b.len() >= 15 * stride_b + 16);
-    assert!(out.len() >= 15 * stride_out + 16);
+    assert!(matches!(WIDTH, 8 | 16) && height > 0);
+    assert!(a.len() >= (height - 1) * stride_a + WIDTH);
+    assert!(b.len() >= (height - 1) * stride_b + WIDTH);
+    assert!(out.len() >= (height - 1) * stride_out + WIDTH);
     debug_assert!((-64..=128).contains(&w0));
     // SAFETY: all row accesses are in bounds and SSE2 is available on
     // x86-64. Implicit weights and rounding fit in signed 16-bit lanes.
@@ -25,18 +27,32 @@ pub(crate) fn block_bi_weighted_16(
             let sum = _mm_add_epi16(_mm_mullo_epi16(a, weight0), _mm_mullo_epi16(b, weight1));
             _mm_srai_epi16(_mm_add_epi16(sum, round), 6)
         };
-        for row in 0..16 {
-            let x = _mm_loadu_si128(a.as_ptr().add(row * stride_a).cast());
-            let y = _mm_loadu_si128(b.as_ptr().add(row * stride_b).cast());
+        let load = |plane: &[u8], off: usize| {
+            if WIDTH == 16 {
+                _mm_loadu_si128(plane.as_ptr().add(off).cast())
+            } else {
+                load8(plane, off)
+            }
+        };
+        for row in 0..height {
+            let x = load(a, row * stride_a);
+            let y = load(b, row * stride_b);
             let values = if w0 == 32 {
                 _mm_avg_epu8(x, y)
             } else {
-                _mm_packus_epi16(
-                    apply(widen8(x), widen8(y)),
-                    apply(widen8_hi(x), widen8_hi(y)),
-                )
+                let lo = apply(widen8(x), widen8(y));
+                let hi = if WIDTH == 16 {
+                    apply(widen8_hi(x), widen8_hi(y))
+                } else {
+                    lo
+                };
+                _mm_packus_epi16(lo, hi)
             };
-            store16(out, row * stride_out, values);
+            if WIDTH == 16 {
+                store16(out, row * stride_out, values);
+            } else {
+                store8(out, row * stride_out, values);
+            }
         }
     }
 }
@@ -129,24 +145,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn strided_luma_bi_prediction_matches_the_scalar_formula() {
-        let a = core::array::from_fn::<u8, { 19 * 16 }, _>(|i| (i * 37) as u8);
-        let b = core::array::from_fn::<u8, { 23 * 16 }, _>(|i| (i * 91 + 7) as u8);
-        for w0 in [-64, -1, 0, 21, 32, 64, 113, 128] {
-            let mut actual = [117; 29 * 16];
-            let mut expected = actual;
-            for row in 0..16 {
-                scalar::weighted_bi_implicit(
-                    &a[row * 19..][..16],
-                    &b[row * 23..][..16],
-                    &mut expected[row * 29..][..16],
-                    w0,
-                    64 - w0,
-                );
+    fn strided_bi_prediction_matches_scalar_for_both_plane_widths() {
+        fn check<const WIDTH: usize>(height: usize) {
+            let a = core::array::from_fn::<u8, { 19 * 16 }, _>(|i| (i * 37) as u8);
+            let b = core::array::from_fn::<u8, { 23 * 16 }, _>(|i| (i * 91 + 7) as u8);
+            for w0 in [-64, -1, 0, 21, 32, 64, 113, 128] {
+                let mut actual = [117; 29 * 16];
+                let mut expected = actual;
+                for row in 0..height {
+                    scalar::weighted_bi_implicit(
+                        &a[row * 19..][..WIDTH],
+                        &b[row * 23..][..WIDTH],
+                        &mut expected[row * 29..][..WIDTH],
+                        w0,
+                        64 - w0,
+                    );
+                }
+                block_bi_weighted::<WIDTH>((&a, 19), (&b, 23), &mut actual, 29, w0, height);
+                assert_eq!(actual, expected, "width={WIDTH}, height={height}, w0={w0}");
             }
-            block_bi_weighted_16((&a, 19), (&b, 23), &mut actual, 29, w0);
-            assert_eq!(actual, expected, "w0={w0}");
         }
+        check::<16>(16);
+        check::<8>(8);
+        check::<8>(16);
     }
 
     #[test]

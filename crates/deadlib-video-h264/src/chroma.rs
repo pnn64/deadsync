@@ -46,6 +46,26 @@ impl<P: Pixel> SliceContext<'_, P> {
         if l0.is_none() && l1.is_none() {
             return;
         }
+        #[cfg(target_arch = "x86_64")]
+        if P::BYTES == 1 && !self.mbaff && !self.field_pic_flag && (x, y, w, h) == (0, 0, 16, 16) {
+            if let (Some((a, r0, mv0)), Some((b, r1, mv1))) = (l0, l1) {
+                if let Some(weight) = sp.wctx.frame_bi_weight(r0 as usize, r1 as usize) {
+                    let off = self.lc_offset + cx;
+                    let planes = [&mut self.frame.u[off..], &mut self.frame.v[off..]];
+                    if crate::inter_pred::predict_integer_bi_chroma(
+                        [(a, mv0), (b, mv1)],
+                        (cx, mb_y >> sy),
+                        (self.width as usize, self.height as usize),
+                        sy,
+                        planes,
+                        self.lc_stride,
+                        weight,
+                    ) {
+                        return;
+                    }
+                }
+            }
+        }
         let weights = sp
             .wctx
             .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx);

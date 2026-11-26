@@ -42,7 +42,7 @@ pub use super::scalar::weighted_bi;
 pub use deblock::{
     deblock_chroma_lines, deblock_luma_lines, load_edge_lines_v, store_edge_lines_v,
 };
-pub(crate) use weight::block_bi_weighted_16;
+pub(crate) use weight::block_bi_weighted;
 pub use weight::{weighted_bi_implicit, weighted_uni};
 
 /// Detected CPU capability level, in ascending order. `Scalar` is only
