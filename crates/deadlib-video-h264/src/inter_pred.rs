@@ -286,7 +286,26 @@ pub(crate) fn predict_integer_bi_luma(
     true
 }
 
-/// Copy an in-bounds full-pel macroblock in an 8-bit 4:2:0 frame.
+/// Locate a skip prediction in a prevalidated, same-size coded frame.
+#[inline]
+fn fullpel_420_position(
+    mv: [i16; 2],
+    (x, y): (usize, usize),
+    (width, height): (usize, usize),
+) -> Option<(usize, usize)> {
+    if mv == [0, 0] {
+        return Some((x, y));
+    }
+    if (mv[0] | mv[1]) & 7 != 0 {
+        return None;
+    }
+    let x = x.checked_add_signed(isize::from(mv[0] >> 2))?;
+    let y = y.checked_add_signed(isize::from(mv[1] >> 2))?;
+    (x + 16 <= width && y + 16 <= height).then_some((x, y))
+}
+
+/// Copy an in-bounds full-pel macroblock in matching 8-bit 4:2:0 frames.
+/// The caller validates the reference geometry for the slice.
 pub(crate) fn predict_integer_uni_420(
     pic: &DecodedPicture,
     mv: [i16; 2],
@@ -294,23 +313,9 @@ pub(crate) fn predict_integer_uni_420(
     (width, height): (usize, usize),
     [out_y, out_u, out_v]: [&mut [u8]; 3],
 ) -> bool {
-    if (mv[0] | mv[1]) & 7 != 0
-        || pic.width as usize != width
-        || pic.height as usize != height
-        || pic.sample_bytes != 1
-        || pic.chroma_422
-    {
-        return false;
-    }
-    let (Some(x), Some(y)) = (
-        x.checked_add_signed(isize::from(mv[0] >> 2)),
-        y.checked_add_signed(isize::from(mv[1] >> 2)),
-    ) else {
+    let Some((x, y)) = fullpel_420_position(mv, (x, y), (width, height)) else {
         return false;
     };
-    if x + 16 > width || y + 16 > height {
-        return false;
-    }
 
     fn copy<const BLOCK: usize>(src: &[u8], dst: &mut [u8], stride: usize) {
         for row in 0..BLOCK {
@@ -330,6 +335,7 @@ pub(crate) fn predict_integer_uni_420(
 
 /// Blend all three planes of a frame macroblock when both references land
 /// on integer 4:2:0 samples. The reference rows are published together.
+/// The caller validates the reference geometry for the slice.
 #[cfg(target_arch = "x86_64")]
 pub(crate) fn predict_integer_bi_420(
     refs: [(&DecodedPicture, [i16; 2]); 2],
@@ -338,23 +344,8 @@ pub(crate) fn predict_integer_bi_420(
     [out_y, out_u, out_v]: [&mut [u8]; 3],
     weight: i32,
 ) -> bool {
-    let position = |(pic, mv): (&DecodedPicture, [i16; 2])| {
-        if (mv[0] | mv[1]) & 7 != 0
-            || pic.width as usize != width
-            || pic.height as usize != height
-            || pic.sample_bytes != 1
-            || pic.chroma_422
-        {
-            return None;
-        }
-        let px = x.checked_add_signed(isize::from(mv[0] >> 2))?;
-        let py = y.checked_add_signed(isize::from(mv[1] >> 2))?;
-        if px + 16 > width || py + 16 > height {
-            return None;
-        }
-        Some((px, py))
-    };
-    let (Some((ax, ay)), Some((bx, by))) = (position(refs[0]), position(refs[1])) else {
+    let position = |mv| fullpel_420_position(mv, (x, y), (width, height));
+    let (Some((ax, ay)), Some((bx, by))) = (position(refs[0].1), position(refs[1].1)) else {
         return false;
     };
     let (a, b) = (refs[0].0, refs[1].0);

@@ -1265,7 +1265,28 @@ fn run_slice_px<P: Pixel, const MBAFF: bool>(
         bottom_field_flag: header.bottom_field_flag,
     };
 
+    let matching_420 = |picture: &Arc<DecodedPicture>| {
+        picture.width == coded_width
+            && picture.height == coded_height
+            && picture.sample_bytes == 1
+            && !picture.chroma_422
+    };
+    let fullpel_skip_420 = P::BYTES == 1
+        && !MBAFF
+        && !is_field_pic
+        && sps.chroma_format_idc == 1
+        && if is_p_slice {
+            wctx.p_skip_is_unweighted() && ref_pic_list.first().is_none_or(matching_420)
+        } else {
+            is_b_slice
+                && _ref_pic_list_l0
+                    .iter()
+                    .chain(_ref_pic_list_l1)
+                    .all(matching_420)
+        };
+
     let params = SliceParams {
+        fullpel_skip_420,
         is_p_slice,
         is_b_slice,
         use_weight,

@@ -14,6 +14,7 @@ use crate::decoder::Frame;
 /// Bundles the immutable slice-level data (header fields, PPS/SPS flags,
 /// reference lists) to avoid long parameter lists.
 pub(crate) struct SliceParams<'a> {
+    pub fullpel_skip_420: bool,
     pub is_p_slice: bool,
     pub is_b_slice: bool,
     pub use_weight: u8,
@@ -596,12 +597,7 @@ impl<P: Pixel, const MBAFF: bool> SliceContext<'_, P, MBAFF> {
             },
         );
         if let Some(ref_pic) = ref_pic_list.first() {
-            let copied = P::BYTES == 1
-                && !MBAFF
-                && !self.field_pic_flag
-                && !sp.monochrome
-                && !self.chroma_422()
-                && sp.wctx.p_skip_is_unweighted()
+            let copied = sp.fullpel_skip_420
                 && crate::inter_pred::predict_integer_uni_420(
                     ref_pic,
                     [mvp_x, mvp_y],
@@ -920,8 +916,7 @@ impl<P: Pixel, const MBAFF: bool> SliceContext<'_, P, MBAFF> {
                     let y_offset = self.ly_offset + mb_x;
                     let c_offset = self.lc_offset + (mb_x / 2);
                     let refs = [(&**a, mv0), (&**b, mv1)];
-                    if !sp.monochrome
-                        && !self.chroma_422()
+                    if sp.fullpel_skip_420
                         && crate::inter_pred::predict_integer_bi_420(
                             refs,
                             (mb_x, mb_y),
