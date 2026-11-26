@@ -9127,12 +9127,14 @@ fn dedicated_controller_providers_stay_in_the_game() {
     let providers = read_source(root.join("crates/deadsync-input/src/devices.rs"))
         .expect("game controller providers");
     assert!(providers.contains("GpSystemEvent<GamepadBackend>"));
-    let reflex = read_source(root.join("crates/deadsync-reflex/src/io.rs"))
-        .expect("RE:Flex driver");
-    assert!(reflex.contains("GamepadBackend::Reflex"));
     let reflex = root.join("crates/deadsync-reflex/src");
+    let reflex_lib = production_source(&reflex.join("lib.rs"));
+    assert!(reflex_lib.contains("Fn(GpSystemEvent<()>)"));
     for file in production_rust_files(&reflex) {
-        assert!(!production_source(&file).contains("install_default_bindings"));
+        let source = production_source(&file);
+        assert!(!source.contains("GamepadBackend"));
+        assert!(!source.contains("GamepadSystemEvent"));
+        assert!(!source.contains("install_default_bindings"));
     }
     let defaults = production_source(&root.join("crates/deadsync-input/src/bindings/reflex.rs"));
     assert!(defaults.contains("pub fn install_reflex_default_bindings("));
@@ -9145,6 +9147,7 @@ fn dedicated_controller_providers_stay_in_the_game() {
     assert!(launch.contains("deadsync_smx::native_smx_owns_device("));
     assert!(launch.contains("map_backend(GamepadBackend::Native)"));
     assert!(launch.contains("map_backend(|()| GamepadBackend::Smx)"));
+    assert!(launch.contains("map_backend(|()| GamepadBackend::Reflex)"));
 }
 
 #[test]

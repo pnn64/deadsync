@@ -52,6 +52,40 @@ fn clock(step: u64) -> impl FnMut() -> (Instant, u64) {
 }
 
 #[test]
+fn system_events_report_device_metadata_for_connection_and_disconnection() {
+    let (device, mut service) = fixture(|_| {});
+    let (tx, rx) = mpsc::channel();
+    Arc::get_mut(&mut service).unwrap().system = Arc::new(move |event| {
+        tx.send(event).unwrap();
+    });
+
+    system_event(&service, &device, true);
+    system_event(&service, &device, false);
+
+    let expected_id = PadId(REFLEX_PAD_ID_BASE as u32);
+    let connected = rx.try_recv().unwrap();
+    assert!(
+        matches!(
+            &connected,
+            GpSystemEvent::Connected {
+                name, id, vendor_id: Some(VID), product_id: Some(PID), backend: (), initial: false,
+            } if name == "RE:Flex test" && *id == expected_id
+        ),
+        "{connected:?}"
+    );
+    let disconnected = rx.try_recv().unwrap();
+    assert!(
+        matches!(
+            &disconnected,
+            GpSystemEvent::Disconnected { name, id, backend: (), initial: false }
+                if name == "RE:Flex test" && *id == expected_id
+        ),
+        "{disconnected:?}"
+    );
+    assert!(rx.try_recv().is_err());
+}
+
+#[test]
 fn sensor_transitions_are_not_coalesced_and_disconnect_releases_held_buttons() {
     let (tx, rx) = mpsc::channel();
     let (d, s) = fixture(move |event| {

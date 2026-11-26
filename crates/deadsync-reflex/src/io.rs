@@ -4,7 +4,6 @@ use deadlib_platform::{
     host_time,
     input::{PadCode, PadId, uuid_from_bytes},
 };
-use deadsync_input::devices::GamepadBackend;
 use hidapi::{DeviceInfo, HidApi, HidDevice};
 use protocol::{PID, VID, decode, light_packet};
 use std::{
@@ -299,19 +298,19 @@ fn connect(
 fn system_event(s: &Service, d: &Device, connected: bool) {
     let id = PadId((REFLEX_PAD_ID_BASE + d.player) as u32);
     let event = if connected {
-        GamepadSystemEvent::Connected {
+        GpSystemEvent::Connected {
             name: d.name.to_string(),
             id,
             vendor_id: Some(VID),
             product_id: Some(PID),
-            backend: GamepadBackend::Reflex,
+            backend: (),
             initial: false,
         }
     } else {
-        GamepadSystemEvent::Disconnected {
+        GpSystemEvent::Disconnected {
             name: d.name.to_string(),
             id,
-            backend: GamepadBackend::Reflex,
+            backend: (),
             initial: false,
         }
     };

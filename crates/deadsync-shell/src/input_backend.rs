@@ -137,7 +137,9 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
             let _ = reflex_pad.send_event(UserEvent::Pad(event));
         },
         move |event| {
-            let _ = reflex_sys.send_event(UserEvent::GamepadSystem(event));
+            let _ = reflex_sys.send_event(UserEvent::GamepadSystem(
+                event.map_backend(|()| GamepadBackend::Reflex),
+            ));
         },
     );
 
