@@ -481,7 +481,9 @@ Simply Love draws the picker and formats the playback label.
 
 `deadsync-gameplay::song_backgrounds` owns the authored background timeline.
 Stage preparation expands random backgrounds using the final master chart,
-including solo P2 and Lua chart replacements. Cue starts are converted once
+including solo P2 and Lua chart replacements. The shell uses the same chart
+loader for stage entry and Lua replacements. The game validates and applies
+the replacement after all requested payloads load. Cue starts are converted once
 with the stage timing map. The primary cursor keeps its forward-only behavior,
 and layer-two lookup follows the display clock in either direction. The shell
 loads textures and drives video timing. The theme applies tint, transitions,

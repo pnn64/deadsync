@@ -278,8 +278,18 @@ mod tests {
                 deadsync_config::options::SongLuaMode::Runtime, None);
             assert!(prepared.compile_succeeded(), "{style:?} compilation");
             assert!(prepared.loaded_style().unwrap().starts_with("pump-"));
-            assert!(apply_song_lua_reload(&song, &mut charts, &mut payloads, &prepared,
-                &mut session, 0.0).unwrap(), "{style:?} selection was applied");
+            assert!(
+                apply_song_lua_reload(
+                    &song,
+                    &mut charts,
+                    &mut payloads,
+                    &prepared,
+                    &mut session,
+                    |song, indices| crate::song_loading::load_gameplay_charts(song, indices, 0.0),
+                )
+                .unwrap(),
+                "{style:?} selection was applied"
+            );
             assert_eq!(session.play_style, style);
             assert_eq!(session.joined_sides, [true, style.player_count() == 2]);
             assert!(charts.iter().all(|chart| chart.chart_type == format!("pump-{kind}")));
@@ -342,9 +352,13 @@ mod tests {
             play_style: Some(Style::Versus),
         };
 
+        let load_charts = |song: &SongData, indices: &[usize]| {
+            assert_eq!(indices, [0, 0]);
+            crate::song_loading::load_gameplay_charts(song, indices, 0.0)
+        };
         for (source, p2_step) in [(&song, Some(1)), (&unavailable_song, Some(0))] {
             assert!(apply_stage_chart_reload(
-                source, &mut charts, &mut payloads, versus(p2_step), &mut session, 0.0,
+                source, &mut charts, &mut payloads, versus(p2_step), &mut session, load_charts,
             )
             .is_err());
             assert_eq!(session, initial_session);
@@ -352,8 +366,21 @@ mod tests {
             assert!(payloads.iter().all(|item| Arc::ptr_eq(item, &payload)));
         }
 
+        assert!(apply_stage_chart_reload(
+            &song,
+            &mut charts,
+            &mut payloads,
+            versus(Some(0)),
+            &mut session,
+            |_, _| Ok(Vec::new()),
+        )
+        .is_err());
+        assert_eq!(session, initial_session);
+        assert!(charts.iter().all(|item| Arc::ptr_eq(item, &chart)));
+        assert!(payloads.iter().all(|item| Arc::ptr_eq(item, &payload)));
+
         apply_stage_chart_reload(
-            &song, &mut charts, &mut payloads, versus(Some(0)), &mut session, 0.0,
+            &song, &mut charts, &mut payloads, versus(Some(0)), &mut session, load_charts,
         )
         .unwrap();
         assert_eq!(session.play_style, Style::Versus);

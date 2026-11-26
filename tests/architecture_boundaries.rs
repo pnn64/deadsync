@@ -459,6 +459,8 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     assert!(lua_adapter.contains("apply_stage_chart_reload("));
     assert!(chart_adapter.contains("pub fn apply_stage_chart_reload("));
     assert!(!chart_adapter.contains("PreparedGameplaySongLua"));
+    assert!(!chart_adapter.contains("deadsync_config::runtime"));
+    assert!(contains_rust(&chart_adapter, "let loaded = load_charts(song, &indices)?;"));
     assert!(contains_rust(
         &chart_adapter,
         "lua_reload_chart_indices(song, reload.steps, selected_session.play_style)?"
@@ -512,6 +514,10 @@ fn gameplay_stage_bootstrap_is_game_owned() {
             .expect("select Lua charts");
         let prepare = entry.find("prepare_gameplay_stage(GameplayStageInput {")
             .expect("prepare game");
+        assert!(contains_rust(
+            &entry[reload..prepare],
+            "song_loading::load_gameplay_charts(song, indices,",
+        ));
         let backgrounds = entry.find("prepared.resolve_song_backgrounds(")
             .expect("resolve the final stage's backgrounds");
         let present = entry.find("crate::gameplay_runtime::present_stage(")

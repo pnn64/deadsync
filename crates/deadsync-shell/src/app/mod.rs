@@ -10027,7 +10027,12 @@ impl App {
                     );
                     if apply_song_lua_reload(
                         &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
-                        &mut gameplay_session, init_config.global_offset_seconds,
+                        &mut gameplay_session,
+                        |song, indices| {
+                            song_loading::load_gameplay_charts(
+                                song, indices, init_config.global_offset_seconds,
+                            )
+                        },
                     )? {
                         crate::gameplay_runtime::refresh_chart_scores(
                             &mut gameplay_startup, &charts, &player_profiles, &gameplay_session,
@@ -10484,7 +10489,12 @@ impl App {
                     };
                     if apply_song_lua_reload(
                         &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
-                        &mut gameplay_session, gameplay_config.global_offset_seconds,
+                        &mut gameplay_session,
+                        |song, indices| {
+                            song_loading::load_gameplay_charts(
+                                song, indices, gameplay_config.global_offset_seconds,
+                            )
+                        },
                     )? {
                         crate::gameplay_runtime::refresh_chart_scores(
                             &mut gameplay_startup, &charts, &player_profiles, &gameplay_session,

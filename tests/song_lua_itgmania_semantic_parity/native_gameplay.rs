@@ -1938,7 +1938,9 @@ end }
         assert_eq!(prepared.loaded_style(), Some("double"));
         assert_eq!(prepared.loaded_steps().unwrap()[0], Some(3), "native catalog selection maps to its playable payload");
         deadsync_shell::gameplay_entry::apply_song_lua_reload(&song, &mut charts,
-            &mut payloads, &prepared, &mut session, -0.008).unwrap();
+            &mut payloads, &prepared, &mut session,
+            |song, indices| load_gameplay_charts(song, indices, -0.008),
+        ).unwrap();
         assert_eq!(session.play_style, deadsync_gameplay::GameplayInputPlayStyle::Double);
         assert_eq!(session.joined_sides, [true,false]);
         assert_eq!(charts[0].chart_type, "dance-double");
@@ -5867,7 +5869,7 @@ fn replay_mode(
             &mut payloads,
             &prepared,
             &mut session,
-            config.global_offset_seconds,
+            |song, indices| load_gameplay_charts(song, indices, config.global_offset_seconds),
         )?;
         let mut state = Box::new(gameplay::init(
             song.clone(),

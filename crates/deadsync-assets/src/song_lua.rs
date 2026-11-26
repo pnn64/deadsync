@@ -129,7 +129,7 @@ pub fn apply_song_lua_reload<S>(
     payloads: &mut [Arc<GameplayChartData>; MAX_PLAYERS],
     prepared: &PreparedGameplaySongLua<S>,
     session: &mut GameplaySession,
-    global_offset_seconds: f32,
+    load_charts: impl FnOnce(&SongData, &[usize]) -> Result<Vec<GameplayChartData>, String>,
 ) -> Result<bool, String> {
     let Some(steps) = prepared.loaded_steps() else {
         return Ok(false);
@@ -155,7 +155,7 @@ pub fn apply_song_lua_reload<S>(
             play_style,
         },
         session,
-        global_offset_seconds,
+        load_charts,
     )?;
     Ok(true)
 }
