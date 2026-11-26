@@ -403,3 +403,18 @@ Both prototypes matched the two bundled clips and the progressive, MBAFF, constr
 | SRPG10 | FFmpeg native | 24.03 | 41.61 | 17.63 | 0.184 |
 
 Across ten rotating rounds the paired packed cycle medians were ?0.16% and ?4.79% relative to FFmpeg. The paired native medians were +1.46% and ?5.37%. Native throughput per billion cycles changed ?1.43% and +5.67% at the paired medians. Native allocation calls fell 58.73% and 69.18%, and requested bytes fell 1.75% and 8.29%. The 97.85% cycle intervals for SRPG9 still extend above the 1% threshold for both output modes. [Paired summary](results/windows-x86_64-20261126/surface-feature/paired-summary.csv)
+
+## Later video segments
+
+A second workload sought to 10 seconds in both original assets and remuxed 150 packets from the keyframe selected by FFmpeg. Both Rust output modes matched FFmpeg's frame bytes on these excerpts. Twelve cycle rounds ran on logical CPU 14. Two calibrated allocation rounds ran separately on logical CPU 6. [Raw samples and summaries](results/windows-x86_64-20261126/surface-later-segments)
+
+| Clip | Output mode | Median paired cycle change | Median paired throughput change | Allocation call change | Requested byte change |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Packed | +0.69% | ?0.69% | ?38.69% | +0.51% |
+| SRPG9 | Surface | +1.23% | ?1.21% | ?59.59% | ?2.04% |
+| SRPG10 | Packed | ?2.92% | +3.01% | ?50.14% | +0.48% |
+| SRPG10 | Surface | ?1.21% | +1.23% | ?69.69% | ?4.04% |
+
+The one-reference B-skip candidate changed median paired cycles by +1.09% on SRPG9 and ?2.12% on SRPG10 relative to `53aa12147` with surfaces enabled. Reusing the slice's picture-identity table for deblocking changed cycles by +2.04% and ?1.71%. Both candidates matched FFmpeg on the bundled clips and the four additional 8-bit reference streams. [Paired samples](results/windows-x86_64-20261126/native-skip-and-keys-paired.csv)
+
+In a diagnostic run with one sampled macroblock per 32, direct full-pel YUV prediction was recorded for 20,772 of 38,250 sampled SRPG9 macroblocks and 28,680 of 38,250 sampled SRPG10 macroblocks. Partitioned B-skip was recorded 112 and 15 times. [Surface decoder profile](results/windows-x86_64-20261126/surface-hot-path-profile.csv)
