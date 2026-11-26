@@ -683,49 +683,37 @@ pub(crate) fn derive_spatial_direct_base(
     let mut mv = [[0i16; 2]; 2];
     let mut pred_flag = [false; 2];
 
+    // Both lists use the same neighbour blocks at the macroblock origin.
+    let frame_neighbors = (!mctx.mbaff).then(|| {
+        let col = mb_idx % mb_width;
+        let location =
+            |mb: usize, block: usize| (mb_slice_id[mb] == cur_slice_id).then_some(mb * 16 + block);
+        let left = (col > 0)
+            .then(|| location(mb_idx - 1, OFFSET_TO_BLOCK[0][3]))
+            .flatten();
+        let Some(above_mb) = mb_idx.checked_sub(mb_width) else {
+            return [left, None, None];
+        };
+        let above = location(above_mb, OFFSET_TO_BLOCK[3][0]);
+        let right = (col + 1 < mb_width)
+            .then(|| location(above_mb + 1, OFFSET_TO_BLOCK[3][0]))
+            .flatten()
+            .or_else(|| {
+                (col > 0)
+                    .then(|| location(above_mb - 1, OFFSET_TO_BLOCK[3][3]))
+                    .flatten()
+            });
+        [left, above, right]
+    });
+
     // For each list, find min-positive ref_idx from neighbors and derive MV
     for list in 0..2 {
         let (mv_s, ref_s) = stores[list];
 
-        let a = get_mv_neighbor_left_mbaff(
-            mv_s,
-            ref_s,
-            mb_idx,
-            mb_width,
-            0,
-            0,
-            mb_slice_id,
-            cur_slice_id,
-            mctx.mbaff,
-            mctx.mb_field_decoding,
-        );
-        let b = get_mv_neighbor_above_mbaff(
-            mv_s,
-            ref_s,
-            mb_idx,
-            mb_width,
-            0,
-            0,
-            mb_slice_id,
-            cur_slice_id,
-            mctx.mbaff,
-            mctx.mb_field_decoding,
-        );
-        let c = get_mv_neighbor_above_right_mbaff(
-            mv_s,
-            ref_s,
-            mb_idx,
-            mb_width,
-            0,
-            0,
-            16,
-            mb_slice_id,
-            cur_slice_id,
-            mctx.mbaff,
-            mctx.mb_field_decoding,
-        )
-        .or_else(|| {
-            get_mv_neighbor_above_left_mbaff(
+        let [a, b, c] = if let Some(neighbors) = frame_neighbors {
+            neighbors.map(|pos| pos.map(|block| (mv_s[block], ref_s[block])))
+        } else {
+            let a = get_mv_neighbor_left_mbaff(
                 mv_s,
                 ref_s,
                 mb_idx,
@@ -736,8 +724,48 @@ pub(crate) fn derive_spatial_direct_base(
                 cur_slice_id,
                 mctx.mbaff,
                 mctx.mb_field_decoding,
+            );
+            let b = get_mv_neighbor_above_mbaff(
+                mv_s,
+                ref_s,
+                mb_idx,
+                mb_width,
+                0,
+                0,
+                mb_slice_id,
+                cur_slice_id,
+                mctx.mbaff,
+                mctx.mb_field_decoding,
+            );
+            let c = get_mv_neighbor_above_right_mbaff(
+                mv_s,
+                ref_s,
+                mb_idx,
+                mb_width,
+                0,
+                0,
+                16,
+                mb_slice_id,
+                cur_slice_id,
+                mctx.mbaff,
+                mctx.mb_field_decoding,
             )
-        });
+            .or_else(|| {
+                get_mv_neighbor_above_left_mbaff(
+                    mv_s,
+                    ref_s,
+                    mb_idx,
+                    mb_width,
+                    0,
+                    0,
+                    mb_slice_id,
+                    cur_slice_id,
+                    mctx.mbaff,
+                    mctx.mb_field_decoding,
+                )
+            });
+            [a, b, c]
+        };
 
         let ref_a = a.map(|(_, r)| r).unwrap_or(-1);
         let ref_b = b.map(|(_, r)| r).unwrap_or(-1);
@@ -791,11 +819,11 @@ pub(crate) fn derive_spatial_direct_base(
             let mv_a = a.map(|(m, _)| m).unwrap_or([0, 0]);
             let mv_b = b.map(|(m, _)| m).unwrap_or([0, 0]);
             let mv_c = c.map(|(m, _)| m).unwrap_or([0, 0]);
-            let mut xs = [mv_a[0], mv_b[0], mv_c[0]];
-            let mut ys = [mv_a[1], mv_b[1], mv_c[1]];
-            xs.sort();
-            ys.sort();
-            mv[list] = [xs[1], ys[1]];
+            let median = |a: i16, b: i16, c: i16| a.max(b).min(c).max(a.min(b));
+            mv[list] = [
+                median(mv_a[0], mv_b[0], mv_c[0]),
+                median(mv_a[1], mv_b[1], mv_c[1]),
+            ];
         }
     }
 
