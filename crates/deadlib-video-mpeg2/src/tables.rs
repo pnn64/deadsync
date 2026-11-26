@@ -391,6 +391,36 @@ pub(crate) static COEFFICIENT_ONE: [u16; 65536] = vlc_table(&[
 pub(crate) const ESCAPE: usize = 111;
 pub(crate) const END_OF_BLOCK: usize = 112;
 
+pub(crate) static SHORT_ZERO: [u16; 512] = short_coefficients(&COEFFICIENT_ZERO);
+pub(crate) static SHORT_ONE: [u16; 512] = short_coefficients(&COEFFICIENT_ONE);
+
+// The nine-bit prefix resolves frequent signed coefficients in one lookup.
+// A zero length falls back to the full table. Level zero marks EOB or escape.
+const fn short_coefficients(codes: &[u16; 65536]) -> [u16; 512] {
+    let mut short = [0; 512];
+    let mut prefix = 0;
+    while prefix < short.len() {
+        let entry = codes[prefix << 7];
+        let length = entry & 31;
+        let symbol = (entry >> 5) as usize;
+        if length != 0 && length <= 9 {
+            short[prefix] = match symbol {
+                END_OF_BLOCK => length,
+                ESCAPE => length | (1 << 4),
+                _ if length < 9 => {
+                    let (run, magnitude) = RUN_LEVEL[symbol];
+                    let sign = (prefix >> (8 - length)) & 1;
+                    let level = if sign == 0 { magnitude } else { -magnitude };
+                    (length + 1) | ((run as u16) << 4) | ((level as u16) << 9)
+                }
+                _ => 0,
+            };
+        }
+        prefix += 1;
+    }
+    short
+}
+
 pub(crate) const RUN_LEVEL: [(usize, i32); ESCAPE] = [
     (0, 1),
     (0, 2),

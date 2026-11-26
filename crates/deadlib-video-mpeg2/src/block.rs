@@ -47,40 +47,57 @@ pub(crate) fn decode(
         next = 1;
     }
 
-    let table = if intra && coding.intra_vlc {
-        &tables::COEFFICIENT_ONE
+    let (short, long) = if intra && coding.intra_vlc {
+        (&tables::SHORT_ONE, &tables::COEFFICIENT_ONE)
     } else {
-        &tables::COEFFICIENT_ZERO
+        (&tables::SHORT_ZERO, &tables::COEFFICIENT_ZERO)
     };
+    let mut parity = coefficients[0];
     loop {
-        let symbol = bits.vlc(table)?;
-        let (run, level) = match symbol {
-            tables::END_OF_BLOCK => break,
-            tables::ESCAPE => {
-                let run = bits.read(6)? as usize;
-                let encoded = bits.read(12)? as i32;
+        let entry = short[bits.peek(9) as usize];
+        let (run, level) = if entry == 0 {
+            read_long(bits, long)?
+        } else {
+            bits.skip((entry & 15) as u8)?;
+            let run = usize::from((entry >> 4) & 31);
+            let level = i32::from((entry as i16) >> 9);
+            if level == 0 {
+                if run == 0 {
+                    break;
+                }
+                let escaped = bits.read(18)?;
+                let run = (escaped >> 12) as usize;
+                let encoded = (escaped & 0xfff) as i32;
                 let level = (encoded ^ 0x800) - 0x800;
                 if level == 0 || level == -2048 {
                     return Err(Error::Invalid("escaped coefficient level"));
                 }
                 (run, level)
-            }
-            _ => {
-                let (run, level) = tables::RUN_LEVEL[symbol];
-                (run, if bits.flag()? { -level } else { level })
+            } else {
+                (run, level)
             }
         };
         let position = *scan
             .get(next + run)
             .ok_or(Error::Invalid("coefficient run exceeds block"))?;
-        coefficients[position] = dequantize(level, quantizer, matrix[position], intra);
+        let coefficient = dequantize(level, quantizer, matrix[position], intra);
+        coefficients[position] = coefficient;
+        parity ^= coefficient;
         next += run + 1;
     }
 
     // Mismatch control makes the sum of the saturated coefficients odd.
-    let parity = coefficients.iter().fold(0, |parity, coeff| parity ^ coeff);
     coefficients[63] ^= (parity ^ 1) & 1;
     Ok(transform::inverse(&coefficients))
+}
+
+#[cold]
+fn read_long(bits: &mut Bits<'_>, table: &[u16; 65536]) -> Result<(usize, i32)> {
+    let symbol = bits.vlc(table)?;
+    let &(run, level) = tables::RUN_LEVEL
+        .get(symbol)
+        .ok_or(Error::Invalid("long coefficient code"))?;
+    Ok((run, if bits.flag()? { -level } else { level }))
 }
 
 fn dequantize(level: i32, quantizer: i32, weight: u8, intra: bool) -> i16 {
