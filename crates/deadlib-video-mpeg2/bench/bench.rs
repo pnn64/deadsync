@@ -1,7 +1,7 @@
-#[cfg(not(mpeg4))]
-use deadlib_video_mpeg2::decode_elementary_stream;
-#[cfg(mpeg4)]
-use deadlib_video_mpeg4::decode_elementary_stream;
+#[cfg(not(any(mpeg4, mp42)))]
+use deadlib_video_mpeg2 as codec;
+#[cfg(any(mpeg4, mp42))]
+use deadlib_video_mpeg4 as codec;
 use std::{env, ffi::c_void, hint::black_box, io::Write, path::Path};
 
 #[repr(C)]
@@ -151,7 +151,7 @@ impl Engine {
     fn decode(self, bytes: &[u8], length: usize, sha: Option<&Sha>) -> Output {
         let mut out = Output::default();
         match self {
-            Self::Rust => decode_elementary_stream(&bytes[..length], |frame| {
+            Self::Rust => decode_rust(&bytes[..length], |frame| {
                 out.frames += 1;
                 out.luma_pixels += (frame.width() * frame.height()) as u64;
                 if let Some(sha) = sha {
@@ -163,8 +163,7 @@ impl Engine {
                 } else {
                     black_box(frame.planes()[0].rows().next().unwrap()[0]);
                 }
-            })
-            .unwrap(),
+            }),
             Self::Ffmpeg => {
                 let mode = if sha.is_some() { 2 } else { 0 };
                 let sha_ptr = sha.map_or(std::ptr::null_mut(), |sha| sha.0);
@@ -181,6 +180,29 @@ impl Engine {
             }
         }
         out
+    }
+}
+
+#[cfg(not(mp42))]
+fn decode_rust(bytes: &[u8], output: impl FnMut(std::sync::Arc<codec::Frame>)) {
+    codec::decode_elementary_stream(bytes, output).unwrap();
+}
+
+#[cfg(mp42)]
+fn decode_rust(mut bytes: &[u8], mut output: impl FnMut(std::sync::Arc<codec::Frame>)) {
+    fn take_u32(bytes: &mut &[u8]) -> usize {
+        let (number, rest) = bytes.split_first_chunk::<4>().unwrap();
+        *bytes = rest;
+        u32::from_le_bytes(*number) as usize
+    }
+
+    let width = take_u32(&mut bytes);
+    let height = take_u32(&mut bytes);
+    let mut decoder = codec::MsMpeg4v2Decoder::new(width, height).unwrap();
+    while !bytes.is_empty() {
+        let size = take_u32(&mut bytes);
+        output(decoder.push_packet(&bytes[..size]).unwrap());
+        bytes = &bytes[size + 64..];
     }
 }
 

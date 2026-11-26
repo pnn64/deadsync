@@ -1,4 +1,4 @@
-# MPEG-4 Visual decoder benchmark
+# MPEG-4 decoder benchmark
 
 Run the shared harness from a Visual Studio x64 developer shell with Rust,
 FFmpeg and Python on the path. The ITGmania checkout supplies FFmpeg's native
@@ -64,3 +64,16 @@ paired cycle ratios were 0.9432 on `logo.mpg` and 0.9915 on `progressive.m4v`.
 The final decoder also matched FFmpeg on all 900 frames when decoding the
 original AVI file directly.
 [Baseline](results/windows-x86_64-20261126/baseline/) · [CPU 4 samples](results/windows-x86_64-20261126/cpu4/) · [CPU 2 samples](results/windows-x86_64-20261126/cpu2/)
+
+## Microsoft MPEG-4 v2
+
+```powershell
+.\crates\deadlib-video-mpeg2\bench\measure.ps1 -ItgmaniaRoot ..\itgmania -Codec mp42 -SongsRoot C:/Games/ITGmania/Songs
+```
+
+The MP42 run uses `A-Short_People_Got_No_Reason_To_Live.avi` from UPS 3,
+`banner.avi` from My Penny, and the offline `mp42.avi` fixture. Both decoders
+receive the same in-memory packets extracted before measurement. The harness
+passes FFmpeg refcounted input backed by those packets so it can retain data
+without copying. It checks the SHA-256 of the visible planes, then measures
+cycles and allocation traffic in separate passes.

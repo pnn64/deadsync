@@ -8,6 +8,9 @@
 #include <string.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
+#ifdef BENCH_PACKET_INPUT
+#include <libavutil/intreadwrite.h>
+#endif
 #include <libavutil/sha.h>
 
 #ifndef BENCH_DECODER_NAME
@@ -73,15 +76,36 @@ static int send_and_drain(AVCodecContext *dec, AVPacket *packet, AVFrame *frame,
     return ret == AVERROR(EAGAIN) || ret == AVERROR_EOF ? 0 : ret;
 }
 
+#ifdef BENCH_PACKET_INPUT
+static void keep_input(void *opaque, uint8_t *data) {
+    (void)opaque;
+    (void)data;
+}
+#endif
+
 int ff_decode(const uint8_t *data, int size, unsigned mode, struct AVSHA *sha, Output *output) {
     const AVCodec *codec = avcodec_find_decoder_by_name(BENCH_DECODER_NAME);
     AVCodecContext *dec = avcodec_alloc_context3(codec);
-    AVCodecParserContext *parser = codec ? av_parser_init(codec->id) : NULL;
     AVFrame *frame = av_frame_alloc();
     AVPacket *packet = av_packet_alloc();
     Consumer sink = {mode, sha, output};
     int ret = AVERROR(ENOMEM);
+#ifdef BENCH_PACKET_INPUT
+    AVBufferRef *input = NULL;
+    if (!codec || !dec || !frame || !packet) goto done;
+    ret = AVERROR_INVALIDDATA;
+    if (size < 8 || AV_RL32(data) > INT_MAX || AV_RL32(data + 4) > INT_MAX) goto done;
+    dec->width = AV_RL32(data);
+    dec->height = AV_RL32(data + 4);
+    input = av_buffer_create((uint8_t *)data, size, keep_input, NULL, AV_BUFFER_FLAG_READONLY);
+    ret = AVERROR(ENOMEM);
+    if (!input) goto done;
+    data += 8;
+    size -= 8;
+#else
+    AVCodecParserContext *parser = codec ? av_parser_init(codec->id) : NULL;
     if (!codec || !dec || !parser || !frame || !packet) goto done;
+#endif
     dec->thread_count = 1;
     dec->thread_type = 0;
 #ifdef BENCH_IDCT
@@ -89,6 +113,27 @@ int ff_decode(const uint8_t *data, int size, unsigned mode, struct AVSHA *sha, O
 #endif
     ret = avcodec_open2(dec, codec, NULL);
     if (ret < 0) goto done;
+#ifdef BENCH_PACKET_INPUT
+    while (size) {
+        uint32_t length;
+        ret = AVERROR_INVALIDDATA;
+        if (size <= 4 + AV_INPUT_BUFFER_PADDING_SIZE) goto done;
+        length = AV_RL32(data);
+        data += 4;
+        size -= 4;
+        if (!length || length > (uint32_t)(size - AV_INPUT_BUFFER_PADDING_SIZE)) goto done;
+        packet->buf = input;
+        packet->data = (uint8_t *)data;
+        packet->size = (int)length;
+        ret = send_and_drain(dec, packet, frame, &sink);
+        packet->buf = NULL;
+        packet->data = NULL;
+        packet->size = 0;
+        if (ret < 0) goto done;
+        data += length + AV_INPUT_BUFFER_PADDING_SIZE;
+        size -= length + AV_INPUT_BUFFER_PADDING_SIZE;
+    }
+#else
     for (;;) {
         uint8_t *payload = NULL;
         int payload_size = 0;
@@ -110,9 +155,14 @@ int ff_decode(const uint8_t *data, int size, unsigned mode, struct AVSHA *sha, O
             if (ret < 0) goto done;
         }
     }
+#endif
     ret = send_and_drain(dec, NULL, frame, &sink);
 done:
+#ifdef BENCH_PACKET_INPUT
+    av_buffer_unref(&input);
+#else
     if (parser) av_parser_close(parser);
+#endif
     av_packet_free(&packet);
     av_frame_free(&frame);
     avcodec_free_context(&dec);

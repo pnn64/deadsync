@@ -33,6 +33,7 @@ def main():
         "mpeg1": {"company": 181, "intro": 941, "nexuswave": 299},
         "mpeg2": {"dix": 865, "lights": 1553},
         "mpeg4": {"logo": 900, "progressive": 10},
+        "mp42": {"A-Short_People_Got_No_Reason_To_Live": 2206, "banner": 69, "mp42": 10},
     }[codec]
     expected_keys = {(clip, engine) for clip in expected_frames for engine in ("deadlib", "ffmpeg")}
     assert cycles.keys() == allocations.keys() == expected_keys
