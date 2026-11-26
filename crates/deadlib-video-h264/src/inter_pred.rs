@@ -286,6 +286,63 @@ pub(crate) fn predict_integer_bi_luma(
     true
 }
 
+/// Blend all three planes of a frame macroblock when both references land
+/// on integer 4:2:0 samples. The reference rows are published together.
+#[cfg(target_arch = "x86_64")]
+pub(crate) fn predict_integer_bi_420(
+    refs: [(&DecodedPicture, [i16; 2]); 2],
+    (x, y): (usize, usize),
+    (width, height): (usize, usize),
+    [out_y, out_u, out_v]: [&mut [u8]; 3],
+    weight: i32,
+) -> bool {
+    let position = |(pic, mv): (&DecodedPicture, [i16; 2])| {
+        if (mv[0] | mv[1]) & 7 != 0
+            || pic.width as usize != width
+            || pic.height as usize != height
+            || pic.sample_bytes != 1
+            || pic.chroma_422
+        {
+            return None;
+        }
+        let px = x.checked_add_signed(isize::from(mv[0] >> 2))?;
+        let py = y.checked_add_signed(isize::from(mv[1] >> 2))?;
+        if px + 16 > width || py + 16 > height {
+            return None;
+        }
+        Some((px, py))
+    };
+    let (Some((ax, ay)), Some((bx, by))) = (position(refs[0]), position(refs[1])) else {
+        return false;
+    };
+    let (a, b) = (refs[0].0, refs[1].0);
+    a.wait_luma((ay + 16) * width);
+    b.wait_luma((by + 16) * width);
+    crate::simd::block_bi_weighted::<16>(
+        (&a.luma()[ay * width + ax..], width),
+        (&b.luma()[by * width + bx..], width),
+        out_y,
+        width,
+        weight,
+        16,
+    );
+
+    let cw = width / 2;
+    let a_offset = (ay / 2) * cw + ax / 2;
+    let b_offset = (by / 2) * cw + bx / 2;
+    for (plane, dst) in [out_u, out_v].into_iter().enumerate() {
+        crate::simd::block_bi_weighted::<8>(
+            (&a.chroma(plane)[a_offset..], cw),
+            (&b.chroma(plane)[b_offset..], cw),
+            dst,
+            cw,
+            weight,
+            8,
+        );
+    }
+    true
+}
+
 /// Blend two integer-pel chroma predictions directly to a full frame MB.
 #[cfg(target_arch = "x86_64")]
 #[allow(clippy::too_many_arguments)]

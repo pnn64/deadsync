@@ -896,21 +896,40 @@ impl<P: Pixel, const MBAFF: bool> SliceContext<'_, P, MBAFF> {
 
         #[cfg(target_arch = "x86_64")]
         let luma_written = if P::BYTES == 1 && !MBAFF && !self.field_pic_flag {
-            match (ref_l0, ref_l1) {
-                (Some(a), Some(b)) => sp
-                    .wctx
-                    .frame_bi_weight(r0 as usize, r1 as usize)
-                    .is_some_and(|weight| {
-                        crate::inter_pred::predict_integer_bi_luma(
-                            [(a, mv0), (b, mv1)],
-                            mb_x,
-                            mb_y,
-                            &mut self.frame.y[self.ly_offset + mb_x..],
-                            self.ly_stride,
+            if let (Some(a), Some(b)) = (ref_l0, ref_l1) {
+                if let Some(weight) = sp.wctx.frame_bi_weight(r0 as usize, r1 as usize) {
+                    let y_offset = self.ly_offset + mb_x;
+                    let c_offset = self.lc_offset + (mb_x / 2);
+                    let refs = [(&**a, mv0), (&**b, mv1)];
+                    if !sp.monochrome
+                        && !self.chroma_422()
+                        && crate::inter_pred::predict_integer_bi_420(
+                            refs,
+                            (mb_x, mb_y),
+                            (self.width as usize, self.height as usize),
+                            [
+                                &mut self.frame.y[y_offset..],
+                                &mut self.frame.u[c_offset..],
+                                &mut self.frame.v[c_offset..],
+                            ],
                             weight,
                         )
-                    }),
-                _ => false,
+                    {
+                        return true;
+                    }
+                    crate::inter_pred::predict_integer_bi_luma(
+                        refs,
+                        mb_x,
+                        mb_y,
+                        &mut self.frame.y[y_offset..],
+                        self.ly_stride,
+                        weight,
+                    )
+                } else {
+                    false
+                }
+            } else {
+                false
             }
         } else {
             false
@@ -1041,9 +1060,7 @@ impl<P: Pixel, const MBAFF: bool> SliceContext<'_, P, MBAFF> {
 
         if self.try_decode_uniform_b_skip_mb(mb_idx, mb_x, mb_y, sp, known_uniform) {
             self.mb_is_direct[mb_idx] = true;
-            for blk in 0..16 {
-                self.blk_is_direct[mb_idx * 16 + blk] = true;
-            }
+            self.blk_is_direct[mb_idx * 16..][..16].fill(true);
             return;
         }
 
