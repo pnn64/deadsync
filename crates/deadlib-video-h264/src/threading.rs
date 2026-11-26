@@ -429,6 +429,7 @@ fn run_picture(slices: Vec<SlicePlan>, writer: PictureWriter) -> WorkerResult {
     };
     let mut pending: Option<PictureState> = None;
     let mut scratch = PictureScratch::default();
+    let mut recycled_frame = None;
     let mut first_error: Option<DecodeError> = None;
     for (k, plan) in slices.iter().enumerate() {
         // Rows a later slice may still write must not be deblocked or
@@ -438,7 +439,13 @@ fn run_picture(slices: Vec<SlicePlan>, writer: PictureWriter) -> WorkerResult {
         // picture as it was before that slice.
         let backup = pending.clone();
         let saved_unit = sync.next_unit;
-        match run_slice(plan, pending.take(), &mut scratch, Some(&mut sync)) {
+        match run_slice(
+            plan,
+            pending.take(),
+            &mut scratch,
+            &mut recycled_frame,
+            Some(&mut sync),
+        ) {
             Ok(ps) => pending = Some(ps),
             Err(e) => {
                 pending = backup;

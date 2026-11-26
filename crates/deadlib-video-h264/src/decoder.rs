@@ -275,6 +275,7 @@ pub struct Decoder {
     /// In-progress picture being assembled from one or more slices.
     pending: Option<PictureState>,
     scratch: PictureScratch,
+    recycled_frame: Option<Frame>,
     /// First field of a field-picture pair awaiting its complement for output.
     pending_field: Option<Frame>,
     /// The last frame returned came from a picture with MMCO 5, which starts
@@ -297,9 +298,18 @@ impl Decoder {
             dpb: Dpb::new(0).recycle_pictures(),
             pending: None,
             scratch: PictureScratch::default(),
+            recycled_frame: None,
             pending_field: None,
             period_start: false,
         }
+    }
+
+    /// Return a consumed frame so its plane allocations can be reused.
+    ///
+    /// The decoder retains at most one returned frame and reuses it when
+    /// the next picture has compatible geometry and sample format.
+    pub fn recycle_frame(&mut self, frame: Frame) {
+        self.recycled_frame = Some(frame);
     }
 
     /// Feed a single NAL unit to the decoder.
@@ -453,7 +463,13 @@ impl Decoder {
                 self.scratch.use_motion(motion);
             }
         }
-        let ps = run_slice(&plan, pending, &mut self.scratch, None)?;
+        let ps = run_slice(
+            &plan,
+            pending,
+            &mut self.scratch,
+            &mut self.recycled_frame,
+            None,
+        )?;
         self.pending = Some(ps);
         Ok(())
     }
@@ -904,13 +920,14 @@ pub(crate) fn run_slice(
     plan: &SlicePlan,
     pending: Option<PictureState>,
     scratch: &mut PictureScratch,
+    recycled_frame: &mut Option<Frame>,
     sync: Option<&mut RowSync>,
 ) -> Result<PictureState, DecodeError> {
     // The slice decoder is compiled once per sample type
     if plan.sps.bit_depth_luma_minus8 == 2 {
-        run_slice_px::<u16>(plan, pending, scratch, sync)
+        run_slice_px::<u16>(plan, pending, scratch, recycled_frame, sync)
     } else {
-        run_slice_px::<u8>(plan, pending, scratch, sync)
+        run_slice_px::<u8>(plan, pending, scratch, recycled_frame, sync)
     }
 }
 
@@ -919,6 +936,7 @@ fn run_slice_px<P: Pixel>(
     plan: &SlicePlan,
     mut pending: Option<PictureState>,
     spare: &mut PictureScratch,
+    recycled_frame: &mut Option<Frame>,
     mut sync: Option<&mut RowSync>,
 ) -> Result<PictureState, DecodeError> {
     // Covers everything before the MB loop: PictureState allocation and
@@ -939,7 +957,7 @@ fn run_slice_px<P: Pixel>(
     let use_weight = plan.use_weight;
     let implicit_weights = &plan.implicit_weights;
     let implicit_weights_field = &plan.implicit_weights_field;
-    let (width, frame_height, height) = (plan.width, plan.frame_height, plan.height);
+    let frame_height = plan.frame_height;
     let (mb_width, mb_height) = (plan.mb_width, plan.mb_height);
     let (coded_width, coded_height) = (plan.coded_width, plan.coded_height);
     let total_mbs = plan.total_mbs;
@@ -961,22 +979,10 @@ fn run_slice_px<P: Pixel>(
     let ps = if is_continuation {
         pending.take().unwrap()
     } else {
-        let chroma_format = ChromaFormat::from_idc(sps.chroma_format_idc);
-        let chroma_len =
-            ((coded_width / 2) * (coded_height >> chroma_format.shift_y())) as usize * P::BYTES;
         let mut scratch = core::mem::take(spare);
         scratch.reset(total_mbs);
         PictureState {
-            frame: Frame {
-                width,
-                height,
-                y: vec![0u8; (coded_width * coded_height) as usize * P::BYTES],
-                u: vec![0u8; chroma_len],
-                v: vec![0u8; chroma_len],
-                pic_order_cnt: current_poc,
-                chroma_format,
-                bit_depth: P::BIT_DEPTH as u8,
-            },
+            frame: new_picture_frame::<P>(plan, recycled_frame.take()),
             frame_num: header.frame_num,
             poc: current_poc,
             field_poc: plan.field_poc,
@@ -1423,6 +1429,42 @@ fn run_slice_px<P: Pixel>(
         crop_x,
         crop_y,
     })
+}
+
+fn new_picture_frame<P: Pixel>(plan: &SlicePlan, recycled: Option<Frame>) -> Frame {
+    fn zeroed(mut plane: Vec<u8>, len: usize) -> Vec<u8> {
+        if plane.capacity() < len {
+            return vec![0; len];
+        }
+        plane.clear();
+        plane.resize(len, 0);
+        plane
+    }
+
+    let chroma_format = ChromaFormat::from_idc(plan.sps.chroma_format_idc);
+    let chroma_len = ((plan.coded_width / 2) * (plan.coded_height >> chroma_format.shift_y()))
+        as usize
+        * P::BYTES;
+    let luma_len = (plan.coded_width * plan.coded_height) as usize * P::BYTES;
+    let bit_depth = P::BIT_DEPTH as u8;
+    let [y, u, v] = recycled
+        .filter(|frame| {
+            frame.width == plan.width
+                && frame.height == plan.height
+                && frame.chroma_format == chroma_format
+                && frame.bit_depth == bit_depth
+        })
+        .map_or_else(<[Vec<u8>; 3]>::default, |frame| [frame.y, frame.u, frame.v]);
+    Frame {
+        width: plan.width,
+        height: plan.height,
+        y: zeroed(y, luma_len),
+        u: zeroed(u, chroma_len),
+        v: zeroed(v, chroma_len),
+        pic_order_cnt: plan.current_poc,
+        chroma_format,
+        bit_depth,
+    }
 }
 
 /// Apply the in-loop deblocking filter to a fully decoded picture.
@@ -1983,6 +2025,11 @@ impl<M> Default for OrderedDecoder<M> {
 }
 
 impl<M> OrderedDecoder<M> {
+    /// Return a consumed output frame for reuse by the decoder.
+    pub fn recycle_frame(&mut self, frame: Frame) {
+        self.inner.recycle_frame(frame);
+    }
+
     /// Create a new ordering decoder with a default reorder buffer depth of
     /// 16 frames (sufficient for any practical bframes setting). Existing
     /// callers receive frames only; use [`decode_nal_with_meta`](OrderedDecoder::decode_nal_with_meta)
@@ -2294,5 +2341,25 @@ mod tests {
             assert_eq!(frames.len(), 1);
             assert!(frames[0].y.iter().all(|&v| v == 0x80));
         }
+    }
+
+    #[test]
+    fn returned_frame_storage_reuses_the_coded_planes() {
+        let stream = redundant_picture_stream(0x80, 0x40);
+        let nals = parse_annex_b(&stream);
+        let mut decoder = Decoder::new();
+        for nal in &nals {
+            decoder.decode_nal(nal).unwrap();
+        }
+        let mut first = decoder.flush().unwrap();
+        let pointer = first.y.as_ptr();
+        first.y.fill(0xff);
+        decoder.recycle_frame(first);
+        for nal in &nals {
+            decoder.decode_nal(nal).unwrap();
+        }
+        let next = decoder.flush().unwrap();
+        assert_eq!(next.y.as_ptr(), pointer);
+        assert!(next.y.iter().all(|&sample| sample == 0x80));
     }
 }
