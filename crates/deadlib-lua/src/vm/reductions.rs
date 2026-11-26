@@ -1,15 +1,17 @@
 //! Exact reductions of numeric loops with a proven instruction path.
 
 use super::{
-    FunctionId, TableId, Value, Vm, forwarding,
+    Cell, FrameKind, FunctionId, TableId, Value, Vm, forwarding,
     math::{MATH_MAX, MATH_MIN},
     numeric_leaf::{Expression, Input},
     slot_index,
+    strings::STR_SUB,
     threads::{CO_RESUME, inline_resume::ParkedIndex},
 };
 use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN_ARGS, Op, Prototype, RK};
 
 mod dense_array;
+mod substring;
 pub(super) mod while_numeric;
 
 const EXACT_INTEGER: i128 = 1 << 53;
@@ -82,6 +84,7 @@ enum Operand {
     Constant(Value),
     Series(Series),
     Sum(usize, Series),
+    Substring(Series),
 }
 
 struct Body<'a> {
@@ -146,7 +149,7 @@ impl Body<'_> {
             }
             Operand::Constant(value) => Series::constant(value),
             Operand::Series(series) => Some(series),
-            Operand::Sum(..) => None,
+            Operand::Sum(..) | Operand::Substring(_) => None,
         }
     }
 
@@ -159,6 +162,17 @@ impl Body<'_> {
             Operand::Constant(value) => Some(value),
             _ => None,
         }
+    }
+
+    fn closed_upvalue(&self, index: usize) -> Option<Operand> {
+        let FrameKind::Lua(function) = self.vm.frames.last()?.function else {
+            return None;
+        };
+        let cell = self.vm.functions[slot_index(function.0)].upvalues[index];
+        let Cell::Closed(value) = self.vm.upvalues[cell as usize] else {
+            return None;
+        };
+        Some(Operand::Constant(value))
     }
 
     fn table(&mut self, register: usize) -> Option<TableId> {
@@ -288,6 +302,7 @@ impl Body<'_> {
             Value::Native(id @ (MATH_MIN | MATH_MAX)) if wanted == 1 => {
                 self.extremum(call, count, id == MATH_MIN)
             }
+            Value::Native(STR_SUB) if count == 3 && wanted == 1 => self.substring(call),
             Value::Native(CO_RESUME) if count == 1 && wanted == 2 => self.resume(call),
             Value::Native(0) if count == 1 && wanted <= 1 => {
                 let value = self.read(call + 1)?;
@@ -505,6 +520,13 @@ impl Body<'_> {
                 Op::Call if i.b != OPEN_ARGS => self.call(destination, usize::from(i.b), i.c)?,
                 Op::GetTable => self.field_read(*i)?,
                 Op::GetGlobal => self.global(i.c as usize)?,
+                Op::GetUpvalue => self.closed_upvalue(i.c as usize)?,
+                Op::Len => {
+                    let Operand::Substring(length) = self.read(usize::from(i.b))? else {
+                        return None;
+                    };
+                    Operand::Series(length)
+                }
                 _ => return None,
             };
             self.write(destination, value)?;
@@ -598,12 +620,18 @@ impl Vm {
                         | Op::Close
                         | Op::GetTable
                         | Op::GetGlobal
+                        | Op::GetUpvalue
+                        | Op::Len
                         | Op::SetTable
                         | Op::Eq
                         | Op::Ne
                         | Op::JumpFalse
                         | Op::JumpTrue
-                ) || (writes && matches!(i.op, Op::GetTable | Op::GetGlobal | Op::Call))
+                ) || (writes
+                    && matches!(
+                        i.op,
+                        Op::GetTable | Op::GetGlobal | Op::GetUpvalue | Op::Call | Op::Len
+                    ))
                     || (matches!(i.op, Op::JumpFalse | Op::JumpTrue)
                         && (writes || self.budget.is_some()))
             })

@@ -412,3 +412,31 @@ fn paired_array_sums_repair_changed_blocks_and_preserve_rounding() {
         4_000_000,
     );
 }
+
+#[test]
+fn substring_length_reduction_preserves_bytes_and_rebound_calls() {
+    check(
+        br#"
+        local function setup()
+            local source = string.rep("ab\000\255", 64)
+            local sub = string.sub
+            return function(count)
+                local total, last = 0
+                for i = 1, count do
+                    local first = (i - 1) * 4 + 1
+                    local piece = sub(source, first, first + i - 1)
+                    total = total + #piece
+                    last = piece
+                end
+                return total, last
+            end, function(replacement) sub = replacement end
+        end
+        local sum, replace = setup()
+        local total, last = sum(8)
+        assert(total == 36 and last == "ab\000\255ab\000\255")
+        replace(function(_, start, last) return string.rep("x", last) end)
+        total, last = sum(8)
+        return total == 148 and last == string.rep("x", 36)
+        "#,
+    );
+}
