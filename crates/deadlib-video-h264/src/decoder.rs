@@ -1073,10 +1073,6 @@ fn run_slice_px<P: Pixel>(
     slice_deblock.resize(usize::from(this_slice_id), this_slice_deblock);
     slice_deblock.push(this_slice_deblock);
 
-    // Each slice reinitializes its own QP from the slice header
-    let mut prev_mb_qp = slice_qp;
-    let mut last_qp_delta_nonzero = false;
-
     // CABAC or CAVLC?
     let use_cabac = pps.entropy_coding_mode_flag;
 
@@ -1104,58 +1100,48 @@ fn run_slice_px<P: Pixel>(
 
     let stride = coded_width as usize;
     let mbaff = header.mbaff_frame_flag;
-    let mut mb_ly_stride = stride;
-    let mut mb_ly_offset = 0usize;
-    let mut mb_lc_stride = (coded_width / 2) as usize;
-    let mut mb_lc_offset = 0usize;
-
-    // Macro to construct a SliceContext from the local variables.
-    // Used at each call site that delegates to a SliceContext method.
-    macro_rules! make_ctx {
-        () => {
-            SliceContext {
-                _pixel: core::marker::PhantomData::<P>,
-                frame: &mut frame,
-                stride,
-                width: coded_width,
-                height: coded_height,
-                mb_width,
-                nc_luma: &mut nc_luma,
-                nc_cb: &mut nc_cb,
-                nc_cr: &mut nc_cr,
-                mv_store_l0: &mut mv_store_l0,
-                mv_store_l1: &mut mv_store_l1,
-                ref_idx_store_l0: &mut ref_idx_store_l0,
-                ref_poc_store_l0: &mut ref_poc_store_l0,
-                ref_poc_store_l1: &mut ref_poc_store_l1,
-                ref_idx_store_l1: &mut ref_idx_store_l1,
-                mvd_store: &mut mvd_store,
-                mvd_store_l1: &mut mvd_store_l1,
-                mb_info: &mut mb_info,
-                i4x4_modes: &mut i4x4_modes,
-                mb_cbp: &mut mb_cbp,
-                mb_chroma_pred: &mut mb_chroma_pred,
-                mb_is_8x8dct: &mut mb_is_8x8dct,
-                mb_skip: &mut mb_skip,
-                mbaff_skip_lookahead: &mut mbaff_skip_lookahead,
-                mb_is_direct: &mut mb_is_direct,
-                blk_is_direct: &mut blk_is_direct,
-                is_i16x16: &mut is_i16x16,
-                mb_slice_id: &mut mb_slice_id,
-                this_slice_id,
-                prev_mb_qp,
-                last_qp_delta_nonzero,
-                mbaff,
-                mb_field_decoding: &mut _mb_field_decoding,
-                ly_stride: mb_ly_stride,
-                ly_offset: mb_ly_offset,
-                lc_stride: mb_lc_stride,
-                lc_offset: mb_lc_offset,
-                field_pic_flag: is_field_pic,
-                bottom_field_flag: header.bottom_field_flag,
-            }
-        };
-    }
+    // One context owns the macroblock state throughout the slice.
+    let mut ctx = SliceContext {
+        _pixel: core::marker::PhantomData::<P>,
+        frame: &mut frame,
+        stride,
+        width: coded_width,
+        height: coded_height,
+        mb_width,
+        nc_luma: &mut nc_luma,
+        nc_cb: &mut nc_cb,
+        nc_cr: &mut nc_cr,
+        mv_store_l0: &mut mv_store_l0,
+        mv_store_l1: &mut mv_store_l1,
+        ref_idx_store_l0: &mut ref_idx_store_l0,
+        ref_poc_store_l0: &mut ref_poc_store_l0,
+        ref_poc_store_l1: &mut ref_poc_store_l1,
+        ref_idx_store_l1: &mut ref_idx_store_l1,
+        mvd_store: &mut mvd_store,
+        mvd_store_l1: &mut mvd_store_l1,
+        mb_info: &mut mb_info,
+        i4x4_modes: &mut i4x4_modes,
+        mb_cbp: &mut mb_cbp,
+        mb_chroma_pred: &mut mb_chroma_pred,
+        mb_is_8x8dct: &mut mb_is_8x8dct,
+        mb_skip: &mut mb_skip,
+        mbaff_skip_lookahead: &mut mbaff_skip_lookahead,
+        mb_is_direct: &mut mb_is_direct,
+        blk_is_direct: &mut blk_is_direct,
+        is_i16x16: &mut is_i16x16,
+        mb_slice_id: &mut mb_slice_id,
+        this_slice_id,
+        prev_mb_qp: slice_qp,
+        last_qp_delta_nonzero: false,
+        mbaff,
+        mb_field_decoding: &mut _mb_field_decoding,
+        ly_stride: stride,
+        ly_offset: 0,
+        lc_stride: (coded_width / 2) as usize,
+        lc_offset: 0,
+        field_pic_flag: is_field_pic,
+        bottom_field_flag: header.bottom_field_flag,
+    };
 
     let params = SliceParams {
         is_p_slice,
@@ -1206,19 +1192,19 @@ fn run_slice_px<P: Pixel>(
             let ready = sync.ready_mb(mb_idx, unit_len);
             if ready >= (sync.next_unit + 2) * unit_len {
                 if ready > fin_from {
-                    make_ctx!().finalize_mb_info_range(fin_from, ready, &params);
+                    ctx.finalize_mb_info_range(fin_from, ready, &params);
                     fin_from = ready;
                 }
                 sync.advance(
                     ready,
-                    &mut frame,
-                    &mb_info,
+                    ctx.frame,
+                    ctx.mb_info,
                     mb_width as usize,
                     deblock::Interlace {
-                        mbaff_field: mbaff.then_some(&_mb_field_decoding[..]),
+                        mbaff_field: mbaff.then_some(&*ctx.mb_field_decoding),
                         field_pic: header.field_pic_flag,
                     },
-                    &mb_slice_id,
+                    ctx.mb_slice_id,
                     &slice_deblock,
                     ps_chroma_qp_offset,
                     ps_second_chroma_qp_offset,
@@ -1232,7 +1218,7 @@ fn run_slice_px<P: Pixel>(
         }
 
         // Stamp this MB with the current slice ID for boundary detection
-        mb_slice_id[mb_idx] = this_slice_id;
+        ctx.mb_slice_id[mb_idx] = this_slice_id;
         // MBAFF: a pair's mb_field_decoding_flag defaults to the inferred
         // value (spec 7.4.4: left pair in the same slice, else the pair
         // above, else frame). It is used as is when neither MB of the pair
@@ -1240,11 +1226,11 @@ fn run_slice_px<P: Pixel>(
         if mbaff && mb_idx.is_multiple_of(2) {
             let pair = mb_idx / 2;
             let mbw = mb_width as usize;
-            _mb_field_decoding[pair] =
-                if !pair.is_multiple_of(mbw) && mb_slice_id[mb_idx - 2] == this_slice_id {
-                    _mb_field_decoding[pair - 1]
-                } else if pair >= mbw && mb_slice_id[mb_idx - 2 * mbw] == this_slice_id {
-                    _mb_field_decoding[pair - mbw]
+            ctx.mb_field_decoding[pair] =
+                if !pair.is_multiple_of(mbw) && ctx.mb_slice_id[mb_idx - 2] == this_slice_id {
+                    ctx.mb_field_decoding[pair - 1]
+                } else if pair >= mbw && ctx.mb_slice_id[mb_idx - 2 * mbw] == this_slice_id {
+                    ctx.mb_field_decoding[pair - mbw]
                 } else {
                     false
                 };
@@ -1272,14 +1258,9 @@ fn run_slice_px<P: Pixel>(
             // MBAFF: end_of_slice_flag and mb_field_decoding_flag are both
             // handled inside decode_cabac_mb (contexts 70-72 for field flag,
             // with MBAFF-adjusted first_mb comparison for terminate).
-            {
-                let mut ctx = make_ctx!();
-                match ctx.decode_cabac_mb(cr, st, rbsp, mb_idx, mb_x, mb_y, &params)? {
-                    CabacMbResult::EndOfSlice => break,
-                    CabacMbResult::Decoded => {}
-                }
-                prev_mb_qp = ctx.prev_mb_qp;
-                last_qp_delta_nonzero = ctx.last_qp_delta_nonzero;
+            match ctx.decode_cabac_mb(cr, st, rbsp, mb_idx, mb_x, mb_y, &params)? {
+                CabacMbResult::EndOfSlice => break,
+                CabacMbResult::Decoded => {}
             }
             if cr.overread() {
                 return Err(DecodeError::InvalidSyntax(
@@ -1305,32 +1286,25 @@ fn run_slice_px<P: Pixel>(
             }
             if mb_skip_run > 0 {
                 mb_skip_run -= 1;
-                mb_skip[mb_idx] = true; // Mark as skipped for MBAFF field flag inference
-                                        // MBAFF: when a run ends on a skipped top MB, the bottom MB is
-                                        // coded and its mb_field_decoding_flag (the next bit) applies
-                                        // to the whole pair, so read it before decoding this MB.
+                ctx.mb_skip[mb_idx] = true; // Mark as skipped for MBAFF field flag inference
+                                            // MBAFF: when a run ends on a skipped top MB, the bottom MB is
+                                            // coded and its mb_field_decoding_flag (the next bit) applies
+                                            // to the whole pair, so read it before decoding this MB.
                 if mbaff && mb_idx.is_multiple_of(2) && mb_skip_run == 0 {
-                    _mb_field_decoding[mb_idx / 2] = reader.read_bit()? != 0;
+                    ctx.mb_field_decoding[mb_idx / 2] = reader.read_bit()? != 0;
                 }
                 // Set layout for skip MBs (field_flag already known)
-                {
-                    let mut ctx = make_ctx!();
-                    ctx.set_mb_layout(mb_idx, mb_x, mb_y);
-                    mb_ly_stride = ctx.ly_stride;
-                    mb_ly_offset = ctx.ly_offset;
-                    mb_lc_stride = ctx.lc_stride;
-                    mb_lc_offset = ctx.lc_offset;
-                }
+                ctx.set_mb_layout(mb_idx, mb_x, mb_y);
                 if is_p_slice {
                     // P_Skip: MV = median predictor, ref_idx = 0, no residual
-                    make_ctx!().decode_p_skip_mb(mb_idx, mb_x, mb_y, &params);
+                    ctx.decode_p_skip_mb(mb_idx, mb_x, mb_y, &params);
                 } else {
                     // B_Skip: spatial/temporal direct MV + MC, no residual
-                    make_ctx!().decode_b_skip_mb(mb_idx, mb_x, mb_y, &params);
+                    ctx.decode_b_skip_mb(mb_idx, mb_x, mb_y, &params);
                 }
-                mb_info[mb_idx] = MbInfo {
+                ctx.mb_info[mb_idx] = MbInfo {
                     mb_type: MbType::Inter,
-                    qp_y: prev_mb_qp,
+                    qp_y: ctx.prev_mb_qp,
                     ..Default::default()
                 };
                 mb_idx += 1;
@@ -1345,7 +1319,7 @@ fn run_slice_px<P: Pixel>(
                 // A bottom MB after a skipped top MB had its flag read with
                 // the top MB (above), so only top MBs read it here.
                 if mb_idx.is_multiple_of(2) {
-                    _mb_field_decoding[mb_idx / 2] = reader.read_bit()? != 0;
+                    ctx.mb_field_decoding[mb_idx / 2] = reader.read_bit()? != 0;
                 }
             }
         }
@@ -1354,17 +1328,12 @@ fn run_slice_px<P: Pixel>(
         if mbaff && !(is_p_slice || is_b_slice) {
             let is_top = mb_idx % 2 == 0;
             if is_top {
-                _mb_field_decoding[mb_idx / 2] = reader.read_bit()? != 0;
+                ctx.mb_field_decoding[mb_idx / 2] = reader.read_bit()? != 0;
             }
         }
 
-        {
-            let mut ctx = make_ctx!();
-            ctx.set_mb_layout(mb_idx, mb_x, mb_y);
-            ctx.decode_cavlc_mb(&mut reader, mb_idx, mb_x, mb_y, &params)?;
-            prev_mb_qp = ctx.prev_mb_qp;
-            last_qp_delta_nonzero = ctx.last_qp_delta_nonzero;
-        }
+        ctx.set_mb_layout(mb_idx, mb_x, mb_y);
+        ctx.decode_cavlc_mb(&mut reader, mb_idx, mb_x, mb_y, &params)?;
         mb_idx += 1;
 
         // CAVLC end-of-slice: spec says "while (more_rbsp_data())"
@@ -1378,28 +1347,28 @@ fn run_slice_px<P: Pixel>(
     // Post-loop: fill deblock info (for the MBs not already done by the
     // row hook) and the ref POC table.
     let end_mb = mb_idx.min(total_mbs);
-    {
-        let mut ctx = make_ctx!();
-        ctx.finalize_mb_info_range(fin_from, end_mb, &params);
-        ctx.fill_ref_poc_table(slice_first_mb, end_mb, &params);
-    }
+    ctx.finalize_mb_info_range(fin_from, end_mb, &params);
+    ctx.fill_ref_poc_table(slice_first_mb, end_mb, &params);
     if let Some(sync) = sync.as_mut() {
         let ready = sync.ready_mb(end_mb, unit_len);
         sync.advance(
             ready,
-            &mut frame,
-            &mb_info,
+            ctx.frame,
+            ctx.mb_info,
             mb_width as usize,
             deblock::Interlace {
-                mbaff_field: mbaff.then_some(&_mb_field_decoding[..]),
+                mbaff_field: mbaff.then_some(&*ctx.mb_field_decoding),
                 field_pic: header.field_pic_flag,
             },
-            &mb_slice_id,
+            ctx.mb_slice_id,
             &slice_deblock,
             ps_chroma_qp_offset,
             ps_second_chroma_qp_offset,
         );
     }
+
+    let prev_mb_qp = ctx.prev_mb_qp;
+    let last_qp_delta_nonzero = ctx.last_qp_delta_nonzero;
 
     // Store state back into pending PictureState.
     // Deblocking and DPB insertion happen in finalize_pending().
