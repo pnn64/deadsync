@@ -251,23 +251,17 @@ fn predict(
     let chroma = if four {
         for (index, vector) in vectors.into_iter().enumerate() {
             let origin = [16 * x + 8 * (index % 2), 16 * y + 8 * (index / 2)];
-            frame.planes[0].predict(&reference.planes[0], origin, 8, vector, truncate);
+            frame.planes[0].predict::<8>(&reference.planes[0], origin, vector, truncate);
         }
         core::array::from_fn(|axis| {
             let value: i32 = vectors.iter().map(|v| v[axis]).sum();
             (value >> 3) + i32::from(matches!(value & 15, 3..=7 | 14..=15))
         })
     } else {
-        frame.planes[0].predict(
-            &reference.planes[0],
-            [16 * x, 16 * y],
-            16,
-            vectors[0],
-            truncate,
-        );
+        frame.planes[0].predict::<16>(&reference.planes[0], [16 * x, 16 * y], vectors[0], truncate);
         vectors[0].map(|component| (component >> 1) | (component & 1))
     };
     for (plane, previous) in frame.planes[1..].iter_mut().zip(&reference.planes[1..]) {
-        plane.predict(previous, [8 * x, 8 * y], 8, chroma, truncate);
+        plane.predict::<8>(previous, [8 * x, 8 * y], chroma, truncate);
     }
 }

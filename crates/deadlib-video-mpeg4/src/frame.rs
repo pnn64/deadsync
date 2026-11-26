@@ -47,44 +47,42 @@ impl Plane {
         }
     }
 
-    fn sample(&self, x: i32, y: i32) -> u16 {
-        let x = x.clamp(0, self.width as i32 - 1) as usize;
-        let y = y.clamp(0, self.height as i32 - 1) as usize;
-        u16::from(self.samples[y * self.stride + x])
-    }
-
-    pub(crate) fn predict(
+    pub(crate) fn predict<const W: usize>(
         &mut self,
         source: &Self,
         [x, y]: [usize; 2],
-        size: usize,
         [dx, dy]: [i32; 2],
         truncate: bool,
     ) {
         let origin_x = x as i32 + (dx >> 1);
         let origin_y = y as i32 + (dy >> 1);
-        let fraction = (dx & 1, dy & 1);
-        let bias = u16::from(!truncate);
-        for row in 0..size {
-            let start = (y + row) * self.stride + x;
-            let sy = origin_y + row as i32;
-            for (col, pixel) in self.samples[start..start + size].iter_mut().enumerate() {
-                let sx = origin_x + col as i32;
-                let a = source.sample(sx, sy);
-                let value = match fraction {
-                    (0, 0) => a,
-                    (1, 0) => (a + source.sample(sx + 1, sy) + bias) >> 1,
-                    (0, 1) => (a + source.sample(sx, sy + 1) + bias) >> 1,
-                    _ => {
-                        (a + source.sample(sx, sy + 1)
-                            + source.sample(sx + 1, sy)
-                            + source.sample(sx + 1, sy + 1)
-                            + 1
-                            + bias)
-                            >> 2
-                    }
-                };
-                *pixel = value as u8;
+        let fraction = (((dy & 1) << 1) | (dx & 1)) as usize;
+        let span = W + (fraction & 1);
+        let rows = W + (fraction >> 1);
+        let dst = &mut self.samples[y * self.stride + x..];
+        if origin_x >= 0
+            && origin_y >= 0
+            && origin_x as usize + span <= source.width
+            && origin_y as usize + rows <= source.height
+        {
+            let src = &source.samples[origin_y as usize * source.stride + origin_x as usize..];
+            crate::motion::predict::<W>(dst, self.stride, src, source.stride, fraction, truncate);
+        } else {
+            let mut tile = [0; 17 * 17];
+            source.extend_edge([origin_x, origin_y], span, rows, &mut tile);
+            crate::motion::predict::<W>(dst, self.stride, &tile, span, fraction, truncate);
+        }
+    }
+
+    #[cold]
+    fn extend_edge(&self, [x, y]: [i32; 2], span: usize, rows: usize, tile: &mut [u8]) {
+        for row in 0..rows {
+            let sy = (y + row as i32).clamp(0, self.height as i32 - 1) as usize;
+            let src = &self.samples[sy * self.stride..][..self.width];
+            let dst = &mut tile[row * span..][..span];
+            for (column, sample) in dst.iter_mut().enumerate() {
+                let sx = (x + column as i32).clamp(0, self.width as i32 - 1) as usize;
+                *sample = src[sx];
             }
         }
     }

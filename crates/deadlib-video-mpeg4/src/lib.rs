@@ -4,7 +4,7 @@
 //! [`decode_avi`]. [`Decoder`] also accepts individual start-code units.
 
 #![no_std]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 extern crate alloc;
 
@@ -13,6 +13,7 @@ mod bitstream;
 mod block;
 mod frame;
 mod headers;
+mod motion;
 mod picture;
 mod tables;
 mod transform;
