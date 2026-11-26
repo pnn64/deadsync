@@ -424,6 +424,9 @@ pub enum Actor {
         distortion: f32,
         /// Clip rect in parent TL space: [x, y, w, h].
         clip: Option<[f32; 4]>,
+        /// BitmapText crop: [left, right] fractions of the laid-out glyphs,
+        /// counted across lines, that are not drawn. Layout is unaffected.
+        glyph_crop: [f32; 2],
         mask_dest: bool,
         blend: BlendMode,
         shadow_len: [f32; 2],
@@ -1673,6 +1676,7 @@ mod tests {
             jitter: false,
             distortion: 0.0,
             clip: None,
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],

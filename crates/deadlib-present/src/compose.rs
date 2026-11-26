@@ -4926,6 +4926,24 @@ fn push_transient_text_mesh_quad(
     out.extend(CORNERS.map(|corner| corners[corner]));
 }
 
+/// BitmapText applies horizontal crop to whole glyphs rather than to a
+/// rectangle: the left and right fractions select a run of the laid-out
+/// glyphs, counted across lines. `None` draws every glyph.
+fn text_glyph_crop_range(crop: [f32; 2], glyphs: usize) -> Option<std::ops::Range<usize>> {
+    let [left, right] = crop;
+    if left == 0.0 && right == 0.0 {
+        return None;
+    }
+    if left + right >= 1.0 {
+        return Some(0..0);
+    }
+    let count = glyphs as f32;
+    let index = |value: f32| (lrint_ties_even(value).max(0.0) as usize).min(glyphs);
+    let start = index(left * count);
+    let end = index(count - right * count);
+    Some(start..end.max(start))
+}
+
 fn build_transient_text_mesh_builders(
     layout: &CachedTextLayout,
     visible_glyphs: usize,
@@ -4934,6 +4952,7 @@ fn build_transient_text_mesh_builders(
     jitter_seed: Option<u32>,
     distortion: f32,
     stroke: bool,
+    glyph_range: Option<&std::ops::Range<usize>>,
     builders: &mut Vec<TextMeshBatchBuilder>,
     recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
     attr_scratch: &mut TextAttrScratch,
@@ -4965,8 +4984,15 @@ fn build_transient_text_mesh_builders(
             start_x_logical(text_align, block_w_logical_even, line.width_i32 as f32);
         let glyph_end = (line.glyph_start + line.glyph_len).min(visible_glyphs);
         let line_glyphs = &layout.glyphs[line.glyph_start..glyph_end];
-        for glyph in line_glyphs {
-            let Some(texture_page) = glyph_mesh_page(glyph, stroke) else {
+        for (index, glyph) in line_glyphs.iter().enumerate() {
+            let cropped =
+                glyph_range.is_some_and(|range| !range.contains(&(line.glyph_start + index)));
+            let texture_page = if cropped {
+                None
+            } else {
+                glyph_mesh_page(glyph, stroke)
+            };
+            let Some(texture_page) = texture_page else {
                 pen_x_logical += glyph.advance_i32;
                 continue;
             };
@@ -6621,6 +6647,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
             None,
             0.0,
             false,
+            None,
             builders,
             recycled_vertices,
             attr_scratch,
@@ -6646,6 +6673,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
                 None,
                 0.0,
                 true,
+                None,
                 builders,
                 recycled_vertices,
                 attr_scratch,
@@ -7616,6 +7644,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             jitter,
             distortion,
             clip,
+            glyph_crop,
             mask_dest,
             blend,
             shadow_len,
@@ -7646,6 +7675,10 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     return;
                 }
                 let partial_text = visible_glyphs < layout.glyphs.len();
+                let glyph_range = text_glyph_crop_range(*glyph_crop, layout.glyphs.len());
+                if glyph_range.as_ref().is_some_and(|range| range.is_empty()) {
+                    return;
+                }
                 let mut effect_color = *color;
                 let mut effect_scale = x_fold.map_or(*scale, |fold| fold.text_scale(*scale));
                 apply_effect_to_text(*effect, total_elapsed, &mut effect_color, &mut effect_scale);
@@ -7692,6 +7725,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                         && attributes.as_slice().is_empty()
                         && !*jitter
                         && text_distortion <= 1e-6
+                        && glyph_range.is_none()
                     {
                         push_resolved_text_mesh_batches(
                             out,
@@ -7764,6 +7798,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             jitter.then(|| (total_elapsed * 8.0) as u32),
                             text_distortion,
                             false,
+                            glyph_range.as_ref(),
                             builders,
                             recycled_vertices,
                             attr_scratch,
@@ -7792,7 +7827,11 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                         if needs_stroke {
                             let stroke_start = out.len();
                             let stroke_start_sprite = sprite_instances.len();
-                            if transient_frame_inline || partial_text || text_distortion > 1e-6 {
+                            if transient_frame_inline
+                                || partial_text
+                                || text_distortion > 1e-6
+                                || glyph_range.is_some()
+                            {
                                 build_transient_text_mesh_builders(
                                     layout,
                                     visible_glyphs,
@@ -7801,6 +7840,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                                     None,
                                     text_distortion,
                                     true,
+                                    glyph_range.as_ref(),
                                     builders,
                                     recycled_vertices,
                                     attr_scratch,
@@ -12108,6 +12148,7 @@ mod tests {
             jitter: false,
             distortion: 0.0,
             clip: None,
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
@@ -12431,6 +12472,7 @@ mod tests {
             None,
             0.0,
             false,
+            None,
             &mut builders,
             &mut recycled,
             &mut TextAttrScratch::default(),
@@ -12459,6 +12501,7 @@ mod tests {
             None,
             0.0,
             true,
+            None,
             &mut builders,
             &mut recycled,
             &mut TextAttrScratch::default(),
@@ -16034,6 +16077,7 @@ mod tests {
             jitter: false,
             distortion: 0.0,
             clip: None,
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
@@ -16048,6 +16092,76 @@ mod tests {
         assert_eq!(instance.tint, [0.5, 0.75, 1.0, 1.0]);
         assert_eq!(geometry.vertices.len(), 12);
         assert_ne!(geometry.cache_key, INVALID_TMESH_CACHE_KEY);
+    }
+
+    // BitmapText crop hides whole glyphs, counted across lines, and leaves
+    // the remaining glyphs where the full text laid them out.
+    #[test]
+    fn text_glyph_crop_hides_glyphs_without_moving_the_rest() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 200.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
+        let draw = |glyph_crop: [f32; 2]| {
+            let actors = [Actor::Text {
+                align: [0.5, 0.5],
+                offset: [100.0, 50.0],
+                local_transform: Matrix4::IDENTITY,
+                color: [1.0; 4],
+                stroke_color: None,
+                glow: [0.0; 4],
+                font: "test",
+                content: TextContent::static_str("AB\nBA"),
+                attributes: TextAttributes::default(),
+                align_text: TextAlign::Center,
+                z: 0,
+                scale: [1.0, 1.0],
+                fit_width: None,
+                fit_height: None,
+                line_spacing: None,
+                wrap_width_pixels: None,
+                max_width: None,
+                max_height: None,
+                max_w_pre_zoom: false,
+                max_h_pre_zoom: false,
+                jitter: false,
+                distortion: 0.0,
+                clip: None,
+                glyph_crop,
+                mask_dest: false,
+                blend: BlendMode::Alpha,
+                shadow_len: [0.0, 0.0],
+                shadow_color: [0.0, 0.0, 0.0, 0.5],
+                effect: EffectState::default(),
+            }];
+            let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+            let positions = |index| {
+                let (_, _, geometry) = tmesh_draw(&render, index);
+                geometry
+                    .vertices
+                    .iter()
+                    .map(|vertex| vertex.pos)
+                    .collect::<Vec<_>>()
+            };
+            (0..render.ops.len()).flat_map(positions).collect::<Vec<_>>()
+        };
+
+        let full = draw([0.0, 0.0]);
+        assert_eq!(full.len(), 24, "four glyphs, six vertices each");
+        // The right half is the second line: a typewriter reveal shows the
+        // first line in place before any of the second.
+        assert_eq!(draw([0.0, 0.5]), full[..12]);
+        assert_eq!(draw([0.5, 0.0]), full[12..]);
+        assert_eq!(draw([0.25, 0.25]), full[6..18]);
+        // Fractions round to whole glyphs; a crop that leaves less than half
+        // a glyph shows none.
+        assert_eq!(draw([0.0, 0.7]), full[..6]);
+        assert_eq!(draw([0.0, 0.9]), Vec::<[f32; 3]>::new());
+        assert_eq!(draw([0.0, 1.0]), Vec::<[f32; 3]>::new());
+        assert_eq!(draw([0.6, 0.6]), Vec::<[f32; 3]>::new());
     }
 
     #[test]
@@ -16082,6 +16196,7 @@ mod tests {
             jitter: false,
             distortion: 0.0,
             clip: Some([10.0, 20.0, 4.0, 10.0]),
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
@@ -16129,6 +16244,7 @@ mod tests {
             jitter: false,
             distortion: 0.0,
             clip: Some([0.0, 0.0, 200.0, 100.0]),
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
@@ -16174,6 +16290,7 @@ mod tests {
             jitter: false,
             distortion: 0.0,
             clip: None,
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
@@ -16228,6 +16345,7 @@ mod tests {
             jitter: false,
             distortion: 0.0,
             clip: None,
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
@@ -16290,6 +16408,7 @@ mod tests {
             jitter: false,
             distortion: 0.0,
             clip: None,
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
@@ -16340,6 +16459,7 @@ mod tests {
             jitter: false,
             distortion: 0.0,
             clip: None,
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
@@ -16393,6 +16513,7 @@ mod tests {
             jitter: false,
             distortion: 0.0,
             clip: None,
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],
@@ -16458,6 +16579,7 @@ mod tests {
             jitter: false,
             distortion: 0.0,
             clip: None,
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: BlendMode::Alpha,
             shadow_len: [0.0, 0.0],

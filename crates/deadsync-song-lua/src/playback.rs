@@ -7691,6 +7691,17 @@ impl SongLuaLayerDepth {
     fn draw_z(self, draw_idx: usize) -> i16 {
         song_lua_add_z(self.base, draw_idx.min(i16::MAX as usize) as i16).min(self.ceiling)
     }
+
+    /// The range left for the next layer of the same group. Each layer numbers
+    /// its actors from `base`, and compose paints in z order, so a later
+    /// layer must start above every actor the earlier ones drew. Layers past
+    /// the ceiling share it and keep their submission order.
+    fn after(self, drawn: usize) -> Self {
+        Self {
+            base: song_lua_add_z(self.base, drawn.min(i16::MAX as usize) as i16).min(self.ceiling),
+            ceiling: self.ceiling,
+        }
+    }
 }
 
 const SONG_LUA_BACKGROUND_DEPTH: SongLuaLayerDepth = SongLuaLayerDepth {
@@ -11542,6 +11553,11 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             attributes,
             ..
         } => {
+            // BitmapText draws nothing once the vertical crops meet; the
+            // horizontal crops select glyphs when the text is composed.
+            if state.croptop + state.cropbottom >= 1.0 {
+                return None;
+            }
             let text_time = if *text_changes_in_seconds {
                 effect_time
             } else {
@@ -11686,6 +11702,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 jitter: state.text_jitter,
                 distortion: state.text_distortion,
                 clip: None,
+                glyph_crop: [state.cropleft, state.cropright],
                 mask_dest: state.mask_dest,
                 blend: overlay_blend,
                 shadow_len: [0.0, 0.0],
@@ -12565,6 +12582,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             jitter: _,
             distortion,
             clip,
+            glyph_crop,
             mask_dest,
             effect,
             ..
@@ -12626,6 +12644,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 jitter: false,
                 distortion: *distortion,
                 clip: *clip,
+                glyph_crop: *glyph_crop,
                 mask_dest: *mask_dest,
                 blend: BlendMode::Add,
                 shadow_len: [0.0, 0.0],
@@ -15568,6 +15587,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             song_lua_style_capture_actor_in_place(actor, screen_layers[2].diffuse, None, 0);
         }
     }
+    let mut song_lua_background_depth = SONG_LUA_BACKGROUND_DEPTH;
     for &layer_idx in song_lua_background_active_layers {
         let layer = &song_lua_visuals.background_visual_layers[layer_idx];
         let local_states = &song_lua_background_layer_local_state_scratch[layer_idx];
@@ -15639,8 +15659,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             song_lua_capture_order_scratch,
             aft_capture_scratch,
             projected_mesh_scratch,
-            SONG_LUA_BACKGROUND_DEPTH,
+            song_lua_background_depth,
         );
+        song_lua_background_depth = song_lua_background_depth.after(song_lua_order_scratch.len());
     }
     song_lua_capture_screen_actors(
         &mut background_source,
@@ -16571,6 +16592,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         background: background_source.as_deref(),
         stage: stage_source.as_deref(),
     };
+    let mut song_lua_foreground_depth = SONG_LUA_FOREGROUND_DEPTH;
     if show_primary_foreground {
         push_song_lua_layer_actors(
             actors,
@@ -16605,8 +16627,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             song_lua_capture_order_scratch,
             song_lua_aft_capture_scratch,
             song_lua_projected_mesh_scratch,
-            SONG_LUA_FOREGROUND_DEPTH,
+            song_lua_foreground_depth,
         );
+        song_lua_foreground_depth = song_lua_foreground_depth.after(song_lua_order_scratch.len());
     }
     if show_song_visuals {
         if let Some(actor) = build_foreground_media(
@@ -16682,8 +16705,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             song_lua_capture_order_scratch,
             aft_capture_scratch,
             projected_mesh_scratch,
-            SONG_LUA_FOREGROUND_DEPTH,
+            song_lua_foreground_depth,
         );
+        song_lua_foreground_depth = song_lua_foreground_depth.after(song_lua_order_scratch.len());
     }
     let screen_actor_end = actors.len();
     if !hide_gameplay_hud {

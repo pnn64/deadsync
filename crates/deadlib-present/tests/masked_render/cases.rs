@@ -444,6 +444,7 @@ fn text_scene(masks: usize) -> Vec<actors::Actor> {
         jitter: true,
         distortion: 0.0,
         clip: (masks == 0).then_some([0.0, 0.0, 16.0, 10.0]),
+        glyph_crop: [0.0; 2],
         mask_dest: masks != 0,
         blend: BlendMode::Alpha,
         shadow_len: [0.0; 2],
