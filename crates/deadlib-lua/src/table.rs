@@ -925,11 +925,27 @@ impl Table {
         if end <= self.array.len() {
             return Some((end, capacity));
         }
-        // Lua 5.1 may rehash when an integer key exceeds the array extent.
-        if self.native51 {
-            return None;
-        }
         let max_capacity = capacity.saturating_add(growth_bytes / size_of::<Value>());
+        if self.native51 {
+            // With no hash part and a filled prefix, each first key outside
+            // the array makes the next power-of-two extent over half full.
+            // The ordinary rehash would keep every key in the array.
+            if self.hash.is_some()
+                || !matches!(self.array, ArrayStorage::Heap(_))
+                || self.array[..start].contains(&Value::Nil)
+            {
+                return None;
+            }
+            let mut extent = self.array.len();
+            while extent < end {
+                let next = (extent + 1).next_power_of_two();
+                if next > max_capacity.min(native51::MAX_ARRAY) {
+                    break;
+                }
+                extent = next;
+            }
+            return Some((end.min(extent), capacity.max(extent)));
+        }
         let mut reserved = capacity;
         while reserved < end {
             let next = reserved.saturating_mul(2).max(4);
@@ -954,6 +970,7 @@ impl Table {
             self.touch_array();
             return Ok(());
         }
+        let old_extent = self.array.len();
         let array = self.array.heap_mut();
         array.try_reserve_exact(capacity - array.len())?;
         let overwrite_end = array.len().min(end);
@@ -961,6 +978,13 @@ impl Table {
             *slot = value_at(start + offset);
         }
         array.extend_with(end, value_at);
+        if self.native51 {
+            // Native array extent includes the unfilled tail.
+            array.resize(capacity, Value::Nil);
+            self.invalidate_trace();
+            let resizes = old_extent.leading_zeros() - capacity.leading_zeros();
+            self.advance_fields_version(resizes);
+        }
         self.touch_array();
         Ok(())
     }

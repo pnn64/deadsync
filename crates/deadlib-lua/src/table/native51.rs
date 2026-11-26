@@ -11,7 +11,7 @@ const EMPTY: Entry = Entry {
     native_hash: 0,
     next: 0,
 };
-const MAX_ARRAY: usize = 1 << 26;
+pub(super) const MAX_ARRAY: usize = 1 << 26;
 
 pub(crate) fn string_hash(bytes: &[u8]) -> u32 {
     let mut hash = bytes.len() as u32;

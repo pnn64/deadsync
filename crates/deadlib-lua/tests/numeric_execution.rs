@@ -13,6 +13,42 @@ fn check_with_limit(source: &[u8], limit: u64) {
 }
 
 #[test]
+fn dense_growth_preserves_native_rehash_shape_and_scalar_values() {
+    let program = compile(
+        br#"
+        local order = 0
+        local function fill(array, first, last, value)
+            for i = first, last do array[i] = value end
+        end
+        for _, n in ipairs({2, 3, 5, 17, 32, 33, 1023}) do
+            local array = {}
+            fill(array, 1, n, -1 / math.huge)
+            assert(#array == n and 1/array[1] == -math.huge and 1/array[n] == -math.huge)
+            fill(array, n+1, n+4, false)
+            array[2*n+7] = 1
+            array.alpha, array.beta = 1, 2
+            for key in pairs(array) do
+                local code = type(key) == 'number' and key or (key == 'alpha' and 3 or 5)
+                order = (order * 31 + code) % 1000000007
+            end
+            assert(array[n+1] == false and array[n+4] == false)
+        end
+        local sparse = {}
+        sparse[2] = 42
+        fill(sparse, 3, 64, true)
+        assert(sparse[1] == nil and sparse[2] == 42 and sparse[64] == true)
+        return order, #sparse
+        "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        let optimized = vm.execute(&program).unwrap().to_vec();
+        vm.set_instruction_limit(Some(500_000));
+        assert_eq!(vm.execute(&program).unwrap(), optimized);
+    }
+}
+
+#[test]
 fn inline_array_dispatch_rechecks_identities_and_preserves_lua_equality() {
     let program = compile(
         br#"
