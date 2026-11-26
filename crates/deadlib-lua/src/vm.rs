@@ -2185,6 +2185,7 @@ impl Vm {
                             natives: &self.native_closures,
                             strings: &self.strings.bytes,
                         }),
+                        string_metatable: self.type_metatables[meta::STRING_METATABLE_SLOT],
                     };
                     if inline_calls
                         && let Some((next, resumed)) =

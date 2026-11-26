@@ -12,6 +12,44 @@ fn check_with_and_without_budget(source: &[u8]) {
 }
 
 #[test]
+fn string_method_lookup_observes_replacement_and_inherited_handlers() {
+    check_with_and_without_budget(
+        br#"
+local original=debug.getmetatable('')
+local methods={sub=string.sub}
+local mt={__index=methods}
+debug.setmetatable('',mt)
+local position=1
+local function next_byte(source)
+    local byte=source:sub(position,position)
+    position=position+1
+    return byte
+end
+assert(next_byte('abc')=='a' and position==2)
+methods.sub=function(s,first,last) return 'changed' end
+assert(next_byte('abc')=='changed' and position==3)
+methods.sub=nil
+local inherited=0
+setmetatable(methods,{__index=function(t,key)
+    assert(t==methods and key=='sub')
+    inherited=inherited+1
+    return string.sub
+end})
+assert(next_byte('abc')=='c' and position==4 and inherited==1)
+mt.__index=function(s,key)
+    assert(s=='abc' and key=='sub')
+    return function() return 'handled' end
+end
+assert(next_byte('abc')=='handled' and position==5)
+mt.__index=nil
+assert(not pcall(next_byte,'abc') and position==5)
+debug.setmetatable('',original)
+return 42
+"#,
+    );
+}
+
+#[test]
 fn single_string_argument_preserves_raw_bytes_and_open_results() {
     check_with_and_without_budget(
         br#"

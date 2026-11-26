@@ -35,6 +35,7 @@ pub(super) struct Context<'a, Threads = &'a Arena<threads::Thread>> {
     pub index_name: StringId,
     /// Host `__index` resolvers, when no hook could observe a skipped call.
     pub resolvers: Option<Resolvers<'a>>,
+    pub string_metatable: Option<TableId>,
 }
 
 /// The closures and strings a host [`IndexResolver`](super::IndexResolver) reads.
@@ -200,11 +201,29 @@ pub(super) fn step(
             }
         }
         Op::GetTable => {
-            let Value::Table(id) = cx.registers[base + usize::from(i.b)] else {
-                return None;
+            let target = cx.registers[base + usize::from(i.b)];
+            let key = cx.operand(i.c);
+            let id = match (target, key) {
+                (Value::Table(id), _) => id,
+                (Value::String(_), Value::String(name)) => {
+                    let metatable = cx.string_metatable?;
+                    let hints = &mut cx.field_hints[pc % FIELD_HINTS];
+                    let Value::Table(methods) = cx.tables[slot_index(metatable.0)]
+                        .get_string_cached(cx.index_name, &mut hints[1])
+                    else {
+                        return None;
+                    };
+                    let value =
+                        cx.tables[slot_index(methods.0)].get_string_cached(name, &mut hints[0]);
+                    if value == Value::Nil {
+                        return None;
+                    }
+                    cx.registers[a] = value;
+                    return Some(next);
+                }
+                _ => return None,
             };
             let table = &cx.tables[slot_index(id.0)];
-            let key = cx.operand(i.c);
             let mut value = match key {
                 Value::String(id) => {
                     table.get_string_cached(id, &mut cx.field_hints[pc % FIELD_HINTS][0])
@@ -235,6 +254,24 @@ pub(super) fn step(
                     cx.threads[slot_index(thread.0)].registers[register]
                 }
             };
+        }
+        Op::SetUpvalue => {
+            let value = cx.registers[a];
+            if !matches!(
+                value,
+                Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_)
+            ) {
+                return None;
+            }
+            let Cell::Open(thread, register) = cx.upvalues[cx.upvalue_ids[i.c as usize] as usize]
+            else {
+                return None;
+            };
+            if thread != cx.thread {
+                return None;
+            }
+            // Scalar writes to an active stack slot add no collector edge.
+            cx.registers[register] = value;
         }
         Op::SetTable => {
             if cx.gc_pending {

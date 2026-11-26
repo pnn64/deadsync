@@ -2,6 +2,8 @@
 use super::*;
 use std::cmp::Ordering;
 
+pub(super) const STRING_METATABLE_SLOT: usize = 3;
+
 pub(super) enum TableRead {
     Value(Value),
     Call(Value, Value),
@@ -30,7 +32,7 @@ impl Vm {
             Value::Nil => 0,
             Value::Boolean(_) => 1,
             Value::Number(_) => 2,
-            Value::String(_) => 3,
+            Value::String(_) => STRING_METATABLE_SLOT,
             Value::Function(_) | Value::Native(_) => 4,
             Value::Table(_) => 5,
             Value::Thread(_) => 6,
