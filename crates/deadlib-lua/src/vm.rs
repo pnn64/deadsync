@@ -62,9 +62,12 @@ fn lua_integer(number: f64) -> i64 {
 
 /// Stable Lua string storage, including the C API's trailing zero byte.
 #[derive(Debug)]
-struct ByteString(Buffer<u8>);
+struct ByteString {
+    storage: Buffer<u8>,
+    hash: usize,
+}
 impl ByteString {
-    fn try_new(bytes: &[u8], memory: Memory) -> Result<Self, Error> {
+    fn try_new(bytes: &[u8], hash: usize, memory: Memory) -> Result<Self, Error> {
         let size = bytes.len().checked_add(1).ok_or_else(Error::memory)?;
         let mut storage = Buffer::new_in(memory);
         storage
@@ -74,19 +77,19 @@ impl ByteString {
         storage.push(0);
         // Keep the vector: shrinking an overallocated buffer to a boxed slice
         // must not introduce an infallible reallocation on this failure path.
-        Ok(Self(storage))
+        Ok(Self { storage, hash })
     }
     fn c_bytes(&self) -> &[u8] {
-        &self.0
+        &self.storage
     }
     fn storage_bytes(&self) -> usize {
-        self.0.capacity()
+        self.storage.capacity()
     }
 }
 impl std::ops::Deref for ByteString {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
-        &self.0[..self.0.len() - 1]
+        &self.storage[..self.storage.len() - 1]
     }
 }
 impl AsRef<[u8]> for ByteString {
@@ -118,11 +121,12 @@ impl Strings {
         crate::hash::hash_bytes(bytes) as usize
     }
     fn find(&self, bytes: &[u8]) -> Option<StringId> {
-        self.find_hashed(bytes, Self::hash(bytes))
+        self.probe(bytes, Self::hash(bytes)).ok()
     }
-    fn find_hashed(&self, bytes: &[u8], hash: usize) -> Option<StringId> {
+    // Return the vacant bucket as well as hits so insertion can reuse the probe.
+    fn probe(&self, bytes: &[u8], hash: usize) -> Result<StringId, usize> {
         if self.buckets.is_empty() {
-            return None;
+            return Err(0);
         }
         let mask = self.buckets.len() - 1;
         let index_mask = self.bucket_index_mask();
@@ -131,12 +135,13 @@ impl Strings {
         loop {
             let entry = self.buckets[slot];
             if entry == 0 {
-                return None;
+                return Err(slot);
             }
             if entry & !index_mask == tag {
                 let index = (entry & index_mask) as usize - 1;
-                if self.bytes[index].as_ref() == bytes {
-                    return self.bytes.key(index).map(StringId);
+                let candidate = &self.bytes[index];
+                if candidate.hash == hash && candidate.as_ref() == bytes {
+                    return Ok(StringId(self.bytes.key(index).expect("live interned string")));
                 }
             }
             slot = (slot + 1) & mask;
@@ -157,7 +162,8 @@ impl Strings {
         }
         buckets[slot] = (index as u32 + 1) | (hash as u32 & !index_mask);
     }
-    fn try_add(&mut self, bytes: ByteString, hash: usize) -> Result<StringId, Error> {
+    fn try_add(&mut self, bytes: ByteString, vacant: usize) -> Result<StringId, Error> {
+        let hash = bytes.hash;
         let old_index_mask = self.bucket_index_mask();
         let mut replacement = None;
         if (self.bytes.live_len() + 1) * 4 >= self.buckets.len() * 3 {
@@ -173,7 +179,7 @@ impl Strings {
                 .map_err(|_| Error::memory())?;
             buckets.resize(size, 0);
             for (id, text) in self.bytes.entries() {
-                Self::place_bucket(&mut buckets, id, Self::hash(text), old_index_mask);
+                Self::place_bucket(&mut buckets, id, text.hash, old_index_mask);
             }
             replacement = Some(buckets);
         }
@@ -181,6 +187,7 @@ impl Strings {
         // Publish neither the hash index nor the string until every allocation
         // has succeeded. Arena accounting includes partially reserved buffers.
         let id = self.bytes.try_insert(bytes)?;
+        let resized = replacement.is_some();
         if let Some(buckets) = replacement {
             let growth =
                 buckets.capacity().saturating_sub(self.buckets.capacity()) * size_of::<u32>();
@@ -196,7 +203,11 @@ impl Strings {
         }
         self.bytes.note_alloc(storage);
         self.payload_bytes += storage;
-        Self::place_bucket(&mut self.buckets, slot_index(id), hash, index_mask);
+        if resized {
+            Self::place_bucket(&mut self.buckets, slot_index(id), hash, index_mask);
+        } else {
+            self.buckets[vacant] = (slot_index(id) as u32 + 1) | (hash as u32 & !index_mask);
+        }
         Ok(StringId(id))
     }
     #[cfg(test)]
@@ -205,14 +216,15 @@ impl Strings {
     }
     fn try_intern(&mut self, bytes: &[u8]) -> Result<StringId, Error> {
         let hash = Self::hash(bytes);
-        if let Some(id) = self.find_hashed(bytes, hash) {
-            self.bytes.preserve_new_reference(id.0);
-            Ok(id)
-        } else {
-            self.try_add(
-                ByteString::try_new(bytes, self.bytes.memory().clone())?,
-                hash,
-            )
+        match self.probe(bytes, hash) {
+            Ok(id) => {
+                self.bytes.preserve_new_reference(id.0);
+                Ok(id)
+            }
+            Err(vacant) => {
+                let owned = ByteString::try_new(bytes, hash, self.bytes.memory().clone())?;
+                self.try_add(owned, vacant)
+            }
         }
     }
     fn substring(
@@ -229,12 +241,16 @@ impl Strings {
             return Ok(StringId(key));
         }
         let hash = Self::hash(bytes);
-        if let Some(id) = self.find_hashed(bytes, hash) {
-            self.bytes.preserve_new_reference(id.0);
-            return Ok(id);
+        match self.probe(bytes, hash) {
+            Ok(id) => {
+                self.bytes.preserve_new_reference(id.0);
+                Ok(id)
+            }
+            Err(vacant) => {
+                let owned = ByteString::try_new(bytes, hash, self.bytes.memory().clone())?;
+                self.try_add(owned, vacant)
+            }
         }
-        let owned = ByteString::try_new(bytes, self.bytes.memory().clone())?;
-        self.try_add(owned, hash)
     }
 }
 

@@ -312,7 +312,7 @@ impl Strings {
         self.bytes.sweep_with(cursor, budget, |bytes, index| {
             let mask = buckets.len() - 1;
             let string = &bytes[index];
-            let hash = Self::hash(string);
+            let hash = string.hash;
             *payload_bytes -= string.storage_bytes();
             let removed = (index as u32 + 1) | (hash as u32 & !index_mask);
             let mut hole = hash & mask;
@@ -324,7 +324,7 @@ impl Strings {
             while buckets[cursor] != 0 {
                 // Backshift the cluster before freeing/reusing its arena slot.
                 let entry = buckets[cursor];
-                let home = Self::hash(&bytes[(entry & index_mask) as usize - 1]) & mask;
+                let home = bytes[(entry & index_mask) as usize - 1].hash & mask;
                 if (cursor.wrapping_sub(home) & mask) >= (hole.wrapping_sub(home) & mask) {
                     buckets[hole] = entry;
                     hole = cursor;
@@ -356,7 +356,7 @@ impl Strings {
         let index_mask = self.bucket_index_mask();
         self.payload_bytes = 0;
         for (i, bytes) in self.bytes.entries() {
-            Self::place_bucket(&mut self.buckets, i, Self::hash(bytes), index_mask);
+            Self::place_bucket(&mut self.buckets, i, bytes.hash, index_mask);
             self.payload_bytes += bytes.storage_bytes();
         }
     }
