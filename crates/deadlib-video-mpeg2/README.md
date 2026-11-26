@@ -37,3 +37,6 @@ both ITGmania fixtures (`dix.mpg` and `lights.mpg`). The offline test fixture wa
 generated with FFmpeg using
 `testsrc2=size=48x34:rate=25:duration=0.32` and
 `-c:v mpeg2video -g 12 -bf 2 -q:v 4 -non_linear_quant 1 -qmax 28`.
+
+See the [decoder benchmark](bench/README.md) for the cycle, throughput and
+allocation comparison with ITGmania's FFmpeg build.

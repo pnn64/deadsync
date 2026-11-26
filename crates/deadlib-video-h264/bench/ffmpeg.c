@@ -10,6 +10,10 @@
 #include <libavutil/imgutils.h>
 #include <libavutil/sha.h>
 
+#ifndef BENCH_DECODER_NAME
+#define BENCH_DECODER_NAME "h264"
+#endif
+
 typedef struct {
     uint64_t frames;
     uint64_t luma_pixels;
@@ -70,9 +74,9 @@ static int send_and_drain(AVCodecContext *dec, AVPacket *packet, AVFrame *frame,
 }
 
 int ff_decode(const uint8_t *data, int size, unsigned mode, struct AVSHA *sha, Output *output) {
-    const AVCodec *codec = avcodec_find_decoder_by_name("h264");
+    const AVCodec *codec = avcodec_find_decoder_by_name(BENCH_DECODER_NAME);
     AVCodecContext *dec = avcodec_alloc_context3(codec);
-    AVCodecParserContext *parser = av_parser_init(AV_CODEC_ID_H264);
+    AVCodecParserContext *parser = codec ? av_parser_init(codec->id) : NULL;
     AVFrame *frame = av_frame_alloc();
     AVPacket *packet = av_packet_alloc();
     Consumer sink = {mode, sha, output};
@@ -80,6 +84,9 @@ int ff_decode(const uint8_t *data, int size, unsigned mode, struct AVSHA *sha, O
     if (!codec || !dec || !parser || !frame || !packet) goto done;
     dec->thread_count = 1;
     dec->thread_type = 0;
+#ifdef BENCH_IDCT
+    dec->idct_algo = BENCH_IDCT;
+#endif
     ret = avcodec_open2(dec, codec, NULL);
     if (ret < 0) goto done;
     for (;;) {
