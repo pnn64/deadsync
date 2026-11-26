@@ -8,7 +8,6 @@ use super::*;
 
 // Larger chunks can amortize the lookup cost across repeated short bodies.
 const MIN_TEMPLATE_SOURCE: usize = 2048;
-const MAX_TEMPLATE_BODY: usize = 256;
 const LEAF_SLOTS: usize = 32;
 
 /// Position data of a consumed token.
@@ -876,7 +875,7 @@ impl Parser {
             && !self.bindings.has_captures();
         let end_line = self.rexpect(input, Kind::End)?.end_line;
         let template_source = if leaf
-            && source_end - source_start <= MAX_TEMPLATE_BODY
+            && source_end - source_start <= MAX_TEMPLATE_BODY as usize
             && let Ok(end) = u32::try_from(source_end)
         {
             [source_start as u32, end]

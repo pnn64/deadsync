@@ -173,6 +173,7 @@ struct Compiler<'a> {
     names: Vec<u8>,
     prototypes: Vec<Prototype>,
     templates: templates::Templates,
+    template_locale: Option<u64>,
     folded: Vec<Option<f64>>,
     tasks: Vec<Task<'a>>,
     /// Assignment targets nest if a target or value contains a function.
@@ -209,18 +210,44 @@ fn drain_boxed<T>(values: &mut Vec<T>) -> Result<Box<[T]>, Error> {
 }
 
 pub(crate) fn compile(ast: Ast, source: &[u8], name: &[u8]) -> Result<Program, Error> {
-    compile_in(&ast, source, name, &mut Spare::default())
+    compile_with_templates(&ast, source, name, &mut Spare::default(), None)
 }
 
 /// Compile with storage from `spare`, which keeps it again after success.
 pub(crate) fn compile_in(
+    ast: &mut Ast,
+    source: &[u8],
+    name: &[u8],
+    spare: &mut Spare,
+    parse_locale: u64,
+) -> Result<Program, Error> {
+    let same_locale = parse_locale == crate::locale::revision();
+    if !same_locale {
+        // Two identical source fragments may have been tokenized under
+        // different rules if the locale changed during this parse.
+        for (expression, _) in &mut ast.exprs {
+            if let Expr::Function {
+                template_source, ..
+            } = expression
+            {
+                *template_source = [0; 2];
+            }
+        }
+    }
+    let template_locale =
+        (same_locale && !crate::memory::compilation::active()).then_some(parse_locale);
+    compile_with_templates(ast, source, name, spare, template_locale)
+}
+
+fn compile_with_templates(
     ast: &Ast,
     source: &[u8],
     name: &[u8],
     spare: &mut Spare,
+    template_locale: Option<u64>,
 ) -> Result<Program, Error> {
     let mut templates = std::mem::take(&mut spare.templates);
-    templates.clear();
+    templates.begin(template_locale);
     let mut functions = std::mem::take(&mut spare.functions);
     let mut function = match functions.pop() {
         Some(function) => function,
@@ -255,6 +282,7 @@ pub(crate) fn compile_in(
         names,
         prototypes,
         templates,
+        template_locale,
         folded,
         tasks,
         assignment_targets: std::mem::take(&mut spare.assignment_targets),
@@ -271,13 +299,13 @@ pub(crate) fn compile_in(
     debug_assert!(c.parents.is_empty());
     spare.parents = c.parents;
     spare.names = c.names;
-    spare.templates = c.templates;
     spare.folded = c.folded;
     spare.tasks = recycle(c.tasks);
     debug_assert!(c.assignment_targets.is_empty());
     spare.assignment_targets = c.assignment_targets;
     let p = Program::try_new(c.prototypes, entry, name)?;
     p.verify()?;
+    spare.templates = c.templates;
     Ok(p)
 }
 

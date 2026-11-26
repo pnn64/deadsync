@@ -561,8 +561,13 @@ impl<'a> Compiler<'a> {
                     }
                     self.line = line;
                     if let Some(source) = template {
-                        self.templates
-                            .remember(source, child, &self.prototypes[child as usize])?;
+                        self.templates.remember(
+                            source,
+                            child,
+                            &mut self.prototypes[child as usize],
+                            self.source,
+                            self.template_locale,
+                        )?;
                     }
                     let parent = self.parents.pop().expect("child has a parent");
                     self.spare

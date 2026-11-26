@@ -514,12 +514,15 @@ impl Prototype {
 
     pub(crate) fn template_lines_valid(&self) -> bool {
         let lines = self.defined[0]..=self.defined[1];
-        self.line_bias == 0
-            && self.defined[0] != 0
+        self.defined[0] != 0
             && self.metadata.iter().all(|m| {
-                lines.contains(&m.line) && (m.hook_line == 0 || lines.contains(&m.hook_line))
+                lines.contains(&self.adjust_line(m.line))
+                    && (m.hook_line == 0 || lines.contains(&self.adjust_line(m.hook_line)))
             })
-            && self.active_lines.iter().all(|line| lines.contains(line))
+            && self
+                .active_lines
+                .iter()
+                .all(|&line| lines.contains(&self.adjust_line(line)))
     }
 
     pub(crate) fn shared_owner(&self) -> Option<u32> {
@@ -530,19 +533,34 @@ impl Prototype {
     }
 
     pub(crate) fn reuse_leaf(&mut self, id: u32, end: u32) -> Result<Self, Error> {
-        debug_assert_eq!(self.line_bias, 0);
-        let line_bias = end.wrapping_sub(self.defined[1]);
+        self.share_leaf(id)?;
+        Ok(self.shared_leaf_for_owner(id, end))
+    }
+
+    pub(crate) fn share_leaf(&mut self, id: u32) -> Result<(), Error> {
         if let PrototypeStorage::Owned(body) = &mut self.storage {
+            debug_assert_eq!(self.line_bias, 0);
             self.storage = PrototypeStorage::Shared {
                 body: Shared::try_new_in(std::mem::take(body), Memory::default())?,
                 owner: id,
             };
         }
-        Ok(Self {
-            storage: self.storage.clone(),
-            defined: [self.defined[0].wrapping_add(line_bias), end],
-            line_bias,
-        })
+        Ok(())
+    }
+
+    pub(crate) fn shared_leaf_for_owner(&self, owner: u32, end: u32) -> Self {
+        let delta = end.wrapping_sub(self.defined[1]);
+        let PrototypeStorage::Shared { body, .. } = &self.storage else {
+            unreachable!("reuse of a shared leaf");
+        };
+        Self {
+            storage: PrototypeStorage::Shared {
+                body: body.clone(),
+                owner,
+            },
+            defined: [self.defined[0].wrapping_add(delta), end],
+            line_bias: self.line_bias.wrapping_add(delta),
+        }
     }
 
     fn same_body(&self, original: &Self) -> bool {
@@ -704,7 +722,11 @@ impl Program {
                         && prototype.defined[0] != 0
                         && prototype.defined[0] <= prototype.defined[1]
                         && prototype.defined
-                            == origin.defined.map(|line| prototype.adjust_line(line))
+                            == origin.defined.map(|line| {
+                                line.wrapping_add(
+                                    prototype.line_bias.wrapping_sub(origin.line_bias),
+                                )
+                            })
                     {
                         continue;
                     }

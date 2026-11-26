@@ -235,11 +235,13 @@ pub(super) fn compile(
             .resume(source, true)
             .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), source, name));
     }
+    let parse_locale = crate::locale::revision();
     let mut parser = crate::parser::Parser::try_new_in(&mut spare.parser, depth)?;
     let parsed = parser.resume(source, true);
     parser.recycle(&mut spare.parser);
-    let ast = parsed?.expect("closed source");
-    let program = crate::compiler::compile_in(&ast, source, name, &mut spare.compiler);
+    let mut ast = parsed?.expect("closed source");
+    let program =
+        crate::compiler::compile_in(&mut ast, source, name, &mut spare.compiler, parse_locale);
     spare.parser.keep_ast(ast);
     program
 }
@@ -324,6 +326,7 @@ pub(super) struct Loading {
     pub(super) parser: crate::parser::Parser,
     pub(super) decoder: Option<Box<crate::chunk51::Decoder>>,
     native_depth: usize,
+    parse_locale: u64,
     pub(super) binary_mode: bool,
     source: Buffer<u8>,
     pub(super) name: Box<[u8]>,
@@ -424,7 +427,7 @@ impl Loading {
         if let Some(roots) = &mut self.native {
             roots.started = true;
         }
-        let Some(ast) = self.parser.resume(&self.source, self.closed)? else {
+        let Some(mut ast) = self.parser.resume(&self.source, self.closed)? else {
             return Ok(None);
         };
         if !self.parser.reusable()
@@ -432,8 +435,13 @@ impl Loading {
         {
             return crate::compiler::compile(ast, &self.source, &self.name).map(Some);
         }
-        let program =
-            crate::compiler::compile_in(&ast, &self.source, &self.name, &mut spare.compiler);
+        let program = crate::compiler::compile_in(
+            &mut ast,
+            &self.source,
+            &self.name,
+            &mut spare.compiler,
+            self.parse_locale,
+        );
         spare.parser.keep_ast(ast);
         program.map(Some)
     }
@@ -494,6 +502,7 @@ impl Vm {
                     parser,
                     decoder: None,
                     native_depth: depth,
+                    parse_locale: crate::locale::revision(),
                     binary_mode: false,
                     source: self.try_take_buffer(0)?,
                     name: name.try_boxed()?,
@@ -801,6 +810,7 @@ impl Vm {
                     parser,
                     decoder: None,
                     native_depth: self.native_depth(owner + 1),
+                    parse_locale: crate::locale::revision(),
                     binary_mode: false,
                     source: self.try_take_buffer(0)?,
                     name: name.try_into_boxed_slice()?,
@@ -1081,11 +1091,16 @@ impl Vm {
         // The EOF path cannot call out or change Lua state. A valid complete
         // parse can consume this borrowed block without publishing parser roots.
         let job = &mut self.loads[index];
-        let Some(ast) = job.parser.try_complete_reader(bytes)? else {
+        let Some(mut ast) = job.parser.try_complete_reader(bytes)? else {
             return Ok(None);
         };
-        let result =
-            crate::compiler::compile_in(&ast, bytes, &job.name, &mut self.compile_spare.compiler);
+        let result = crate::compiler::compile_in(
+            &mut ast,
+            bytes,
+            &job.name,
+            &mut self.compile_spare.compiler,
+            job.parse_locale,
+        );
         self.compile_spare.parser.keep_ast(ast);
         Ok(Some(result))
     }

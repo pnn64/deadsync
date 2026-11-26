@@ -7,6 +7,14 @@ use crate::memory::fallible::{self, SliceExt, VecExt};
 
 mod recursive;
 
+const MAX_TEMPLATE_BODY: u32 = 256;
+
+#[derive(Clone, Copy, Debug, Default)]
+struct TemplateCandidate {
+    start: u32,
+    children: u32,
+}
+
 /// Grammar continuations. List-building tasks hold a mark into one of the
 /// parser's scratch stacks; finished lists are published to the AST pools.
 #[derive(Debug)]
@@ -60,11 +68,11 @@ enum Task {
     List,
     ListAfter(usize),
     Function(u32, bool),
-    Params(u32, usize, bool),
-    ParamAfter(u32, usize),
-    ParamsEnd(u32, usize, bool),
-    FunctionEnd(u32, Span, bool, u16, bool, u16, u32),
-    FunctionAfterEnd(u32, Span, bool, u16, bool, u16, u32, u32),
+    Params(u32, usize, bool, TemplateCandidate),
+    ParamAfter(u32, usize, TemplateCandidate),
+    ParamsEnd(u32, usize, bool, TemplateCandidate),
+    FunctionEnd(u32, Span, bool, u16, bool, u16, u32, TemplateCandidate),
+    FunctionAfterEnd(u32, Span, bool, u16, bool, u16, u32, u32, [u32; 2]),
     Expr(u8),
     ExprLoop(u8, u32),
     Unary(Kind, u32),
@@ -610,6 +618,7 @@ impl Parser {
         line: u32,
         params: usize,
         vararg: bool,
+        source: TemplateCandidate,
     ) -> Result<(), Error> {
         let count = self.scratch.names.len() - params + usize::from(vararg);
         self.check_local_count_at(count, line)?;
@@ -625,6 +634,7 @@ impl Parser {
             self.vararg,
             self.locals,
             self.function_line,
+            source,
         ))?;
         self.function_line = line;
         self.loops = 0;
@@ -1298,6 +1308,19 @@ impl Parser {
                     if let Some(events) = &mut self.native_events {
                         events.try_push(NativeRootEvent::Open)?;
                     }
+                    let source = if self.keep
+                        && self.native_events.is_none()
+                        && !method
+                        && self.lookahead.is_none()
+                        && self.kind() == Kind::LParen
+                        && self.line() == line
+                        && let Ok(start) = u32::try_from(self.scanner.position())
+                        && let Ok(children) = u32::try_from(self.ast.stacks.len())
+                    {
+                        TemplateCandidate { start, children }
+                    } else {
+                        TemplateCandidate::default()
+                    };
                     self.expect(Kind::LParen)?;
                     let params = self.scratch.names.len();
                     if method {
@@ -1305,9 +1328,10 @@ impl Parser {
                             .names
                             .try_push(Lexeme::Owned(Text::new(b"self")?))?;
                     }
-                    self.tasks.try_push(Task::Params(line, params, true))?;
+                    self.tasks
+                        .try_push(Task::Params(line, params, true, source))?;
                 }
-                Task::Params(line, params, allow_end) => {
+                Task::Params(line, params, allow_end, source) => {
                     if allow_end
                         && self.scratch.names.len() > params
                         && let Some(events) = &mut self.native_events
@@ -1316,32 +1340,35 @@ impl Parser {
                     }
                     if self.kind() == Kind::Dots {
                         self.take();
-                        self.tasks.try_push(Task::ParamsEnd(line, params, true))?;
+                        self.tasks
+                            .try_push(Task::ParamsEnd(line, params, true, source))?;
                     } else if self.kind() == Kind::RParen && allow_end {
-                        self.start_function_body(input, line, params, false)?;
+                        self.start_function_body(input, line, params, false, source)?;
                     } else {
                         if self.kind() != Kind::Name {
                             return Err(self.error("<name> or '...' expected"));
                         }
                         let name = self.take().text;
                         self.scratch.names.try_push(name)?;
-                        self.tasks.try_push(Task::ParamAfter(line, params))?;
+                        self.tasks
+                            .try_push(Task::ParamAfter(line, params, source))?;
                     }
                 }
-                Task::ParamAfter(line, params) => {
+                Task::ParamAfter(line, params, source) => {
                     self.check_local_count_at(self.scratch.names.len() - params, line)?;
                     if self.kind() == Kind::Comma {
                         self.take();
-                        self.tasks.try_push(Task::Params(line, params, false))?;
+                        self.tasks
+                            .try_push(Task::Params(line, params, false, source))?;
                     } else {
-                        self.start_function_body(input, line, params, false)?;
+                        self.start_function_body(input, line, params, false, source)?;
                     }
                 }
-                Task::ParamsEnd(line, params, vararg) => {
+                Task::ParamsEnd(line, params, vararg, source) => {
                     if vararg && let Some(events) = &mut self.native_events {
                         events.try_push(NativeRootEvent::Anchor(RootText::Static(b"arg")))?;
                     }
-                    self.start_function_body(input, line, params, vararg)?
+                    self.start_function_body(input, line, params, vararg, source)?
                 }
                 Task::FunctionEnd(
                     line,
@@ -1351,7 +1378,19 @@ impl Parser {
                     parent_vararg,
                     locals,
                     parent_line,
+                    TemplateCandidate { start, children },
                 ) => {
+                    let template_source = if start != 0
+                        && self.lookahead.is_none()
+                        && self.ast.stacks.len() == children as usize
+                        && !self.bindings.has_captures()
+                        && let Ok(end) = u32::try_from(self.scanner.position())
+                        && end.saturating_sub(start) <= MAX_TEMPLATE_BODY
+                    {
+                        [start, end]
+                    } else {
+                        [0; 2]
+                    };
                     let end_line = self.close(Kind::End, Kind::Function, line)?.end_line;
                     self.tasks.try_push(Task::FunctionAfterEnd(
                         line,
@@ -1362,6 +1401,7 @@ impl Parser {
                         locals,
                         parent_line,
                         end_line,
+                        template_source,
                     ))?;
                 }
                 Task::FunctionAfterEnd(
@@ -1373,6 +1413,7 @@ impl Parser {
                     locals,
                     parent_line,
                     end_line,
+                    template_source,
                 ) => {
                     if let Some(events) = &mut self.native_events {
                         events.try_push(NativeRootEvent::Close)?;
@@ -1402,7 +1443,7 @@ impl Parser {
                             vararg,
                             body,
                             end_line,
-                            template_source: [0; 2],
+                            template_source,
                             template_line: 0,
                         },
                         line,
