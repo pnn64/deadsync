@@ -1315,8 +1315,11 @@ impl Vm {
                 || !matches!(value, Value::Userdata(id) if self.userdata[slot_index(id.0)].finalized))
     }
     #[inline]
-    fn quiet_suspension(thread: &threads::Thread) -> bool {
-        thread.status == threads::Status::Suspended
+    fn quiet_parked_thread(thread: &threads::Thread) -> bool {
+        (thread.status == threads::Status::Suspended
+            || (thread.status == threads::Status::Dead
+                && thread.registers.is_empty()
+                && thread.frames.is_empty()))
             && thread.open_upvalues.is_empty()
             && thread.call_slots <= 16
             && !matches!(thread.hooks.callback, hooks::Callback::Host(_))
@@ -1379,8 +1382,20 @@ impl Vm {
             | Trace::ThreadAgain(id) = item
                 && id != self.thread
                 && let Some(thread) = self.threads.get(id.0)
-                && Self::quiet_suspension(thread)
+                && Self::quiet_parked_thread(thread)
             {
+                if thread.status == threads::Status::Dead {
+                    // A completed stack with no attached roots only retains
+                    // its environment. Popping the thread frees that slot.
+                    let env = thread.globals;
+                    work.pop();
+                    self.threads.mark(id.0);
+                    if budget != usize::MAX || !self.tables.marked(env.0) {
+                        work.push(Trace::Value(Value::Table(env)));
+                    }
+                    visited += 1;
+                    continue;
+                }
                 if let Some((env, entry)) = Self::dormant_thread_roots(thread) {
                     // There are no frames or extra roots to size. In an
                     // unbounded pass, skip edges that were already marked.
@@ -1475,7 +1490,7 @@ impl Vm {
                         self.trace_thread(id, work);
                         if let Some(refresh) = refresh.as_deref_mut()
                             && (id == self.thread
-                                || !Self::quiet_suspension(&self.threads[slot_index(id.0)]))
+                                || !Self::quiet_parked_thread(&self.threads[slot_index(id.0)]))
                         {
                             refresh.record(id);
                         }
@@ -1754,11 +1769,11 @@ impl Vm {
         } else {
             for key in self.threads.marked_keys() {
                 let id = ThreadId(key);
-                // During synchronous collection the first pass traced and
-                // cleaned quiet parked stacks, and their roots stay fixed.
+                // During synchronous collection the first pass handled quiet
+                // parked threads, and their roots stay fixed.
                 if !fresh_cycle
                     || id == self.thread
-                    || !Self::quiet_suspension(&self.threads[slot_index(key)])
+                    || !Self::quiet_parked_thread(&self.threads[slot_index(key)])
                 {
                     work.push(Trace::ThreadAgain(id));
                 }
@@ -2170,6 +2185,45 @@ mod tests {
             refresh.record(ThreadId((1 << 32) | slot));
         }
         assert!(refresh.ordered().is_none());
+    }
+
+    #[test]
+    fn completed_coroutine_traces_its_private_environment() {
+        let program = crate::compile(
+            br#"
+            local thread = coroutine.create(function()
+                coroutine.yield(19)
+                return 42
+            end)
+            assert(coroutine.resume(thread))
+            assert(coroutine.resume(thread))
+            return thread
+            "#,
+        )
+        .unwrap();
+        for incremental in [false, true] {
+            let mut vm = Vm::new();
+            let [Value::Thread(id)] = *vm.execute(&program).unwrap() else {
+                panic!("expected a completed coroutine");
+            };
+            assert!(Vm::quiet_parked_thread(&vm.threads[slot_index(id.0)]));
+            let root = vm.pin(Value::Thread(id)).unwrap();
+            let environment = vm.new_table();
+            vm.set_thread_environment(id, environment).unwrap();
+            let marker = vm.intern(b"only reachable from the thread environment");
+            let key = Value::Number(1.0);
+            vm.raw_set(environment, key, marker).unwrap();
+
+            if incremental {
+                while vm.gc_control(GcOperation::Step(0)).unwrap().0 == 0 {}
+            } else {
+                vm.collect_garbage().unwrap();
+            }
+            assert_eq!(vm.thread_environment(id), environment);
+            assert_eq!(vm.tables[slot_index(environment.0)].get(key), marker);
+            assert!(vm.is_live_value(marker));
+            vm.unpin(root).unwrap();
+        }
     }
 
     #[test]
