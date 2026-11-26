@@ -108,6 +108,33 @@ struct Scan {
     registers: usize,
 }
 
+struct Accumulator {
+    sum: f64,
+    exact: Option<Exact>,
+}
+
+impl Accumulator {
+    #[inline]
+    fn add(&mut self, value: f64) {
+        self.sum += value;
+        if let Some(proof) = &mut self.exact
+            && proof.push(value).is_none()
+        {
+            self.exact = None;
+        }
+    }
+
+    fn finish(self, iterations: usize, terms: usize, registers: usize) -> Scan {
+        Scan {
+            sum: self.sum,
+            exact: self
+                .exact
+                .and_then(|proof| proof.check_count(iterations, terms)),
+            registers,
+        }
+    }
+}
+
 impl Plan {
     fn decode(
         vm: &Vm,
@@ -266,12 +293,12 @@ impl Plan {
         })
     }
 
-    fn scan(
+    fn scan<const RESULTS: usize>(
         &self,
         vm: &Vm,
         bounds: (i64, i64),
         ascending: bool,
-        mut sum: f64,
+        sum: f64,
         measure_exactness: bool,
     ) -> Option<Scan> {
         let mut arrays = [&[][..]; MAX_ARRAYS];
@@ -288,20 +315,23 @@ impl Plan {
             )?),
             Target::Array(_) => None,
         };
+        let mut accumulator = Accumulator {
+            sum,
+            exact: measure_exactness.then_some(Exact::ZERO),
+        };
+        if RESULTS == 2
+            && let Some(recipe) = &fixed
+            && let Some(pair) = self.additive_pair(recipe, &arrays)
+        {
+            return scan_additive_pair(pair, ascending, accumulator, recipe.registers);
+        }
         let mut targets = Targets::new();
-        let mut exact = measure_exactness.then_some(Exact::ZERO);
         let mut accumulate = |index| {
-            let values = self
-                .call
-                .values(vm, &arrays, index, fixed.as_ref(), &mut targets)?;
-            for &addend in &self.addends[..self.call.results] {
-                let value = values[usize::from(addend)];
-                sum += value;
-                if let Some(proof) = &mut exact
-                    && proof.push(value).is_none()
-                {
-                    exact = None;
-                }
+            let values =
+                self.call
+                    .values::<RESULTS>(vm, &arrays, index, fixed.as_ref(), &mut targets)?;
+            for &addend in &self.addends[..RESULTS] {
+                accumulator.add(values[usize::from(addend)]);
             }
             Some(())
         };
@@ -316,24 +346,92 @@ impl Plan {
         }
         let last = if ascending { len - 1 } else { 0 };
         self.call
-            .values(vm, &arrays, last, fixed.as_ref(), &mut targets)?;
-        Some(Scan {
-            sum,
-            exact: exact.and_then(|proof| proof.check_count(len - 1, self.call.results)),
-            registers: fixed.map_or(targets.registers, |recipe| recipe.registers),
-        })
+            .values::<RESULTS>(vm, &arrays, last, fixed.as_ref(), &mut targets)?;
+        Some(accumulator.finish(
+            len - 1,
+            RESULTS,
+            fixed.map_or(targets.registers, |recipe| recipe.registers),
+        ))
+    }
+
+    fn additive_pair<'a>(
+        &self,
+        recipe: &Recipe,
+        arrays: &[&'a [Value]; MAX_ARRAYS],
+    ) -> Option<[(&'a [Value], f64); 2]> {
+        if self.call.arity != 2
+            || self.call.results != 2
+            || recipe.count != 2
+            || self.addends[0] == self.addends[1]
+        {
+            return None;
+        }
+        let term = |result: u8| {
+            let Input::Argument(output) = recipe.results[usize::from(result)] else {
+                return None;
+            };
+            let Expression::Binary(Op::Add, Input::Argument(argument), Input::Constant(offset)) =
+                *recipe.operations.get(output.checked_sub(MAX_ARGUMENTS)?)?
+            else {
+                return None;
+            };
+            let Argument::Array(array) = *self.call.arguments.get(argument)? else {
+                return None;
+            };
+            Some((argument, (arrays[array], offset)))
+        };
+        let (first_arg, first) = term(self.addends[0])?;
+        let (second_arg, second) = term(self.addends[1])?;
+        (first_arg != second_arg).then_some([first, second])
     }
 }
 
+fn scan_additive_pair(
+    [(first, first_offset), (second, second_offset)]: [(&[Value], f64); 2],
+    ascending: bool,
+    mut accumulator: Accumulator,
+    registers: usize,
+) -> Option<Scan> {
+    // Validate the last iteration's inputs as well, then leave it to dispatch.
+    let last = if ascending { first.len() - 1 } else { 0 };
+    if !matches!(
+        (first[last], second[last]),
+        (Value::Number(_), Value::Number(_))
+    ) {
+        return None;
+    }
+    let mut add = |(&first, &second)| {
+        let (Value::Number(first), Value::Number(second)) = (first, second) else {
+            return None;
+        };
+        accumulator.add(first + first_offset);
+        accumulator.add(second + second_offset);
+        Some(())
+    };
+    if ascending {
+        first[..last]
+            .iter()
+            .zip(&second[..last])
+            .try_for_each(&mut add)?;
+    } else {
+        first[1..]
+            .iter()
+            .zip(&second[1..])
+            .rev()
+            .try_for_each(add)?;
+    }
+    Some(accumulator.finish(first.len() - 1, 2, registers))
+}
+
 impl Call {
-    fn values(
+    fn values<const RESULTS: usize>(
         &self,
         vm: &Vm,
         arrays: &[&[Value]; MAX_ARRAYS],
         index: usize,
         fixed: Option<&Recipe>,
         targets: &mut Targets,
-    ) -> Option<[f64; MAX_RESULTS]> {
+    ) -> Option<[f64; RESULTS]> {
         let recipe = if let Some(fixed) = fixed {
             fixed
         } else {
@@ -357,7 +455,7 @@ impl Call {
                 }
             };
         }
-        Some(recipe.values(&mut numbers))
+        Some(recipe.values::<RESULTS>(&mut numbers))
     }
 }
 
@@ -438,7 +536,10 @@ impl Recipe {
     }
 
     #[inline]
-    fn values(&self, numbers: &mut [f64; MAX_ARGUMENTS + MAX_OPS]) -> [f64; MAX_RESULTS] {
+    fn values<const RESULTS: usize>(
+        &self,
+        numbers: &mut [f64; MAX_ARGUMENTS + MAX_OPS],
+    ) -> [f64; RESULTS] {
         let read = |numbers: &[f64; MAX_ARGUMENTS + MAX_OPS], operand| match operand {
             Input::Argument(index) => numbers[index],
             Input::Constant(number) => number,
@@ -448,7 +549,7 @@ impl Recipe {
                 .evaluate_with(|operand| Some(read(numbers, operand)))
                 .expect("verified numeric operation");
         }
-        self.results.map(|input| read(numbers, input))
+        std::array::from_fn(|index| read(numbers, self.results[index]))
     }
 }
 
@@ -559,7 +660,11 @@ impl Vm {
             hit
         } else {
             let remember = cacheable && cached.is_none();
-            let scan = plan.scan(self, bounds, step > 0, initial, remember)?;
+            let scan = if plan.call.results == 1 {
+                plan.scan::<1>(self, bounds, step > 0, initial, remember)
+            } else {
+                plan.scan::<2>(self, bounds, step > 0, initial, remember)
+            }?;
             if remember {
                 self.array_reduction.cache_call(CachedCall {
                     key,
