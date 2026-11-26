@@ -759,6 +759,13 @@ pub(crate) fn derive_spatial_direct_base(
     )
 }
 
+/// Colocated refinement can only zero a nonzero vector pointing at reference zero.
+#[inline]
+pub(crate) fn spatial_direct_needs_colocated(base: DirectMvResult) -> bool {
+    let (mv0, mv1, ref0, ref1, _, _) = base;
+    (ref0 == 0 && mv0 != [0, 0]) || (ref1 == 0 && mv1 != [0, 0])
+}
+
 /// Apply spatial direct colocated zero-MV refinement to an already-derived base result.
 ///
 /// Only the colocated block lookup depends on `col_blk`; the spatial median/ref result
@@ -774,6 +781,9 @@ pub(crate) fn apply_spatial_direct_col_zero(
     cur_poc: i32,
     cur_bottom: bool,
 ) -> DirectMvResult {
+    if !spatial_direct_needs_colocated(base) {
+        return base;
+    }
     let (mut mv_l0, mut mv_l1, ref_idx_l0, ref_idx_l1, pred_l0, pred_l1) = base;
 
     // Co-located zero-MV refinement (spec 8.4.1.2.2):

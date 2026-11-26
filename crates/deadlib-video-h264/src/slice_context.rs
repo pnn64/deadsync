@@ -53,7 +53,8 @@ use crate::intra_pred::{
 };
 use crate::mv_pred::{
     apply_spatial_direct_col_zero, derive_spatial_direct_base, derive_spatial_direct_blk,
-    derive_temporal_direct_blk, predict_mv_skip, ref_pic_safe, MbaffCtx, WeightContext,
+    derive_temporal_direct_blk, predict_mv_skip, ref_pic_safe, spatial_direct_needs_colocated,
+    MbaffCtx, WeightContext,
 };
 use crate::pixel::Pixel;
 use crate::residual::BLOCK_INDEX_TO_OFFSET;
@@ -640,14 +641,14 @@ impl<P: Pixel> SliceContext<'_, P> {
 
     /// Derive direct-mode MVs for all 16 4x4 blocks of a macroblock.
     ///
-    /// Used by B_Skip, B_Direct_16x16, and B_Direct_8x8 sub-partitions.
+    /// Returns true when the full macroblock is known to share one motion tuple.
     pub(crate) fn derive_direct_mvs(
         &mut self,
         mb_idx: usize,
         blk_start: usize,
         blk_count: usize,
         sp: &SliceParams,
-    ) {
+    ) -> bool {
         let direct_spatial = sp.direct_spatial_mv_pred_flag;
         // Spatial direct zeroes MVs from a still co-located block only when
         // RefPicList1[0] is a short-term reference (spec 8.4.1.2.2)
@@ -712,12 +713,19 @@ impl<P: Pixel> SliceContext<'_, P> {
                         mb_field_decoding: self.mb_field_decoding,
                     },
                 );
-                let col_pic = col_pic_spatial;
+                if col_pic_spatial.is_none() || !spatial_direct_needs_colocated(spatial_base) {
+                    let (mv0, mv1, ref0, ref1, _, _) = spatial_base;
+                    self.mv_store_l0[base..base + 16].fill(mv0);
+                    self.mv_store_l1[base..base + 16].fill(mv1);
+                    self.ref_idx_store_l0[base..base + 16].fill(ref0);
+                    self.ref_idx_store_l1[base..base + 16].fill(ref1);
+                    return true;
+                }
                 for group in 0..4 {
                     let first_blk = group * 4;
                     let (mv_l0, mv_l1, ri_l0, ri_l1, _, _) = apply_spatial_direct_col_zero(
                         spatial_base,
-                        col_pic,
+                        col_pic_spatial,
                         mb_idx,
                         first_blk,
                         direct_8x8_inference_flag,
@@ -765,7 +773,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             }
         } else {
             let Some(col_pic) = ref_pic_list_l1.first() else {
-                return; // malformed: temporal direct requires L1 ref list
+                return false; // malformed: temporal direct requires L1 ref list
             };
             if direct_8x8_inference_flag && blk_count == 4 {
                 let first_blk = blk_start;
@@ -838,6 +846,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                 }
             }
         }
+        false
     }
 
     /// Fast path for B-skip macroblocks whose direct-derived MV/ref state is uniform.
@@ -851,18 +860,20 @@ impl<P: Pixel> SliceContext<'_, P> {
         mb_x: usize,
         mb_y: usize,
         sp: &SliceParams,
+        known_uniform: bool,
     ) -> bool {
         let base = mb_idx * 16;
         let mv0 = self.mv_store_l0[base];
         let mv1 = self.mv_store_l1[base];
         let r0 = self.ref_idx_store_l0[base];
         let r1 = self.ref_idx_store_l1[base];
-        let uniform = (1..16).all(|blk| {
-            self.mv_store_l0[base + blk] == mv0
-                && self.mv_store_l1[base + blk] == mv1
-                && self.ref_idx_store_l0[base + blk] == r0
-                && self.ref_idx_store_l1[base + blk] == r1
-        });
+        let uniform = known_uniform
+            || (1..16).all(|blk| {
+                self.mv_store_l0[base + blk] == mv0
+                    && self.mv_store_l1[base + blk] == mv1
+                    && self.ref_idx_store_l0[base + blk] == r0
+                    && self.ref_idx_store_l1[base + blk] == r1
+            });
         if !uniform {
             return false;
         }
@@ -1003,9 +1014,9 @@ impl<P: Pixel> SliceContext<'_, P> {
             .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx);
         let use_weight = sp.use_weight;
         // Derive MVs per 4x4 block via spatial or temporal direct mode
-        self.derive_direct_mvs(mb_idx, 0, 16, sp);
+        let known_uniform = self.derive_direct_mvs(mb_idx, 0, 16, sp);
 
-        if self.try_decode_uniform_b_skip_mb(mb_idx, mb_x, mb_y, sp) {
+        if self.try_decode_uniform_b_skip_mb(mb_idx, mb_x, mb_y, sp, known_uniform) {
             self.mb_is_direct[mb_idx] = true;
             for blk in 0..16 {
                 self.blk_is_direct[mb_idx * 16 + blk] = true;
