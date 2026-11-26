@@ -4,6 +4,8 @@ use super::{FunctionId, Value, Vm, slot_index};
 use crate::bytecode::{OPEN, OPEN_ARGS, Op};
 use std::ops::Range;
 
+pub(super) mod numeric;
+
 pub(super) const MAX_VALUES: usize = 8;
 const MAX_REGISTERS: usize = 32;
 const MAX_INSTRUCTIONS: usize = 12;
@@ -192,22 +194,42 @@ impl Plan {
     }
 
     pub(super) fn has_stack_space(&self, vm: &Vm) -> bool {
-        let depth = vm.frames.len() + usize::from(self.tail.is_some());
-        depth < vm.frames.capacity()
-            && depth + 1 < usize::from(vm.call_slots)
-            && self.registers <= vm.registers.capacity() - vm.registers.len()
+        has_stack_space(vm, self.tail.is_some(), self.registers)
+    }
+}
+
+fn has_stack_space(vm: &Vm, tail: bool, registers: usize) -> bool {
+    let depth = vm.frames.len() + usize::from(tail);
+    depth < vm.frames.capacity()
+        && depth + 1 < usize::from(vm.call_slots)
+        && registers <= vm.registers.capacity() - vm.registers.len()
+}
+
+enum CallPlan {
+    Projection(Plan),
+    Numeric(numeric::Plan),
+}
+
+impl CallPlan {
+    fn matches(&self, vm: &Vm) -> bool {
+        match self {
+            Self::Projection(plan) => plan.matches(vm),
+            Self::Numeric(plan) => plan.matches(vm),
+        }
     }
 }
 
 pub(super) struct Cache {
-    entry: Option<(FunctionId, usize, Plan)>,
+    entries: [Option<(FunctionId, usize, CallPlan)>; 3],
+    next: usize,
     rejected: [(FunctionId, u16); 2],
 }
 
 impl Default for Cache {
     fn default() -> Self {
         Self {
-            entry: None,
+            entries: [None, None, None],
+            next: 0,
             rejected: [(FunctionId(0), 0); 2],
         }
     }
@@ -232,17 +254,33 @@ impl Cache {
         }
     }
 
-    fn get(&mut self, vm: &Vm, function: FunctionId, count: usize) -> Option<&Plan> {
-        if !self.entry.as_ref().is_some_and(|(cached, arity, plan)| {
-            *cached == function && *arity == count && plan.matches(vm)
-        }) {
-            let Some(plan) = Plan::build(vm, function, count) else {
-                self.reject(function, count);
-                return None;
-            };
-            self.entry = Some((function, count, plan));
+    fn get(&mut self, vm: &Vm, function: FunctionId, count: usize) -> Option<&CallPlan> {
+        let same_call = self.entries.iter().position(|entry| {
+            entry
+                .as_ref()
+                .is_some_and(|(cached, arity, _)| *cached == function && *arity == count)
+        });
+        if let Some(index) = same_call
+            && self.entries[index]
+                .as_ref()
+                .is_some_and(|(_, _, plan)| plan.matches(vm))
+        {
+            return self.entries[index].as_ref().map(|(_, _, plan)| plan);
         }
-        self.entry.as_ref().map(|(_, _, plan)| plan)
+        let plan = Plan::build(vm, function, count)
+            .map(CallPlan::Projection)
+            .or_else(|| numeric::Plan::build(vm, function, count).map(CallPlan::Numeric));
+        let Some(plan) = plan else {
+            self.reject(function, count);
+            return None;
+        };
+        let index = same_call.unwrap_or_else(|| {
+            let index = self.next;
+            self.next = (index + 1) % self.entries.len();
+            index
+        });
+        self.entries[index] = Some((function, count, plan));
+        self.entries[index].as_ref().map(|(_, _, plan)| plan)
     }
 }
 
@@ -260,29 +298,50 @@ impl Vm {
         if count > MAX_VALUES
             || wanted > MAX_VALUES
             || call + (count + 1).max(wanted) > self.registers.len()
+            || !self.sort_fast_context()
         {
             return false;
         }
         let Some(plan) = cache.get(self, function, count) else {
             return false;
         };
-        if !plan.has_stack_space(self) || !self.sort_fast_context() || !self.sort_gc_ready() {
-            return false;
-        }
         let mut values = [Value::Nil; MAX_VALUES];
-        for (output, &source) in values[..wanted.min(plan.count)]
-            .iter_mut()
-            .zip(&plan.values)
-        {
-            *output = match source {
-                Source::Argument(index) => self.registers[call + 1 + index],
-                Source::Constant(value) => value,
-                Source::Capture(_) => unreachable!("verified forwarding result"),
-            };
-        }
+        let line = match plan {
+            CallPlan::Projection(plan) => {
+                if !plan.has_stack_space(self) || !self.sort_gc_ready() {
+                    return false;
+                }
+                for (output, &source) in values[..wanted.min(plan.count)]
+                    .iter_mut()
+                    .zip(&plan.values)
+                {
+                    *output = match source {
+                        Source::Argument(index) => self.registers[call + 1 + index],
+                        Source::Constant(value) => value,
+                        Source::Capture(_) => unreachable!("verified forwarding result"),
+                    };
+                }
+                plan.line
+            }
+            CallPlan::Numeric(plan) => {
+                if !plan.has_stack_space(self) || !self.numeric_sort_gc_ready() {
+                    return false;
+                }
+                let Some(numbers) =
+                    plan.evaluate_values(&self.registers[call + 1..call + 1 + count])
+                else {
+                    return false;
+                };
+                for (output, number) in values[..wanted].iter_mut().zip(numbers) {
+                    *output = number.map_or(Value::Nil, Value::Number);
+                }
+                self.gc.pending = false;
+                plan.line
+            }
+        };
         self.registers[call..call + wanted].copy_from_slice(&values[..wanted]);
         self.top = call + wanted;
-        *error_line = plan.line;
+        *error_line = line;
         true
     }
 }

@@ -1,6 +1,47 @@
 use deadlib_lua::{Value, Vm, compile};
 
 #[test]
+fn numeric_vararg_relays_keep_defaults_results_and_dispatch_guards() {
+    let program = compile(
+        br#"
+        local function target(first, ...)
+            local second, third, fourth = ...
+            return first + (second or 0) * 3, (third or 0) * 5 + (fourth or 0) * 7
+        end
+        local function relay(...) return target(...) end
+        local function one(x) return relay(x) end
+        local function check(x, y, z, w)
+            local a, b = relay(x, y, z, w)
+            return a, b
+        end
+        for i = 1, 4 do
+            local a, b = relay(4)
+            assert(a == 4 and b == 0)
+            a, b = relay(4, 6)
+            assert(a == 22 and b == 0)
+            a, b = check(4, 6, 8, 10)
+            assert(a == 22 and b == 110)
+        end
+        assert(one(4) == 4)
+        local object = setmetatable({}, {__mul = function(_, weight)
+            assert(weight == 3)
+            return 7
+        end})
+        local a, b = check(4, object, false, nil)
+        assert(a == 11 and b == 0)
+        target = function(x, ...) return x - 1, 39 end
+        a, b = check(4, 6, 8, 10)
+        return a + b
+        "#,
+    )
+    .unwrap();
+    let mut vm = Vm::new();
+    assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+    vm.set_instruction_limit(Some(u64::MAX));
+    assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+}
+
+#[test]
 fn fast_table_lengths_match_observed_execution_and_ignore_table_len_metamethods() {
     let program = compile(
         br#"
