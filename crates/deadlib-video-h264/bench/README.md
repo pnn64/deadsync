@@ -207,3 +207,17 @@ The full benchmark reproduced those allocations in both runs and matched the FFm
 | SRPG10 | FFmpeg packed | 28.28 | 35.36 | 18.63 | 3.151 |
 
 A diagnostic run sampled one in 32 CABAC macroblocks and instrumented the full deblock and macroblock metadata passes. Deblocking accounted for about 17.5% and 15.2% of the instrumented decode ticks. The metadata pass accounted for another 4.2% and 5.1%. [Macroblock profile after luma and chroma blending](results/windows-x86_64-20261126/post-fusion-profile.csv)
+
+## Uniform deblock motion and reference progress
+
+`a019348c9` writes one motion entry for an inter macroblock whose 16 blocks share both reference indices and vectors. The boundary-strength calculation reuses that entry on edges touching a partitioned macroblock. The decoder also resets only the filter metadata it needs before decoding the next picture. FFmpeg skips motion comparisons on eligible edges using its macroblock partition type. [FFmpeg boundary-strength calculation](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264_loopfilter.c)
+
+`2ae41f6d4` checks the reference's published rows before calculating a row to wait for. Complete references and worker references with enough published rows can take the fast path. FFmpeg only computes reference waits when frame threading is active. [FFmpeg motion compensation and reference waits](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264_mc_template.c)
+
+| Candidate versus `a75c0e03c` | SRPG9 median paired cycle change | SRPG10 median paired cycle change |
+|---|---:|---:|
+| Uniform deblock motion | −5.33% | −4.93% |
+| Published-reference fast path | −3.61% | −2.09% |
+| Direct strided luma for unweighted skip partitions | −2.06% | −0.68% |
+
+The two committed changes matched FFmpeg in isolation on the bundled clips and temporal-direct progressive and MBAFF multislice clips. The uniform deblock motion build also matched the constrained-intra CAVLC and resolution-change samples. The strided luma path remained a prototype. [Paired samples](results/windows-x86_64-20261126/decode-paths-paired.csv)
