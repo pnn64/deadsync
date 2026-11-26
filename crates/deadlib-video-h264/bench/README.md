@@ -123,3 +123,16 @@ Allocation counts matched in two runs of each mode. Across five cycle runs, the 
 `37e4e52ab` uses SSE2 to weight 8-bit uni-prediction and implicit bi-prediction. Identity weights and equal averaging use simpler paths. FFmpeg also uses packed SIMD for weighted prediction. Median paired cycle ratios for the SIMD change alone were 0.921 and 0.897 relative to `64dca4237`. With both slice allocation changes included, the ratios were 0.919 and 0.907. All three candidates matched FFmpeg on the bundled clips, MBAFF and constrained-intra CABAC samples. The combined revision also matched on the temporal-direct multislice and High 10 samples. [Weighted prediction cycle samples](results/windows-x86_64-20261126/weights-paired.csv) · [FFmpeg x86 weighted prediction](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/x86/h264_weight.asm)
 
 The paired CABAC refill and sparse 8×8 inverse-quantization prototypes showed no reproducible cycle reduction and were left out of this revision.
+
+The combined revision completed five cycle runs and two matching allocation runs. Its default output requested fewer allocation calls per frame than both FFmpeg modes on the two clips. Requested bytes and cycles still exceeded the comparable FFmpeg modes. [Complete weighted-prediction benchmark](results/windows-x86_64-20261126/weighted-prediction)
+
+| Clip | Output mode | Mcycles/frame | Frames/billion cycles | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Deadlib | 50.15 | 19.9 | 17.73 | 3.42 |
+| SRPG9 | Deadlib recycled, SPS depth | 48.41 | 20.7 | 14.99 | 0.51 |
+| SRPG9 | FFmpeg native | 34.17 | 29.3 | 17.91 | 0.29 |
+| SRPG9 | FFmpeg packed | 37.17 | 26.9 | 18.91 | 3.26 |
+| SRPG10 | Deadlib | 42.04 | 23.8 | 15.39 | 3.26 |
+| SRPG10 | Deadlib recycled, SPS depth | 40.94 | 24.4 | 13.07 | 0.43 |
+| SRPG10 | FFmpeg native | 24.70 | 40.5 | 17.63 | 0.18 |
+| SRPG10 | FFmpeg packed | 27.84 | 35.9 | 18.63 | 3.15 |
