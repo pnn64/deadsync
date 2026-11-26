@@ -192,3 +192,18 @@ The full benchmark of `b4110122d` matched FFmpeg on every output mode and reprod
 `a75c0e03c` reads the existing RBSP slice and supplies virtual zero padding to the bit reader. This removes separate padded copies during header parsing and slice decoding. The committed code matched FFmpeg on both bundled clips, the temporal-direct progressive and MBAFF multislice samples, and constrained-intra CABAC and CAVLC. The default and no-default-features tests passed. [Allocation probe](results/windows-x86_64-20261126/bit-reader-allocations.csv)
 
 The probe reproduced the prior default allocation totals before the change. With the borrowed reader, default allocation calls per frame fell from 16.73 to 11.71 on SRPG9 and from 14.39 to 9.33 on SRPG10. Requested bytes fell from 3.343 to 3.272 MiB per frame and from 3.219 to 3.158. These totals are 0.54% and 0.23% above the packed FFmpeg totals. The recycled decoder with SPS reorder depth requested 0.364 and 0.329 MiB per frame. The comparison with native FFmpeg still shows a gap in requested bytes.
+
+The full benchmark reproduced those allocations in both runs and matched the FFmpeg output on both clips. The five-round paired cycle changes versus `b4110122d` were +2.38% on SRPG9 and −0.46% on SRPG10. An interior fractional chroma blend prototype in the same paired run changed cycles by +0.80% and −0.54%. [Paired cycles](results/windows-x86_64-20261126/bit-reader-paired.csv) · [Full benchmark](results/windows-x86_64-20261126/bit-reader)
+
+| Clip | Output mode | Mcycles/frame | Frames/billion cycles | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Deadlib | 42.38 | 23.60 | 11.71 | 3.272 |
+| SRPG9 | Deadlib recycled, SPS depth | 40.92 | 24.44 | 8.95 | 0.364 |
+| SRPG9 | FFmpeg native | 33.80 | 29.58 | 17.91 | 0.289 |
+| SRPG9 | FFmpeg packed | 37.44 | 26.71 | 18.91 | 3.255 |
+| SRPG10 | Deadlib | 32.52 | 30.75 | 9.33 | 3.158 |
+| SRPG10 | Deadlib recycled, SPS depth | 30.48 | 32.80 | 6.99 | 0.329 |
+| SRPG10 | FFmpeg native | 24.77 | 40.37 | 17.63 | 0.184 |
+| SRPG10 | FFmpeg packed | 28.28 | 35.36 | 18.63 | 3.151 |
+
+A diagnostic run sampled one in 32 CABAC macroblocks and instrumented the full deblock and macroblock metadata passes. Deblocking accounted for about 17.5% and 15.2% of the instrumented decode ticks. The metadata pass accounted for another 4.2% and 5.1%. [Macroblock profile after luma and chroma blending](results/windows-x86_64-20261126/post-fusion-profile.csv)
