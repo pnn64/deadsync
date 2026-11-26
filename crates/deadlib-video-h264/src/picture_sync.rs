@@ -28,6 +28,12 @@ pub(crate) struct SharedPlane {
     data: Box<UnsafeCell<[u8]>>,
 }
 
+impl Default for SharedPlane {
+    fn default() -> Self {
+        Self::from_vec(Vec::new())
+    }
+}
+
 // SAFETY: concurrent access is limited to reads of the published prefix and
 // writes (by the single writer) to the unpublished suffix; these never
 // overlap and are ordered by `RowProgress`'s Release/Acquire pair.
@@ -45,6 +51,10 @@ impl SharedPlane {
     #[inline]
     pub(crate) fn len(&self) -> usize {
         self.data.get().len()
+    }
+
+    pub(crate) fn copy_from(&mut self, src: &[u8]) {
+        self.data.get_mut().copy_from_slice(src);
     }
 
     /// The first `len` bytes.

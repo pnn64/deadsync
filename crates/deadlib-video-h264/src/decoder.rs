@@ -193,6 +193,15 @@ pub(crate) struct PictureScratch {
 }
 
 impl PictureScratch {
+    fn use_motion(&mut self, motion: Motion) {
+        self.mv_store_l0 = motion.mv_l0;
+        self.mv_store_l1 = motion.mv_l1;
+        self.ref_idx_store_l0 = motion.ref_idx_l0;
+        self.ref_idx_store_l1 = motion.ref_idx_l1;
+        self.ref_poc_store_l0 = motion.ref_poc_l0;
+        self.ref_poc_store_l1 = motion.ref_poc_l1;
+    }
+
     fn reset(&mut self, total_mbs: usize) {
         // Release the previous picture's storage when the coded area changes.
         if self.mb_info.len() != total_mbs {
@@ -285,7 +294,7 @@ impl Decoder {
         Self {
             sps_table: BTreeMap::new(),
             pps_table: BTreeMap::new(),
-            dpb: Dpb::new(0),
+            dpb: Dpb::new(0).recycle_pictures(),
             pending: None,
             scratch: PictureScratch::default(),
             pending_field: None,
@@ -406,7 +415,7 @@ impl Decoder {
         let mut ps = self.pending.take()?;
         deblock_picture(&mut ps);
         if ps.nal_ref_idc != 0 || ps.nal_unit_type == NalUnitType::SliceIdr {
-            let pic = Arc::new(make_decoded_picture(&mut ps));
+            let pic = make_decoded_picture(&mut ps, self.dpb.take_spare_picture());
             apply_reference_marking(
                 &mut self.dpb,
                 pic,
@@ -436,6 +445,14 @@ impl Decoder {
     fn decode_slice(&mut self, nal: &NalUnit) -> Result<(), DecodeError> {
         let plan = prepare_slice(&self.sps_table, &self.pps_table, &mut self.dpb, nal)?;
         let pending = self.pending.take();
+        if pending.is_none()
+            && self.scratch.mb_info.len() == plan.total_mbs
+            && self.scratch.mv_store_l0.capacity() == 0
+        {
+            if let Some(motion) = self.dpb.take_spare_motion(plan.total_mbs * 16) {
+                self.scratch.use_motion(motion);
+            }
+        }
         let ps = run_slice(&plan, pending, &mut self.scratch, None)?;
         self.pending = Some(ps);
         Ok(())
@@ -1503,12 +1520,30 @@ pub(crate) fn take_motion(ps: &mut PictureState) -> Motion {
     }
 }
 
-/// Build the DPB picture for a decoded (and deblocked) picture: the coded
-/// planes are copied, the motion data is moved out of `ps`.
-pub(crate) fn make_decoded_picture(ps: &mut PictureState) -> DecodedPicture {
+/// Copy the coded planes into the DPB and move the picture's motion data.
+fn make_decoded_picture(
+    ps: &mut PictureState,
+    spare: Option<Arc<DecodedPicture>>,
+) -> Arc<DecodedPicture> {
     let meta = picture_meta(ps);
-    let (y, u, v) = (ps.frame.y.clone(), ps.frame.u.clone(), ps.frame.v.clone());
-    DecodedPicture::new_complete(meta, y, u, v, take_motion(ps))
+    let motion = take_motion(ps);
+    let [y, u, v] = [&ps.frame.y, &ps.frame.u, &ps.frame.v];
+    let motion = if let Some(mut spare) = spare {
+        let picture = Arc::get_mut(&mut spare).expect("retired picture is uniquely owned");
+        match picture.reuse_complete(meta, [y, u, v], motion) {
+            Ok(()) => return spare,
+            Err(motion) => motion,
+        }
+    } else {
+        motion
+    };
+    Arc::new(DecodedPicture::new_complete(
+        meta,
+        y.clone(),
+        u.clone(),
+        v.clone(),
+        motion,
+    ))
 }
 
 /// Number of macroblocks in one deblocking unit: an MB row, or an MB-pair

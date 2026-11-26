@@ -288,6 +288,31 @@ impl DecodedPicture {
         pic
     }
 
+    /// Replace a retired picture in the same allocation when its planes fit.
+    pub(crate) fn reuse_complete(
+        &mut self,
+        meta: PictureMeta,
+        samples: [&[u8]; 3],
+        motion: Motion,
+    ) -> Result<(), Motion> {
+        if self
+            .planes
+            .iter()
+            .zip(samples)
+            .any(|(p, s)| p.len() != s.len())
+        {
+            return Err(motion);
+        }
+        let mut planes = core::mem::take(&mut self.planes);
+        for (plane, src) in planes.iter_mut().zip(samples) {
+            plane.copy_from(src);
+        }
+        let rows = Self::mb_rows(meta.width, meta.sample_bytes, samples[0].len());
+        *self = Self::with_planes(meta, planes, RowProgress::complete(rows));
+        let _ = self.motion.set(motion);
+        Ok(())
+    }
+
     /// A picture that will be filled in by the returned writer. Its planes
     /// are coded size; readers block until the rows they need are published.
     #[cfg_attr(not(feature = "std"), allow(dead_code))]
@@ -524,6 +549,8 @@ struct DpbEntry {
 pub struct Dpb {
     max_ref_frames: usize,
     entries: Vec<DpbEntry>,
+    recycle_pictures: bool,
+    spare_picture: Option<Arc<DecodedPicture>>,
     // POC type 0 state
     prev_poc_msb: i32,
     prev_poc_lsb: u32,
@@ -541,12 +568,29 @@ impl Dpb {
         Self {
             max_ref_frames,
             entries: Vec::new(),
+            recycle_pictures: false,
+            spare_picture: None,
             prev_poc_msb: 0,
             prev_poc_lsb: 0,
             prev_frame_num: 0,
             prev_frame_num_offset: 0,
             prev_ref_frame_num: None,
         }
+    }
+
+    pub(crate) fn recycle_pictures(mut self) -> Self {
+        self.recycle_pictures = true;
+        self
+    }
+
+    pub(crate) fn take_spare_picture(&mut self) -> Option<Arc<DecodedPicture>> {
+        self.spare_picture.take()
+    }
+
+    pub(crate) fn take_spare_motion(&mut self, blocks: usize) -> Option<Motion> {
+        let pic = Arc::get_mut(self.spare_picture.as_mut()?)?;
+        let motion = pic.motion.get_mut()?;
+        (motion.mv_l0.len() == blocks).then(|| core::mem::take(motion))
     }
 
     /// Update capacity when a new SPS is parsed.
@@ -556,7 +600,13 @@ impl Dpb {
 
     /// Clear the entire DPB. Called on IDR.
     pub fn clear(&mut self) {
-        self.entries.clear();
+        if self.recycle_pictures {
+            for entry in self.entries.drain(..) {
+                Self::save_spare(&mut self.spare_picture, entry);
+            }
+        } else {
+            self.entries.clear();
+        }
         self.prev_poc_msb = 0;
         self.prev_poc_lsb = 0;
         self.prev_frame_num = 0;
@@ -1496,10 +1546,34 @@ impl Dpb {
         refs.into_iter().map(|(p, _)| p).collect()
     }
 
-    /// Remove entries that are unused for reference (freeing memory).
+    /// Remove entries that are unused for reference.
     fn remove_unused(&mut self) {
-        self.entries
-            .retain(|e| e.reference != ReferenceStatus::Unused);
+        if self.recycle_pictures {
+            for entry in self
+                .entries
+                .extract_if(.., |e| e.reference == ReferenceStatus::Unused)
+            {
+                Self::save_spare(&mut self.spare_picture, entry);
+            }
+        } else {
+            self.entries
+                .retain(|e| e.reference != ReferenceStatus::Unused);
+        }
+    }
+
+    fn save_spare(spare: &mut Option<Arc<DecodedPicture>>, entry: DpbEntry) {
+        let DpbEntry {
+            mut pic,
+            field_views,
+            frame_view,
+            ..
+        } = entry;
+        drop(field_views);
+        drop(frame_view);
+        // A field or paired-frame view can still keep a reference alive.
+        if Arc::get_mut(&mut pic).is_some() {
+            *spare = Some(pic);
+        }
     }
 }
 
@@ -1526,6 +1600,55 @@ mod tests {
             vec![],
             Motion::default(),
         ))
+    }
+
+    #[test]
+    fn retiring_references_reuses_only_exclusive_storage() {
+        let mut dpb = Dpb::new(1).recycle_pictures();
+        let held = make_pic(0, 0);
+        dpb.insert(held.clone(), ReferenceStatus::ShortTerm);
+        dpb.insert(make_pic(1, 2), ReferenceStatus::ShortTerm);
+        assert!(dpb.take_spare_picture().is_none());
+        assert_eq!(held.frame_num, 0);
+
+        let meta = PictureMeta {
+            width: 16,
+            height: 16,
+            frame_num: 2,
+            pic_order_cnt: 4,
+            field_poc: [4; 2],
+            mb_width: 1,
+            is_intra: false,
+            structure: PictureStructure::Frame,
+            chroma_422: false,
+            sample_bytes: 1,
+        };
+        let picture = Arc::new(DecodedPicture::new_complete(
+            meta,
+            vec![1; 256],
+            vec![2; 64],
+            vec![3; 64],
+            Motion::unavailable(1),
+        ));
+        let luma = picture.luma().as_ptr();
+        dpb.insert(picture, ReferenceStatus::ShortTerm);
+        dpb.insert(make_pic(3, 6), ReferenceStatus::ShortTerm);
+        let motion = dpb.take_spare_motion(16).unwrap();
+        let mut spare = dpb.take_spare_picture().unwrap();
+        let picture = Arc::get_mut(&mut spare).unwrap();
+        let new_meta = PictureMeta {
+            frame_num: 4,
+            ..meta
+        };
+        picture
+            .reuse_complete(new_meta, [&[4; 256], &[5; 64], &[6; 64]], motion)
+            .unwrap();
+        assert_eq!(picture.frame_num, 4);
+        assert_eq!(picture.luma().as_ptr(), luma);
+        assert_eq!(picture.luma(), &[4; 256]);
+        assert_eq!(picture.chroma(0), &[5; 64]);
+        assert_eq!(picture.chroma(1), &[6; 64]);
+        assert_eq!(picture.motion().mv_l0.len(), 16);
     }
 
     #[test]

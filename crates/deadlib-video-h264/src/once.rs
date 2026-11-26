@@ -61,6 +61,13 @@ mod no_std {
             }
         }
 
+        pub(crate) fn get_mut(&mut self) -> Option<&mut T> {
+            let ptr = *self.ptr.get_mut();
+            // SAFETY: The pointer is null or owns the initialized value,
+            // and the exclusive borrow prevents other accesses.
+            unsafe { ptr.as_mut() }
+        }
+
         pub(crate) fn set(&self, value: T) -> Result<(), T> {
             let mut value = Some(value);
             self.get_or_init(|| value.take().expect("value present"));
@@ -74,6 +81,16 @@ mod no_std {
             let ptr = self.ptr.load(Ordering::Acquire);
             debug_assert!(!ptr.is_null());
             unsafe { &*ptr }
+        }
+    }
+
+    impl<T> Drop for OnceLock<T> {
+        fn drop(&mut self) {
+            let ptr = *self.ptr.get_mut();
+            if !ptr.is_null() {
+                // SAFETY: This lock owns the allocation installed by get_or_init.
+                drop(unsafe { Box::from_raw(ptr) });
+            }
         }
     }
 }
