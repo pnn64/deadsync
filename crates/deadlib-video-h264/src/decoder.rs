@@ -922,16 +922,26 @@ pub(crate) fn run_slice(
     recycled_frame: &mut Option<Frame>,
     sync: Option<&mut RowSync>,
 ) -> Result<PictureState, DecodeError> {
-    // The slice decoder is compiled once per sample type
-    if plan.sps.bit_depth_luma_minus8 == 2 {
-        run_slice_px::<u16>(plan, rbsp, pending, scratch, recycled_frame, sync)
-    } else {
-        run_slice_px::<u8>(plan, rbsp, pending, scratch, recycled_frame, sync)
+    let high_bit_depth = plan.sps.bit_depth_luma_minus8 == 2;
+    let mbaff = plan.header.mbaff_frame_flag;
+    match (high_bit_depth, mbaff) {
+        (false, false) => {
+            run_slice_px::<u8, false>(plan, rbsp, pending, scratch, recycled_frame, sync)
+        }
+        (false, true) => {
+            run_slice_px::<u8, true>(plan, rbsp, pending, scratch, recycled_frame, sync)
+        }
+        (true, false) => {
+            run_slice_px::<u16, false>(plan, rbsp, pending, scratch, recycled_frame, sync)
+        }
+        (true, true) => {
+            run_slice_px::<u16, true>(plan, rbsp, pending, scratch, recycled_frame, sync)
+        }
     }
 }
 
-/// [`run_slice`] for samples of type `P`.
-fn run_slice_px<P: Pixel>(
+/// Slice decode specialized by sample depth and macroblock-pair layout.
+fn run_slice_px<P: Pixel, const MBAFF: bool>(
     plan: &SlicePlan,
     rbsp: &[u8],
     mut pending: Option<PictureState>,
@@ -1103,9 +1113,8 @@ fn run_slice_px<P: Pixel>(
     let mut mbaff_skip_lookahead: Option<bool> = None;
 
     let stride = coded_width as usize;
-    let mbaff = header.mbaff_frame_flag;
     // One context owns the macroblock state throughout the slice.
-    let mut ctx = SliceContext {
+    let mut ctx = SliceContext::<P, MBAFF> {
         _pixel: core::marker::PhantomData::<P>,
         frame: &mut frame,
         stride,
@@ -1135,7 +1144,6 @@ fn run_slice_px<P: Pixel>(
         this_slice_id,
         prev_mb_qp: slice_qp,
         last_qp_delta_nonzero: false,
-        mbaff,
         mb_field_decoding: &mut _mb_field_decoding,
         ly_stride: stride,
         ly_offset: 0,
@@ -1175,7 +1183,7 @@ fn run_slice_px<P: Pixel>(
     };
 
     // In MBAFF, first_mb_in_slice is a pair address
-    let mut mb_idx = if mbaff {
+    let mut mb_idx = if MBAFF {
         (header.first_mb_in_slice as usize) * 2
     } else {
         header.first_mb_in_slice as usize
@@ -1186,7 +1194,7 @@ fn run_slice_px<P: Pixel>(
     // MBs of this slice from `fin_from` on still need their deblocking info
     // filled in (finalize_mb_info_range).
     let mut fin_from = mb_idx;
-    let unit_len = deblock_unit_len(mb_width as usize, mbaff);
+    let unit_len = deblock_unit_len(mb_width as usize, MBAFF);
     while mb_idx < total_mbs {
         // Frame threading: deblock and publish rows as they become final.
         if let Some(sync) = sync.as_mut() {
@@ -1202,7 +1210,7 @@ fn run_slice_px<P: Pixel>(
                     ctx.mb_info,
                     mb_width as usize,
                     deblock::Interlace {
-                        mbaff_field: mbaff.then_some(&*ctx.mb_field_decoding),
+                        mbaff_field: MBAFF.then_some(&*ctx.mb_field_decoding),
                         field_pic: header.field_pic_flag,
                     },
                     ctx.mb_slice_id,
@@ -1224,7 +1232,7 @@ fn run_slice_px<P: Pixel>(
         // value (spec 7.4.4: left pair in the same slice, else the pair
         // above, else frame). It is used as is when neither MB of the pair
         // carries the flag, and for context derivation until it is decoded.
-        if mbaff && mb_idx.is_multiple_of(2) {
+        if MBAFF && mb_idx.is_multiple_of(2) {
             let pair = mb_idx / 2;
             let mbw = mb_width as usize;
             ctx.mb_field_decoding[pair] =
@@ -1237,7 +1245,7 @@ fn run_slice_px<P: Pixel>(
                 };
         }
         // Compute pixel position
-        let (mb_x, mb_y) = if mbaff {
+        let (mb_x, mb_y) = if MBAFF {
             let pair_addr = mb_idx / 2;
             let pair_col = pair_addr % mb_width as usize;
             let pair_row = pair_addr / mb_width as usize;
@@ -1268,7 +1276,7 @@ fn run_slice_px<P: Pixel>(
                     "CABAC read past the end of the slice data",
                 ));
             }
-            if mbaff && mb_idx % 2 != 0 {
+            if MBAFF && mb_idx % 2 != 0 {
                 let term = cr.get_cabac_terminate();
                 if term != 0 {
                     mb_idx += 1;
@@ -1291,7 +1299,7 @@ fn run_slice_px<P: Pixel>(
                                             // MBAFF: when a run ends on a skipped top MB, the bottom MB is
                                             // coded and its mb_field_decoding_flag (the next bit) applies
                                             // to the whole pair, so read it before decoding this MB.
-                if mbaff && mb_idx.is_multiple_of(2) && mb_skip_run == 0 {
+                if MBAFF && mb_idx.is_multiple_of(2) && mb_skip_run == 0 {
                     ctx.mb_field_decoding[mb_idx / 2] = reader.read_bit()? != 0;
                 }
                 // Set layout for skip MBs (field_flag already known)
@@ -1312,7 +1320,7 @@ fn run_slice_px<P: Pixel>(
 
             // MBAFF: read mb_field_decoding_flag for this pair
             // (spec 7.3.4: read before first non-skipped MB of pair)
-            if mbaff {
+            if MBAFF {
                 // A bottom MB after a skipped top MB had its flag read with
                 // the top MB (above), so only top MBs read it here.
                 if mb_idx.is_multiple_of(2) {
@@ -1322,7 +1330,7 @@ fn run_slice_px<P: Pixel>(
         }
 
         // MBAFF I-slice: read mb_field_decoding_flag before MB decode
-        if mbaff && !(is_p_slice || is_b_slice) {
+        if MBAFF && !(is_p_slice || is_b_slice) {
             let is_top = mb_idx % 2 == 0;
             if is_top {
                 ctx.mb_field_decoding[mb_idx / 2] = reader.read_bit()? != 0;
@@ -1360,7 +1368,7 @@ fn run_slice_px<P: Pixel>(
             ctx.mb_info,
             mb_width as usize,
             deblock::Interlace {
-                mbaff_field: mbaff.then_some(&*ctx.mb_field_decoding),
+                mbaff_field: MBAFF.then_some(&*ctx.mb_field_decoding),
                 field_pic: header.field_pic_flag,
             },
             ctx.mb_slice_id,

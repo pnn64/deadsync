@@ -64,7 +64,7 @@ use crate::residual::BLOCK_INDEX_TO_OFFSET;
 /// All mutable MB-level arrays live here so that individual decode
 /// functions can be extracted as methods on `&mut SliceContext`.
 #[allow(dead_code)] // Fields progressively used as methods are extracted from decode_slice
-pub(crate) struct SliceContext<'a, P: Pixel = u8> {
+pub(crate) struct SliceContext<'a, P: Pixel, const MBAFF: bool> {
     /// Sample type: planes hold `P::BYTES` bytes per sample
     pub _pixel: core::marker::PhantomData<P>,
     // Pixel output
@@ -77,7 +77,6 @@ pub(crate) struct SliceContext<'a, P: Pixel = u8> {
     pub mb_width: u32,
 
     // MBAFF state
-    pub mbaff: bool,
     pub mb_field_decoding: &'a mut [bool],
 
     // Per-4x4-block coefficient counts (for CABAC CBF / CAVLC nC)
@@ -180,7 +179,7 @@ pub(crate) fn chroma_mv_offset_impl(
 
 use crate::deblock::MbType;
 
-impl<P: Pixel> SliceContext<'_, P> {
+impl<P: Pixel, const MBAFF: bool> SliceContext<'_, P, MBAFF> {
     /// I_PCM samples (spec 7.3.5): 256 luma, then the Cb and Cr samples
     /// of the MB, each from `next` (BitDepth bits as coded); monochrome
     /// chroma is mid-grey and not coded. Fails if `next` runs out.
@@ -261,7 +260,7 @@ impl<P: Pixel> SliceContext<'_, P> {
     /// Returns true if the current MB uses field coefficient scan order.
     /// True for field pictures and for field-coded MBs in MBAFF.
     pub(crate) fn is_field_scan(&self, mb_idx: usize) -> bool {
-        self.field_pic_flag || (self.mbaff && self.mb_field_decoding[mb_idx / 2])
+        self.field_pic_flag || (MBAFF && self.mb_field_decoding[mb_idx / 2])
     }
 
     /// Chroma MV vertical offset (in 1/8 chroma samples) for the current MB
@@ -274,7 +273,7 @@ impl<P: Pixel> SliceContext<'_, P> {
     pub(crate) fn chroma_mv_offset(&self, ref_pic: &DecodedPicture, c_ref_off: usize) -> i32 {
         chroma_mv_offset_impl(
             (self.field_pic_flag, self.bottom_field_flag),
-            (self.mbaff, self.width, self.lc_stride, self.lc_offset),
+            (MBAFF, self.width, self.lc_stride, self.lc_offset),
             ref_pic,
             c_ref_off,
         )
@@ -286,7 +285,7 @@ impl<P: Pixel> SliceContext<'_, P> {
         let w = self.stride;
         let cw = (self.width / 2) as usize;
         let sy = self.chroma_shift_y();
-        if self.mbaff && self.mb_field_decoding[mb_idx / 2] {
+        if MBAFF && self.mb_field_decoding[mb_idx / 2] {
             // Field-coded MB pair: doubled stride, field-line offset
             let pair_row = (mb_idx / 2) / self.mb_width as usize;
             let pair_y = pair_row * 32;
@@ -323,7 +322,7 @@ impl<P: Pixel> SliceContext<'_, P> {
         ref_width: usize,
         ref_idx: i8,
     ) -> (i32, usize, usize, usize, usize, usize) {
-        if self.mbaff && self.mb_field_decoding[mb_idx / 2] {
+        if MBAFF && self.mb_field_decoding[mb_idx / 2] {
             let pair_row = (mb_idx / 2) / self.mb_width as usize;
             let is_bottom = !mb_idx.is_multiple_of(2);
             let mc_y = (pair_row * 16) as i32;
@@ -354,7 +353,7 @@ impl<P: Pixel> SliceContext<'_, P> {
     /// For frame-coded, returns ref_idx unchanged.
     #[inline]
     pub(crate) fn frame_ref_idx(&self, mb_idx: usize, ref_idx: i8) -> i8 {
-        if self.mbaff && self.mb_field_decoding[mb_idx / 2] {
+        if MBAFF && self.mb_field_decoding[mb_idx / 2] {
             ref_idx / 2
         } else {
             ref_idx
@@ -365,13 +364,13 @@ impl<P: Pixel> SliceContext<'_, P> {
     /// True for field pictures and for field-coded MBs in MBAFF.
     #[inline]
     pub(crate) fn is_field_coded(&self, mb_idx: usize) -> bool {
-        self.field_pic_flag || (self.mbaff && self.mb_field_decoding[mb_idx / 2])
+        self.field_pic_flag || (MBAFF && self.mb_field_decoding[mb_idx / 2])
     }
 
     /// Field-coded MBs double the count (each frame ref → 2 field refs).
     #[inline]
     pub(crate) fn effective_num_ref(&self, mb_idx: usize, num_ref: u32) -> u32 {
-        if self.mbaff && self.mb_field_decoding[mb_idx / 2] {
+        if MBAFF && self.mb_field_decoding[mb_idx / 2] {
             (num_ref * 2).min(32)
         } else {
             num_ref
@@ -382,7 +381,7 @@ impl<P: Pixel> SliceContext<'_, P> {
     /// Returns `None` if no left MB exists or it's in a different slice.
     #[inline]
     pub(crate) fn left_mb(&self, mb_idx: usize) -> Option<usize> {
-        if !self.mbaff {
+        if !MBAFF {
             let mb_col = mb_idx % self.mb_width as usize;
             if mb_col == 0 {
                 return None;
@@ -425,7 +424,7 @@ impl<P: Pixel> SliceContext<'_, P> {
     /// Returns `None` if no above MB exists or it's in a different slice.
     #[inline]
     pub(crate) fn above_mb(&self, mb_idx: usize) -> Option<usize> {
-        if !self.mbaff {
+        if !MBAFF {
             if mb_idx < self.mb_width as usize {
                 return None;
             }
@@ -496,7 +495,7 @@ impl<P: Pixel> SliceContext<'_, P> {
     /// pair (spec Table 6-4), which matters with constrained intra
     /// prediction, where an inter MB's samples are unavailable.
     pub(crate) fn left_intra_avail(&self, mb_idx: usize, sp: &SliceParams) -> [bool; 2] {
-        if !self.mbaff {
+        if !MBAFF {
             let l = self
                 .left_mb(mb_idx)
                 .is_some_and(|left| self.is_intra_neighbor_avail(left, sp));
@@ -535,7 +534,7 @@ impl<P: Pixel> SliceContext<'_, P> {
         sp: &SliceParams,
     ) -> bool {
         let mbw = self.mb_width as usize;
-        let n = if self.mbaff {
+        let n = if MBAFF {
             crate::neighbor::mbaff_neighbor_loc(mb_idx, mbw, self.mb_field_decoding, xn, yn, 16, 16)
                 .map(|(m, _, _)| m)
         } else {
@@ -566,7 +565,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             self.mb_slice_id,
             self.this_slice_id,
             |neighbor| self.is_intra_neighbor_avail(neighbor, sp),
-            self.mbaff,
+            MBAFF,
             self.mb_field_decoding,
         )
     }
@@ -582,7 +581,7 @@ impl<P: Pixel> SliceContext<'_, P> {
         let ref_pic_list = sp.ref_pic_list;
         let wctx = sp
             .wctx
-            .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx);
+            .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx);
         let use_weight = sp.use_weight;
         let (mvp_x, mvp_y) = predict_mv_skip(
             self.mv_store_l0,
@@ -592,7 +591,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             self.mb_slice_id,
             self.this_slice_id,
             MbaffCtx {
-                mbaff: self.mbaff,
+                mbaff: MBAFF,
                 mb_field_decoding: self.mb_field_decoding,
             },
         );
@@ -680,7 +679,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     self.this_slice_id,
                     direct_8x8_inference_flag,
                     MbaffCtx {
-                        mbaff: self.mbaff,
+                        mbaff: MBAFF,
                         mb_field_decoding: self.mb_field_decoding,
                     },
                     current_poc,
@@ -707,7 +706,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     self.mb_slice_id,
                     self.this_slice_id,
                     MbaffCtx {
-                        mbaff: self.mbaff,
+                        mbaff: MBAFF,
                         mb_field_decoding: self.mb_field_decoding,
                     },
                 );
@@ -728,7 +727,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         first_blk,
                         direct_8x8_inference_flag,
                         MbaffCtx {
-                            mbaff: self.mbaff,
+                            mbaff: MBAFF,
                             mb_field_decoding: self.mb_field_decoding,
                         },
                         current_poc,
@@ -757,7 +756,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         self.this_slice_id,
                         direct_8x8_inference_flag,
                         MbaffCtx {
-                            mbaff: self.mbaff,
+                            mbaff: MBAFF,
                             mb_field_decoding: self.mb_field_decoding,
                         },
                         current_poc,
@@ -784,7 +783,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     first_blk,
                     direct_8x8_inference_flag,
                     MbaffCtx {
-                        mbaff: self.mbaff,
+                        mbaff: MBAFF,
                         mb_field_decoding: self.mb_field_decoding,
                     },
                     self.bottom_field_flag,
@@ -809,7 +808,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         first_blk,
                         direct_8x8_inference_flag,
                         MbaffCtx {
-                            mbaff: self.mbaff,
+                            mbaff: MBAFF,
                             mb_field_decoding: self.mb_field_decoding,
                         },
                         self.bottom_field_flag,
@@ -832,7 +831,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         blk,
                         direct_8x8_inference_flag,
                         MbaffCtx {
-                            mbaff: self.mbaff,
+                            mbaff: MBAFF,
                             mb_field_decoding: self.mb_field_decoding,
                         },
                         self.bottom_field_flag,
@@ -896,7 +895,7 @@ impl<P: Pixel> SliceContext<'_, P> {
         };
 
         #[cfg(target_arch = "x86_64")]
-        let luma_written = if P::BYTES == 1 && !self.mbaff && !self.field_pic_flag {
+        let luma_written = if P::BYTES == 1 && !MBAFF && !self.field_pic_flag {
             match (ref_l0, ref_l1) {
                 (Some(a), Some(b)) => sp
                     .wctx
@@ -954,7 +953,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         ref_y_off_l1,
                     );
                     sp.wctx
-                        .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                        .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                         .apply_bi(&p0, &p1, &mut luma_pred, r0 as usize, r1 as usize, false, 0);
                 }
                 (Some(ref0), None) => {
@@ -974,7 +973,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     );
                     if sp.use_weight == 1 {
                         sp.wctx
-                            .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                            .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                             .apply_uni(&mut luma_pred, 0, r0 as usize, false, 0);
                     }
                 }
@@ -995,7 +994,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     );
                     if sp.use_weight == 1 {
                         sp.wctx
-                            .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                            .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                             .apply_uni(&mut luma_pred, 1, r1 as usize, false, 0);
                     }
                 }
@@ -1035,7 +1034,7 @@ impl<P: Pixel> SliceContext<'_, P> {
         let ref_pic_list_l1 = sp.ref_pic_list_l1;
         let wctx = sp
             .wctx
-            .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx);
+            .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx);
         let use_weight = sp.use_weight;
         // Derive MVs per 4x4 block via spatial or temporal direct mode
         let known_uniform = self.derive_direct_mvs(mb_idx, 0, 16, sp);
@@ -1181,7 +1180,7 @@ impl<P: Pixel> SliceContext<'_, P> {
         } else {
             unavail_cbp
         };
-        if self.mbaff {
+        if MBAFF {
             // The left 8x8 luma block of each 8x8 row comes from the sample
             // left of that row (spec Table 6-4), which in a mixed frame/field
             // pair may be the other MB or the other 8x8 row of the left pair.
@@ -1601,7 +1600,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             // MBAFF field MB references fields: ref_idx k is the field of
             // parity (MB parity) ^ (k & 1) of frame entry k / 2, told apart
             // by its field POC and parity.
-            let field_parity = (self.mbaff && self.mb_field_decoding[mi / 2]).then_some(mi % 2);
+            let field_parity = (MBAFF && self.mb_field_decoding[mi / 2]).then_some(mi % 2);
             let ref_id = |list: &[Arc<DecodedPicture>], ri: i8| -> i32 {
                 if ri < 0 {
                     return -1;

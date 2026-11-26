@@ -19,7 +19,7 @@ use crate::slice_context::{SliceContext, SliceParams};
 /// and the motion vector.
 pub(crate) type PartMotion<'r> = (&'r DecodedPicture, i8, [i16; 2]);
 
-impl<P: Pixel> SliceContext<'_, P> {
+impl<P: Pixel, const MBAFF: bool> SliceContext<'_, P, MBAFF> {
     /// Chroma inter prediction of the partition at luma offset `(x, y)`,
     /// size `w` x `h`, of the current MB, written to both chroma planes:
     /// motion compensation from each list used, then weighted (explicit
@@ -47,7 +47,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             return;
         }
         #[cfg(target_arch = "x86_64")]
-        if P::BYTES == 1 && !self.mbaff && !self.field_pic_flag && (x, y, w, h) == (0, 0, 16, 16) {
+        if P::BYTES == 1 && !MBAFF && !self.field_pic_flag && (x, y, w, h) == (0, 0, 16, 16) {
             if let (Some((a, r0, mv0)), Some((b, r1, mv1))) = (l0, l1) {
                 if let Some(weight) = sp.wctx.frame_bi_weight(r0 as usize, r1 as usize) {
                     let off = self.lc_offset + cx;
@@ -68,7 +68,7 @@ impl<P: Pixel> SliceContext<'_, P> {
         }
         let weights = sp
             .wctx
-            .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx);
+            .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx);
         // Per list: reference, chroma row stride and offset, MC origin row
         // and vertical MV. Vertical chroma MVs are in 1/8 sample units for
         // 4:2:0 (with the field parity offset), 1/4 for 4:2:2 (spec 8.4.1.4,
@@ -255,7 +255,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         rows,
                         self.mb_slice_id,
                         self.this_slice_id,
-                        self.mbaff,
+                        MBAFF,
                         self.mb_field_decoding,
                     );
                     let mut ac = [0i32; 15];
@@ -338,7 +338,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             rows,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         )
                     };

@@ -24,7 +24,7 @@ pub(crate) enum CabacMbResult {
     EndOfSlice,
 }
 
-impl<P: Pixel> SliceContext<'_, P> {
+impl<P: Pixel, const MBAFF: bool> SliceContext<'_, P, MBAFF> {
     /// Decode a single CABAC macroblock (skip, P/B inter, or intra).
     ///
     /// Returns `CabacMbResult::Decoded` on success or `CabacMbResult::EndOfSlice`
@@ -70,12 +70,12 @@ impl<P: Pixel> SliceContext<'_, P> {
         // End-of-slice terminate: for non-MBAFF, decoded for every non-first MB.
         // For MBAFF, terminate is ONLY decoded at the END of bottom MBs (by the caller loop).
         // The START terminate here is skipped entirely for MBAFF.
-        let first_mb_addr = if self.mbaff {
+        let first_mb_addr = if MBAFF {
             (sp.first_mb_in_slice as usize) * 2
         } else {
             sp.first_mb_in_slice as usize
         };
-        let should_check_terminate = if self.mbaff {
+        let should_check_terminate = if MBAFF {
             false // MBAFF terminate handled by caller (END of bottom MBs)
         } else {
             mb_idx > first_mb_addr
@@ -91,7 +91,7 @@ impl<P: Pixel> SliceContext<'_, P> {
         //     Field_flag is decoded only when a non-skipped MB is found.
         //   - Bottom MB (when top was skipped): skip first, then field_flag if not skipped.
         // This matches FFmpeg/x264's CABAC encoding order.
-        if self.mbaff && !(sp.is_p_slice || sp.is_b_slice) {
+        if MBAFF && !(sp.is_p_slice || sp.is_b_slice) {
             // I-slice: field_flag for all top MBs (no skip flags exist)
             if mb_idx.is_multiple_of(2) {
                 self.decode_mbaff_field_flag(cr, st, mb_idx);
@@ -127,7 +127,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             };
             let is_top = mb_idx.is_multiple_of(2);
             // A bottom MB whose skip flag was decoded ahead with its top MB
-            let lookahead = if self.mbaff && !is_top {
+            let lookahead = if MBAFF && !is_top {
                 self.mbaff_skip_lookahead.take()
             } else {
                 None
@@ -146,7 +146,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             // applies to the top MB too, so decode both now (as FFmpeg does)
             // before reconstructing the top MB. A fully skipped pair keeps the
             // inferred flag.
-            if self.mbaff && is_top {
+            if MBAFF && is_top {
                 if is_skip {
                     self.mb_skip[mb_idx] = true;
                     let (left_skip, top_skip) = skip_ctx(self, mb_idx + 1);
@@ -364,7 +364,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                     true,
                                     self.mb_slice_id,
                                     self.this_slice_id,
-                                    self.mbaff,
+                                    MBAFF,
                                     self.mb_field_decoding,
                                 );
                                 let top_nz = cabac_neighbor_nz_luma(
@@ -376,7 +376,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                     true,
                                     self.mb_slice_id,
                                     self.this_slice_id,
-                                    self.mbaff,
+                                    MBAFF,
                                     self.mb_field_decoding,
                                 );
                                 if cr.decode_coded_block_flag(st, 2, left_nz, top_nz) {
@@ -494,7 +494,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 true,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             let top_nz = cabac_neighbor_nz_luma(
@@ -506,7 +506,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 true,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             if cr.decode_coded_block_flag(st, 1, left_nz, top_nz) {
@@ -671,7 +671,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                     self.mb_is_direct,
                                     self.blk_is_direct,
                                     sp.is_b_slice,
-                                    self.mbaff,
+                                    MBAFF,
                                     self.mb_field_decoding,
                                 );
                                 *sr = cr.decode_ref_idx(st, left_ref, top_ref);
@@ -712,7 +712,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 0,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             let amvd_y = cabac_amvd(
@@ -724,7 +724,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 1,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             let mvd_x = cr.decode_mvd_comp(st, 40, amvd_x) as i16;
@@ -742,7 +742,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 self.mb_slice_id,
                                 self.this_slice_id,
                                 MbaffCtx {
-                                    mbaff: self.mbaff,
+                                    mbaff: MBAFF,
                                     mb_field_decoding: self.mb_field_decoding,
                                 },
                             );
@@ -782,7 +782,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             );
                             if sp.use_weight == 1 {
                                 sp.wctx
-                                    .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                                    .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                                     .apply_uni(&mut luma_pred, 0, ref_idx as usize, false, 0);
                             }
                             crate::residual::put_block(
@@ -848,7 +848,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 self.mb_is_direct,
                                 self.blk_is_direct,
                                 sp.is_b_slice,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             *ref_entry = cr.decode_ref_idx(st, left_ref, top_ref);
@@ -884,7 +884,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             0,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let amvd_y = cabac_amvd(
@@ -896,7 +896,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             1,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let mvd_x = cr.decode_mvd_comp(st, 40, amvd_x) as i16;
@@ -913,7 +913,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             self.mb_slice_id,
                             self.this_slice_id,
                             MbaffCtx {
-                                mbaff: self.mbaff,
+                                mbaff: MBAFF,
                                 mb_field_decoding: self.mb_field_decoding,
                             },
                         );
@@ -955,7 +955,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         );
                         if sp.use_weight == 1 {
                             sp.wctx
-                                .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                                .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                                 .apply_uni(&mut luma_pred, 0, part_ref[p] as usize, false, 0);
                         }
                         crate::residual::put_block(
@@ -1077,7 +1077,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                     false,
                                     self.mb_slice_id,
                                     self.this_slice_id,
-                                    self.mbaff,
+                                    MBAFF,
                                     self.mb_field_decoding,
                                 );
                                 let top_nz = cabac_neighbor_nz_luma(
@@ -1089,7 +1089,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                     false,
                                     self.mb_slice_id,
                                     self.this_slice_id,
-                                    self.mbaff,
+                                    MBAFF,
                                     self.mb_field_decoding,
                                 );
                                 let cbf = cr.decode_coded_block_flag(st, 2, left_nz, top_nz);
@@ -1294,7 +1294,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             self.mb_is_direct,
                             self.blk_is_direct,
                             sp.is_b_slice,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         ref_l0 = cr.decode_ref_idx(st, left_ref, top_ref);
@@ -1311,7 +1311,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             self.mb_is_direct,
                             self.blk_is_direct,
                             sp.is_b_slice,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         ref_l1 = cr.decode_ref_idx(st, left_ref, top_ref);
@@ -1330,7 +1330,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             0,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let amvd_y = cabac_amvd(
@@ -1342,7 +1342,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             1,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let mvd_x = cr.decode_mvd_comp(st, 40, amvd_x) as i16;
@@ -1359,7 +1359,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             self.mb_slice_id,
                             self.this_slice_id,
                             MbaffCtx {
-                                mbaff: self.mbaff,
+                                mbaff: MBAFF,
                                 mb_field_decoding: self.mb_field_decoding,
                             },
                         );
@@ -1380,7 +1380,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             0,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let amvd_y = cabac_amvd(
@@ -1392,7 +1392,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             1,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let mvd_x = cr.decode_mvd_comp(st, 40, amvd_x) as i16;
@@ -1409,7 +1409,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             self.mb_slice_id,
                             self.this_slice_id,
                             MbaffCtx {
-                                mbaff: self.mbaff,
+                                mbaff: MBAFF,
                                 mb_field_decoding: self.mb_field_decoding,
                             },
                         );
@@ -1475,7 +1475,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                     self.mb_is_direct,
                                     self.blk_is_direct,
                                     sp.is_b_slice,
-                                    self.mbaff,
+                                    MBAFF,
                                     self.mb_field_decoding,
                                 );
                                 part_ref_l0[p] = cr.decode_ref_idx(st, left_ref, top_ref);
@@ -1510,7 +1510,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                     self.mb_is_direct,
                                     self.blk_is_direct,
                                     sp.is_b_slice,
-                                    self.mbaff,
+                                    MBAFF,
                                     self.mb_field_decoding,
                                 );
                                 part_ref_l1[p] = cr.decode_ref_idx(st, left_ref, top_ref);
@@ -1556,7 +1556,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 0,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             let amvd_y = cabac_amvd(
@@ -1568,7 +1568,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 1,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             let mvd_x = cr.decode_mvd_comp(st, 40, amvd_x) as i16;
@@ -1585,7 +1585,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 self.mb_slice_id,
                                 self.this_slice_id,
                                 MbaffCtx {
-                                    mbaff: self.mbaff,
+                                    mbaff: MBAFF,
                                     mb_field_decoding: self.mb_field_decoding,
                                 },
                             );
@@ -1639,7 +1639,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 0,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             let amvd_y = cabac_amvd(
@@ -1651,7 +1651,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 1,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             let mvd_x = cr.decode_mvd_comp(st, 40, amvd_x) as i16;
@@ -1668,7 +1668,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 self.mb_slice_id,
                                 self.this_slice_id,
                                 MbaffCtx {
-                                    mbaff: self.mbaff,
+                                    mbaff: MBAFF,
                                     mb_field_decoding: self.mb_field_decoding,
                                 },
                             );
@@ -1755,7 +1755,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                         self.mb_is_direct,
                                         self.blk_is_direct,
                                         sp.is_b_slice,
-                                        self.mbaff,
+                                        MBAFF,
                                         self.mb_field_decoding,
                                     );
                                     sub_ref_l0[smb] = cr.decode_ref_idx(st, left_ref, top_ref);
@@ -1794,7 +1794,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                         self.mb_is_direct,
                                         self.blk_is_direct,
                                         sp.is_b_slice,
-                                        self.mbaff,
+                                        MBAFF,
                                         self.mb_field_decoding,
                                     );
                                     sub_ref_l1[smb] = cr.decode_ref_idx(st, left_ref, top_ref);
@@ -1939,7 +1939,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 0,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             let amvd_y = cabac_amvd(
@@ -1951,7 +1951,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 1,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             let mvd_x = cr.decode_mvd_comp(st, 40, amvd_x) as i16;
@@ -1969,7 +1969,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 self.mb_slice_id,
                                 self.this_slice_id,
                                 MbaffCtx {
-                                    mbaff: self.mbaff,
+                                    mbaff: MBAFF,
                                     mb_field_decoding: self.mb_field_decoding,
                                 },
                             );
@@ -2020,7 +2020,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 0,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             let amvd_y = cabac_amvd(
@@ -2032,7 +2032,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 1,
                                 self.mb_slice_id,
                                 self.this_slice_id,
-                                self.mbaff,
+                                MBAFF,
                                 self.mb_field_decoding,
                             );
                             let mvd_x = cr.decode_mvd_comp(st, 40, amvd_x) as i16;
@@ -2050,7 +2050,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 self.mb_slice_id,
                                 self.this_slice_id,
                                 MbaffCtx {
-                                    mbaff: self.mbaff,
+                                    mbaff: MBAFF,
                                     mb_field_decoding: self.mb_field_decoding,
                                 },
                             );
@@ -2191,7 +2191,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             ref_y_off_l1,
                         );
                         sp.wctx
-                            .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                            .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                             .apply_bi(
                                 &p0,
                                 &p1,
@@ -2223,7 +2223,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         );
                         if sp.use_weight == 1 {
                             sp.wctx
-                                .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                                .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                                 .apply_uni(
                                     &mut luma_pred,
                                     0,
@@ -2254,7 +2254,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         );
                         if sp.use_weight == 1 {
                             sp.wctx
-                                .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                                .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                                 .apply_uni(
                                     &mut luma_pred,
                                     1,
@@ -2396,7 +2396,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                     false,
                                     self.mb_slice_id,
                                     self.this_slice_id,
-                                    self.mbaff,
+                                    MBAFF,
                                     self.mb_field_decoding,
                                 );
                                 let top_nz = cabac_neighbor_nz_luma(
@@ -2408,7 +2408,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                     false,
                                     self.mb_slice_id,
                                     self.this_slice_id,
-                                    self.mbaff,
+                                    MBAFF,
                                     self.mb_field_decoding,
                                 );
                                 if cr.decode_coded_block_flag(st, 2, left_nz, top_nz) {
@@ -2663,7 +2663,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             true,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let top_nz_blk = cabac_neighbor_nz_luma(
@@ -2675,7 +2675,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             true,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
 
@@ -2798,7 +2798,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         true,
                         self.mb_slice_id,
                         self.this_slice_id,
-                        self.mbaff,
+                        MBAFF,
                         self.mb_field_decoding,
                     );
                     let top_nz = cabac_neighbor_nz_luma(
@@ -2810,7 +2810,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         true,
                         self.mb_slice_id,
                         self.this_slice_id,
-                        self.mbaff,
+                        MBAFF,
                         self.mb_field_decoding,
                     );
                     if cr.decode_coded_block_flag(st, 1, left_nz, top_nz) {

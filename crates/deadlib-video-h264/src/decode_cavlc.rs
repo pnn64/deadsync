@@ -16,7 +16,7 @@ use crate::residual::{
 };
 use crate::slice_context::{SliceContext, SliceParams};
 
-impl<P: Pixel> SliceContext<'_, P> {
+impl<P: Pixel, const MBAFF: bool> SliceContext<'_, P, MBAFF> {
     /// Decode a single non-skip CAVLC macroblock (P inter, B inter, or intra).
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::needless_range_loop)]
@@ -61,7 +61,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             let num_ref_l0 = self.effective_num_ref(mb_idx, sp.num_ref_idx_l0_active);
             let num_ref_l1 = self.effective_num_ref(mb_idx, sp.num_ref_idx_l1_active);
             // Reference list index of a (field) ref_idx; see `frame_ref_idx`
-            let field_mb = self.mbaff && self.mb_field_decoding[mb_idx / 2];
+            let field_mb = MBAFF && self.mb_field_decoding[mb_idx / 2];
             let fri = move |r: i8| if field_mb { r / 2 } else { r };
             // === Inter (B) macroblock ===
             // Table 7-11: mb_type 0=B_Direct_16x16, 1=B_L0_16x16,
@@ -113,7 +113,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         self.mb_slice_id,
                         self.this_slice_id,
                         MbaffCtx {
-                            mbaff: self.mbaff,
+                            mbaff: MBAFF,
                             mb_field_decoding: self.mb_field_decoding,
                         },
                     );
@@ -229,7 +229,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         self.mb_slice_id,
                         self.this_slice_id,
                         MbaffCtx {
-                            mbaff: self.mbaff,
+                            mbaff: MBAFF,
                             mb_field_decoding: self.mb_field_decoding,
                         },
                     );
@@ -252,7 +252,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         self.mb_slice_id,
                         self.this_slice_id,
                         MbaffCtx {
-                            mbaff: self.mbaff,
+                            mbaff: MBAFF,
                             mb_field_decoding: self.mb_field_decoding,
                         },
                     );
@@ -370,7 +370,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 self.mb_slice_id,
                                 self.this_slice_id,
                                 MbaffCtx {
-                                    mbaff: self.mbaff,
+                                    mbaff: MBAFF,
                                     mb_field_decoding: self.mb_field_decoding,
                                 },
                             );
@@ -412,7 +412,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                 self.mb_slice_id,
                                 self.this_slice_id,
                                 MbaffCtx {
-                                    mbaff: self.mbaff,
+                                    mbaff: MBAFF,
                                     mb_field_decoding: self.mb_field_decoding,
                                 },
                             );
@@ -628,7 +628,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                     self.mb_slice_id,
                                     self.this_slice_id,
                                     MbaffCtx {
-                                        mbaff: self.mbaff,
+                                        mbaff: MBAFF,
                                         mb_field_decoding: self.mb_field_decoding,
                                     },
                                 );
@@ -674,7 +674,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                                     self.mb_slice_id,
                                     self.this_slice_id,
                                     MbaffCtx {
-                                        mbaff: self.mbaff,
+                                        mbaff: MBAFF,
                                         mb_field_decoding: self.mb_field_decoding,
                                     },
                                 );
@@ -819,7 +819,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             16,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let mut quad_coeffs = [0i32; 16];
@@ -857,7 +857,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             16,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let mut block_coeffs = [0i32; 16];
@@ -940,7 +940,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         ref_y_off_l1,
                     );
                     sp.wctx
-                        .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                        .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                         .apply_bi(
                             &pred_l0,
                             &pred_l1,
@@ -969,7 +969,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     );
                     if sp.use_weight == 1 {
                         sp.wctx
-                            .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                            .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                             .apply_uni(&mut luma_pred, 0, sub_part.ref_idx_l0 as usize, false, 0);
                     }
                 } else if sub_part.pred_l1 {
@@ -991,7 +991,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     );
                     if sp.use_weight == 1 {
                         sp.wctx
-                            .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                            .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                             .apply_uni(&mut luma_pred, 1, sub_part.ref_idx_l1 as usize, false, 0);
                     }
                 }
@@ -1121,7 +1121,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             self.mb_slice_id,
                             self.this_slice_id,
                             MbaffCtx {
-                                mbaff: self.mbaff,
+                                mbaff: MBAFF,
                                 mb_field_decoding: self.mb_field_decoding,
                             },
                         );
@@ -1181,7 +1181,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         self.mb_slice_id,
                         self.this_slice_id,
                         MbaffCtx {
-                            mbaff: self.mbaff,
+                            mbaff: MBAFF,
                             mb_field_decoding: self.mb_field_decoding,
                         },
                     );
@@ -1267,7 +1267,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             16,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let mut quad_coeffs = [0i32; 16];
@@ -1304,7 +1304,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             16,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let mut block_coeffs = [0i32; 16];
@@ -1360,7 +1360,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                 );
                 if sp.use_weight == 1 {
                     sp.wctx
-                        .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                        .mb(MBAFF && self.mb_field_decoding[mb_idx / 2], mb_idx)
                         .apply_uni(&mut luma_pred, 0, sub_part.ref_idx as usize, false, 0);
                 }
                 crate::residual::put_pred_residual(
@@ -1492,7 +1492,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             16,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let mut quad_coeffs = [0i32; 16];
@@ -1551,7 +1551,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                             16,
                             self.mb_slice_id,
                             self.this_slice_id,
-                            self.mbaff,
+                            MBAFF,
                             self.mb_field_decoding,
                         );
                         let tc = parse_residual_block_cavlc(reader, &mut block_coeffs, 16, nc)?;
@@ -1615,7 +1615,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                 16,
                 self.mb_slice_id,
                 self.this_slice_id,
-                self.mbaff,
+                MBAFF,
                 self.mb_field_decoding,
             );
             parse_residual_block_cavlc(reader, &mut luma_dc, 16, nc_dc)?;
@@ -1632,7 +1632,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         16,
                         self.mb_slice_id,
                         self.this_slice_id,
-                        self.mbaff,
+                        MBAFF,
                         self.mb_field_decoding,
                     );
                     let tc = parse_residual_block_cavlc(reader, &mut luma_ac_scan[blk], 15, nc)?;
