@@ -125,31 +125,7 @@ pub(crate) struct PictureState {
     pub(crate) field_poc: [i32; 2],
     pub(crate) nal_unit_type: NalUnitType,
     pub(crate) nal_ref_idc: u8,
-    // Per-MB arrays that persist across slices
-    pub(crate) nc_luma: Vec<u8>,
-    pub(crate) nc_cb: Vec<u8>,
-    pub(crate) nc_cr: Vec<u8>,
-    pub(crate) mv_store_l0: Vec<[i16; 2]>,
-    pub(crate) mv_store_l1: Vec<[i16; 2]>,
-    pub(crate) ref_idx_store_l0: Vec<i8>,
-    pub(crate) ref_poc_store_l0: Vec<i32>,
-    pub(crate) ref_poc_store_l1: Vec<i32>,
-    pub(crate) ref_idx_store_l1: Vec<i8>,
-    pub(crate) mvd_store: Vec<[i16; 2]>,
-    pub(crate) mvd_store_l1: Vec<[i16; 2]>,
-    pub(crate) mb_info: Vec<deblock::MbInfo>,
-    pub(crate) i4x4_modes: Vec<u8>,
-    // CABAC neighbor context state
-    pub(crate) mb_cbp: Vec<u16>,
-    pub(crate) mb_chroma_pred: Vec<u8>,
-    pub(crate) mb_is_8x8dct: Vec<bool>,
-    pub(crate) mb_skip: Vec<bool>,
-    pub(crate) mb_is_direct: Vec<bool>,
-    pub(crate) blk_is_direct: Vec<bool>,
-    pub(crate) is_i16x16: Vec<bool>,
-    /// Per-MB slice ID for slice boundary detection. MBs from different
-    /// slices are treated as unavailable for CABAC context and MV prediction.
-    pub(crate) mb_slice_id: Vec<u16>,
+    scratch: PictureScratch,
     /// Current slice ID counter (incremented for each new slice).
     pub(crate) current_slice_id: u16,
     #[allow(dead_code)]
@@ -161,15 +137,10 @@ pub(crate) struct PictureState {
     pub(crate) adaptive_ref_pic_marking: bool,
     pub(crate) long_term_reference_flag: bool,
     pub(crate) is_intra_slice: bool,
-    /// Deblocking settings of each slice so far, indexed by slice ID
-    /// (each MB is filtered as its own slice says, spec 8.7).
-    pub(crate) slice_deblock: Vec<deblock::SliceDeblock>,
     pub(crate) chroma_qp_index_offset: i32,
     pub(crate) second_chroma_qp_index_offset: i32,
     pub(crate) mb_width: u32,
     pub(crate) mb_height: u32,
-    /// Per-MB-pair field decoding flag (MBAFF only). Indexed by pair address.
-    pub(crate) mb_field_decoding: Vec<bool>,
     /// True if this picture uses MBAFF (mb_adaptive_frame_field_flag && !field_pic_flag).
     pub(crate) mbaff_frame_flag: bool,
     /// True if this picture is a field picture (field_pic_flag=1).
@@ -184,6 +155,79 @@ pub(crate) struct PictureState {
     /// samples (field lines for field pictures).
     pub(crate) crop_x: u32,
     pub(crate) crop_y: u32,
+}
+
+/// Reusable macroblock storage. Motion arrays leave with reference pictures.
+#[derive(Clone, Default)]
+pub(crate) struct PictureScratch {
+    // Per-MB arrays that persist across slices
+    nc_luma: Vec<u8>,
+    nc_cb: Vec<u8>,
+    nc_cr: Vec<u8>,
+    mv_store_l0: Vec<[i16; 2]>,
+    mv_store_l1: Vec<[i16; 2]>,
+    ref_idx_store_l0: Vec<i8>,
+    ref_poc_store_l0: Vec<i32>,
+    ref_poc_store_l1: Vec<i32>,
+    ref_idx_store_l1: Vec<i8>,
+    mvd_store: Vec<[i16; 2]>,
+    mvd_store_l1: Vec<[i16; 2]>,
+    mb_info: Vec<deblock::MbInfo>,
+    i4x4_modes: Vec<u8>,
+    // CABAC neighbor context state
+    mb_cbp: Vec<u16>,
+    mb_chroma_pred: Vec<u8>,
+    mb_is_8x8dct: Vec<bool>,
+    mb_skip: Vec<bool>,
+    mb_is_direct: Vec<bool>,
+    blk_is_direct: Vec<bool>,
+    is_i16x16: Vec<bool>,
+    /// Per-MB slice ID for slice boundary detection. MBs from different
+    /// slices are treated as unavailable for CABAC context and MV prediction.
+    mb_slice_id: Vec<u16>,
+    /// Deblocking settings of each slice so far, indexed by slice ID
+    /// (each MB is filtered as its own slice says, spec 8.7).
+    slice_deblock: Vec<deblock::SliceDeblock>,
+    /// Per-MB-pair field decoding flag (MBAFF only). Indexed by pair address.
+    mb_field_decoding: Vec<bool>,
+}
+
+impl PictureScratch {
+    fn reset(&mut self, total_mbs: usize) {
+        // Release the previous picture's storage when the coded area changes.
+        if self.mb_info.len() != total_mbs {
+            *self = Self::default();
+        }
+        fn reset<T: Clone>(values: &mut Vec<T>, len: usize, value: T) {
+            values.clear();
+            values.resize(len, value);
+        }
+
+        let blocks = total_mbs * 16;
+        reset(&mut self.nc_luma, blocks, 0);
+        reset(&mut self.nc_cb, total_mbs * 8, 0);
+        reset(&mut self.nc_cr, total_mbs * 8, 0);
+        reset(&mut self.mv_store_l0, blocks, [0; 2]);
+        reset(&mut self.mv_store_l1, blocks, [0; 2]);
+        reset(&mut self.ref_idx_store_l0, blocks, -1);
+        reset(&mut self.ref_poc_store_l0, blocks, -1);
+        reset(&mut self.ref_poc_store_l1, blocks, -1);
+        reset(&mut self.ref_idx_store_l1, blocks, -1);
+        reset(&mut self.mvd_store, blocks, [0; 2]);
+        reset(&mut self.mvd_store_l1, blocks, [0; 2]);
+        reset(&mut self.mb_info, total_mbs, deblock::MbInfo::default());
+        reset(&mut self.i4x4_modes, blocks, 2);
+        reset(&mut self.mb_cbp, total_mbs, 0);
+        reset(&mut self.mb_chroma_pred, total_mbs, 0);
+        reset(&mut self.mb_is_8x8dct, total_mbs, false);
+        reset(&mut self.mb_skip, total_mbs, false);
+        reset(&mut self.mb_is_direct, total_mbs, false);
+        reset(&mut self.blk_is_direct, blocks, false);
+        reset(&mut self.is_i16x16, total_mbs, false);
+        reset(&mut self.mb_slice_id, total_mbs, 0);
+        reset(&mut self.mb_field_decoding, total_mbs.div_ceil(2), false);
+        self.slice_deblock.clear();
+    }
 }
 
 /// Streaming H.264 decoder.
@@ -221,6 +265,7 @@ pub struct Decoder {
     dpb: Dpb,
     /// In-progress picture being assembled from one or more slices.
     pending: Option<PictureState>,
+    scratch: PictureScratch,
     /// First field of a field-picture pair awaiting its complement for output.
     pending_field: Option<Frame>,
     /// The last frame returned came from a picture with MMCO 5, which starts
@@ -242,6 +287,7 @@ impl Decoder {
             pps_table: BTreeMap::new(),
             dpb: Dpb::new(0),
             pending: None,
+            scratch: PictureScratch::default(),
             pending_field: None,
             period_start: false,
         }
@@ -375,6 +421,7 @@ impl Decoder {
             );
         }
         let mmco5 = has_mmco5(&ps.mmco_ops);
+        self.scratch = core::mem::take(&mut ps.scratch);
         let frame = finish_output(ps, &mut self.pending_field);
         self.period_start = mmco5 && frame.is_some();
         frame
@@ -389,7 +436,7 @@ impl Decoder {
     fn decode_slice(&mut self, nal: &NalUnit) -> Result<(), DecodeError> {
         let plan = prepare_slice(&self.sps_table, &self.pps_table, &mut self.dpb, nal)?;
         let pending = self.pending.take();
-        let ps = run_slice(&plan, pending, None)?;
+        let ps = run_slice(&plan, pending, &mut self.scratch, None)?;
         self.pending = Some(ps);
         Ok(())
     }
@@ -839,13 +886,14 @@ pub(crate) fn prepare_slice(
 pub(crate) fn run_slice(
     plan: &SlicePlan,
     pending: Option<PictureState>,
+    scratch: &mut PictureScratch,
     sync: Option<&mut RowSync>,
 ) -> Result<PictureState, DecodeError> {
     // The slice decoder is compiled once per sample type
     if plan.sps.bit_depth_luma_minus8 == 2 {
-        run_slice_px::<u16>(plan, pending, sync)
+        run_slice_px::<u16>(plan, pending, scratch, sync)
     } else {
-        run_slice_px::<u8>(plan, pending, sync)
+        run_slice_px::<u8>(plan, pending, scratch, sync)
     }
 }
 
@@ -853,6 +901,7 @@ pub(crate) fn run_slice(
 fn run_slice_px<P: Pixel>(
     plan: &SlicePlan,
     mut pending: Option<PictureState>,
+    spare: &mut PictureScratch,
     mut sync: Option<&mut RowSync>,
 ) -> Result<PictureState, DecodeError> {
     // Covers everything before the MB loop: PictureState allocation and
@@ -891,13 +940,15 @@ fn run_slice_px<P: Pixel>(
     // CABAC neighbor contexts, and deblocking.
     let is_continuation = header.first_mb_in_slice > 0
         && pending.is_some()
-        && pending.as_ref().unwrap().mb_slice_id.len() == total_mbs;
+        && pending.as_ref().unwrap().scratch.mb_slice_id.len() == total_mbs;
     let ps = if is_continuation {
         pending.take().unwrap()
     } else {
         let chroma_format = ChromaFormat::from_idc(sps.chroma_format_idc);
         let chroma_len =
             ((coded_width / 2) * (coded_height >> chroma_format.shift_y())) as usize * P::BYTES;
+        let mut scratch = core::mem::take(spare);
+        scratch.reset(total_mbs);
         PictureState {
             frame: Frame {
                 width,
@@ -914,27 +965,7 @@ fn run_slice_px<P: Pixel>(
             field_poc: plan.field_poc,
             nal_unit_type: plan.nal_unit_type,
             nal_ref_idc: plan.nal_ref_idc,
-            nc_luma: vec![0u8; total_mbs * 16],
-            nc_cb: vec![0u8; total_mbs * 8],
-            nc_cr: vec![0u8; total_mbs * 8],
-            mv_store_l0: vec![[0i16; 2]; total_mbs * 16],
-            mv_store_l1: vec![[0i16; 2]; total_mbs * 16],
-            ref_idx_store_l0: vec![-1i8; total_mbs * 16],
-            ref_poc_store_l0: vec![-1i32; total_mbs * 16],
-            ref_poc_store_l1: vec![-1i32; total_mbs * 16],
-            ref_idx_store_l1: vec![-1i8; total_mbs * 16],
-            mvd_store: vec![[0i16; 2]; total_mbs * 16],
-            mvd_store_l1: vec![[0i16; 2]; total_mbs * 16],
-            mb_info: vec![deblock::MbInfo::default(); total_mbs],
-            i4x4_modes: vec![2u8; total_mbs * 16],
-            mb_cbp: vec![0u16; total_mbs],
-            mb_chroma_pred: vec![0u8; total_mbs],
-            mb_is_8x8dct: vec![false; total_mbs],
-            mb_skip: vec![false; total_mbs],
-            mb_is_direct: vec![false; total_mbs],
-            blk_is_direct: vec![false; total_mbs * 16],
-            is_i16x16: vec![false; total_mbs],
-            mb_slice_id: vec![0u16; total_mbs],
+            scratch,
             current_slice_id: 0,
             prev_mb_qp: slice_qp,
             last_qp_delta_nonzero: false,
@@ -942,12 +973,10 @@ fn run_slice_px<P: Pixel>(
             adaptive_ref_pic_marking: header.adaptive_ref_pic_marking,
             long_term_reference_flag: header.long_term_reference_flag,
             is_intra_slice: header.slice_type == SliceType::I,
-            slice_deblock: Vec::new(),
             chroma_qp_index_offset: pps.chroma_qp_index_offset,
             second_chroma_qp_index_offset: pps.second_chroma_qp_index_offset,
             mb_width,
             mb_height,
-            mb_field_decoding: vec![false; total_mbs.div_ceil(2)],
             mbaff_frame_flag: header.mbaff_frame_flag,
             field_pic_flag: header.field_pic_flag,
             bottom_field_flag: header.bottom_field_flag,
@@ -966,27 +995,32 @@ fn run_slice_px<P: Pixel>(
         field_poc: ps_field_poc,
         nal_unit_type: _ps_nal_type,
         nal_ref_idc: _ps_nal_ref_idc,
-        mut nc_luma,
-        mut nc_cb,
-        mut nc_cr,
-        mut mv_store_l0,
-        mut mv_store_l1,
-        mut ref_idx_store_l0,
-        mut ref_poc_store_l0,
-        mut ref_poc_store_l1,
-        mut ref_idx_store_l1,
-        mut mvd_store,
-        mut mvd_store_l1,
-        mut mb_info,
-        mut i4x4_modes,
-        mut mb_cbp,
-        mut mb_chroma_pred,
-        mut mb_is_8x8dct,
-        mut mb_skip,
-        mut mb_is_direct,
-        mut blk_is_direct,
-        mut is_i16x16,
-        mut mb_slice_id,
+        scratch:
+            PictureScratch {
+                mut nc_luma,
+                mut nc_cb,
+                mut nc_cr,
+                mut mv_store_l0,
+                mut mv_store_l1,
+                mut ref_idx_store_l0,
+                mut ref_poc_store_l0,
+                mut ref_poc_store_l1,
+                mut ref_idx_store_l1,
+                mut mvd_store,
+                mut mvd_store_l1,
+                mut mb_info,
+                mut i4x4_modes,
+                mut mb_cbp,
+                mut mb_chroma_pred,
+                mut mb_is_8x8dct,
+                mut mb_skip,
+                mut mb_is_direct,
+                mut blk_is_direct,
+                mut is_i16x16,
+                mut mb_slice_id,
+                mb_field_decoding: mut _mb_field_decoding,
+                mut slice_deblock,
+            },
         mut current_slice_id,
         prev_mb_qp: _,
         last_qp_delta_nonzero: _,
@@ -994,12 +1028,10 @@ fn run_slice_px<P: Pixel>(
         adaptive_ref_pic_marking: _,
         long_term_reference_flag: _ps_lt_ref_flag,
         is_intra_slice: _ps_is_intra,
-        mut slice_deblock,
         chroma_qp_index_offset: ps_chroma_qp_offset,
         second_chroma_qp_index_offset: ps_second_chroma_qp_offset,
         mb_width: _ps_mb_width,
         mb_height: _ps_mb_height,
-        mb_field_decoding: mut _mb_field_decoding,
         mbaff_frame_flag: _ps_mbaff,
         field_pic_flag: _ps_field,
         bottom_field_flag: _ps_bottom,
@@ -1361,27 +1393,31 @@ fn run_slice_px<P: Pixel>(
         field_poc: ps_field_poc,
         nal_unit_type: plan.nal_unit_type,
         nal_ref_idc: plan.nal_ref_idc,
-        nc_luma,
-        nc_cb,
-        nc_cr,
-        mv_store_l0,
-        mv_store_l1,
-        ref_idx_store_l0,
-        ref_poc_store_l0,
-        ref_poc_store_l1,
-        ref_idx_store_l1,
-        mvd_store,
-        mvd_store_l1,
-        mb_info,
-        i4x4_modes,
-        mb_cbp,
-        mb_chroma_pred,
-        mb_is_8x8dct,
-        mb_skip,
-        mb_is_direct,
-        blk_is_direct,
-        is_i16x16,
-        mb_slice_id,
+        scratch: PictureScratch {
+            nc_luma,
+            nc_cb,
+            nc_cr,
+            mv_store_l0,
+            mv_store_l1,
+            ref_idx_store_l0,
+            ref_poc_store_l0,
+            ref_poc_store_l1,
+            ref_idx_store_l1,
+            mvd_store,
+            mvd_store_l1,
+            mb_info,
+            i4x4_modes,
+            mb_cbp,
+            mb_chroma_pred,
+            mb_is_8x8dct,
+            mb_skip,
+            mb_is_direct,
+            blk_is_direct,
+            is_i16x16,
+            mb_slice_id,
+            mb_field_decoding: _mb_field_decoding,
+            slice_deblock,
+        },
         current_slice_id,
         prev_mb_qp,
         last_qp_delta_nonzero,
@@ -1389,12 +1425,10 @@ fn run_slice_px<P: Pixel>(
         adaptive_ref_pic_marking: header.adaptive_ref_pic_marking,
         long_term_reference_flag: header.long_term_reference_flag,
         is_intra_slice: header.slice_type == SliceType::I,
-        slice_deblock,
         chroma_qp_index_offset: ps_chroma_qp_offset,
         second_chroma_qp_index_offset: ps_second_chroma_qp_offset,
         mb_width,
         mb_height,
-        mb_field_decoding: _mb_field_decoding,
         mbaff_frame_flag: header.mbaff_frame_flag,
         field_pic_flag: header.field_pic_flag,
         bottom_field_flag: header.bottom_field_flag,
@@ -1409,14 +1443,16 @@ fn run_slice_px<P: Pixel>(
 pub(crate) fn deblock_picture(ps: &mut PictureState) {
     deblock::filter_frame_mbaff(
         &mut ps.frame,
-        &ps.mb_info,
+        &ps.scratch.mb_info,
         ps.mb_width as usize,
-        &ps.mb_slice_id,
-        &ps.slice_deblock,
+        &ps.scratch.mb_slice_id,
+        &ps.scratch.slice_deblock,
         ps.chroma_qp_index_offset,
         ps.second_chroma_qp_index_offset,
         deblock::Interlace {
-            mbaff_field: ps.mbaff_frame_flag.then_some(&ps.mb_field_decoding[..]),
+            mbaff_field: ps
+                .mbaff_frame_flag
+                .then_some(&ps.scratch.mb_field_decoding[..]),
             field_pic: ps.field_pic_flag,
         },
     );
@@ -1453,14 +1489,14 @@ pub(crate) fn picture_meta(ps: &PictureState) -> PictureMeta {
 /// Move the motion data out of a fully decoded picture.
 pub(crate) fn take_motion(ps: &mut PictureState) -> Motion {
     Motion {
-        mv_l0: core::mem::take(&mut ps.mv_store_l0),
-        ref_idx_l0: core::mem::take(&mut ps.ref_idx_store_l0),
-        ref_poc_l0: core::mem::take(&mut ps.ref_poc_store_l0),
-        ref_poc_l1: core::mem::take(&mut ps.ref_poc_store_l1),
-        mv_l1: core::mem::take(&mut ps.mv_store_l1),
-        ref_idx_l1: core::mem::take(&mut ps.ref_idx_store_l1),
+        mv_l0: core::mem::take(&mut ps.scratch.mv_store_l0),
+        ref_idx_l0: core::mem::take(&mut ps.scratch.ref_idx_store_l0),
+        ref_poc_l0: core::mem::take(&mut ps.scratch.ref_poc_store_l0),
+        ref_poc_l1: core::mem::take(&mut ps.scratch.ref_poc_store_l1),
+        mv_l1: core::mem::take(&mut ps.scratch.mv_store_l1),
+        ref_idx_l1: core::mem::take(&mut ps.scratch.ref_idx_store_l1),
         mb_field: if ps.mbaff_frame_flag {
-            ps.mb_field_decoding.clone()
+            ps.scratch.mb_field_decoding.clone()
         } else {
             Vec::new()
         },
@@ -1570,20 +1606,22 @@ impl RowSync {
         {
             deblock::filter_mb_range(
                 &mut ps.frame,
-                &ps.mb_info,
+                &ps.scratch.mb_info,
                 ps.mb_width as usize,
-                &ps.mb_slice_id,
-                &ps.slice_deblock,
+                &ps.scratch.mb_slice_id,
+                &ps.scratch.slice_deblock,
                 ps.chroma_qp_index_offset,
                 ps.second_chroma_qp_index_offset,
                 deblock::Interlace {
-                    mbaff_field: ps.mbaff_frame_flag.then_some(&ps.mb_field_decoding[..]),
+                    mbaff_field: ps
+                        .mbaff_frame_flag
+                        .then_some(&ps.scratch.mb_field_decoding[..]),
                     field_pic: ps.field_pic_flag,
                 },
-                start..ps.mb_info.len(),
+                start..ps.scratch.mb_info.len(),
             );
         }
-        self.next_unit = ps.mb_info.len().div_ceil(unit_len.max(1));
+        self.next_unit = ps.scratch.mb_info.len().div_ceil(unit_len.max(1));
         let motion = take_motion(ps);
         self.writer
             .finish(&ps.frame.y, &ps.frame.u, &ps.frame.v, motion);

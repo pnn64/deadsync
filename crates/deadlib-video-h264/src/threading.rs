@@ -43,7 +43,8 @@ use std::time::Duration;
 use crate::bitstream::BitstreamReader;
 use crate::decoder::{
     apply_reference_marking, decoded_numbering, finish_output, has_mmco5, is_redundant_slice,
-    prepare_slice, run_slice, store_parameter_set, Frame, PictureState, RowSync, SlicePlan,
+    prepare_slice, run_slice, store_parameter_set, Frame, PictureScratch, PictureState, RowSync,
+    SlicePlan,
 };
 use crate::dpb::{DecodedPicture, Dpb, PictureMeta, PictureStructure, PictureWriter};
 use crate::error::DecodeError;
@@ -427,6 +428,7 @@ fn run_picture(slices: Vec<SlicePlan>, writer: PictureWriter) -> WorkerResult {
         limit_mb: 0,
     };
     let mut pending: Option<PictureState> = None;
+    let mut scratch = PictureScratch::default();
     let mut first_error: Option<DecodeError> = None;
     for (k, plan) in slices.iter().enumerate() {
         // Rows a later slice may still write must not be deblocked or
@@ -436,7 +438,7 @@ fn run_picture(slices: Vec<SlicePlan>, writer: PictureWriter) -> WorkerResult {
         // picture as it was before that slice.
         let backup = pending.clone();
         let saved_unit = sync.next_unit;
-        match run_slice(plan, pending.take(), Some(&mut sync)) {
+        match run_slice(plan, pending.take(), &mut scratch, Some(&mut sync)) {
             Ok(ps) => pending = Some(ps),
             Err(e) => {
                 pending = backup;
