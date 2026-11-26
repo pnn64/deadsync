@@ -136,3 +136,13 @@ The combined revision completed five cycle runs and two matching allocation runs
 | SRPG10 | Deadlib recycled, SPS depth | 40.94 | 24.4 | 13.07 | 0.43 |
 | SRPG10 | FFmpeg native | 24.70 | 40.5 | 17.63 | 0.18 |
 | SRPG10 | FFmpeg packed | 27.84 | 35.9 | 18.63 | 3.15 |
+
+## Temporal reference keys and deblock edges
+
+`e1b2c2329` stores reference-picture IDs per slice and resolves them by macroblock slice and reference index when temporal direct prediction needs them. This replaces two full-picture arrays filled with per-block POCs. FFmpeg also stores reference identities by list index for temporal direct prediction. [FFmpeg temporal direct prediction](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264_direct.c)
+
+`7f01bb1f9` skips interior deblock edges of inter macroblocks with uniform motion and zero luma coefficients. It also shares the motion check across edge segments when both sides have uniform motion. FFmpeg similarly skips interior edges for unpartitioned inter macroblocks with no luma residual. [FFmpeg loop filter](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264_loopfilter.c)
+
+Median per-round cycle ratios versus `37e4e52ab` were 0.966 and 0.946 with both changes applied. The combined revision matched FFmpeg on both bundled clips, temporal-direct progressive and MBAFF multislice clips, constrained-intra CAVLC and the resolution change. [Paired samples](results/windows-x86_64-20261126/reference-keys-and-deblock-paired.csv)
+
+The default output requested 3.36 and 3.23 MiB/frame, down from 3.42 and 3.26. The recycled output with SPS depth requested 0.45 and 0.40 MiB/frame. The separate full SRPG10 batch had wide sample spreads, including 73% for packed FFmpeg. The paired batch provides the cycle comparisons between revisions. [Full cycle and allocation samples](results/windows-x86_64-20261126/reference-keys-and-deblock)
