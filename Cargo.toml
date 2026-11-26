@@ -150,8 +150,6 @@ zstd = "0.14.4"
 # StepManiaX's SDK depends on hidapi directly. Route it through the same HID
 # transport as our other devices until the SDK can omit its built-in backend.
 hidapi = { path = "crates/deadlib-hid/hidapi-compat" }
-# Opus must honor Rust's static MSVC runtime; its CMake default selects /MD.
-opusic-sys = { path = "vendor/opusic-sys" }
 
 [build-dependencies]
 fs_extra = "1.3.0"
