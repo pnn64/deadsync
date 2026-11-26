@@ -18,6 +18,11 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use std::collections::{BTreeMap, HashMap};
 type MotionSample = (Option<[f32; 2]>, Option<[f32; 3]>);
 
+// Check at idle frame boundaries. The replay can churn through many native
+// bindings and temporary tables before the VM finishes an incremental cycle.
+const BAKE_HEAP_CHECK_FRAMES: usize = 32;
+const BAKE_HEAP_GROWTH_BYTES: usize = 64 * 1024 * 1024;
+
 #[derive(Default)]
 pub struct SongUpdateOutput {
     pub eases: Vec<SongLuaEaseWindow>,
@@ -531,12 +536,33 @@ impl SongRuntime {
             let mut masks = self.update_masks(&players)?;
             let mut broadcasts = Vec::new();
             let mut motions = Vec::with_capacity(values.len());
+            let mut bake_heap = Some(self.vm.heap_stats());
+            #[cfg(feature = "test-support")]
+            if context.initial_lua_gc_stopped {
+                bake_heap = None;
+            }
 
             for (frame, (exact_beat, delta)) in frames.into_iter().enumerate().skip(1) {
                 if frame & 63 == 0 {
                     context.report_bake_progress(
                         0.45 + 0.50 * frame as f32 / sample_count.max(1) as f32,
                     );
+                }
+                if frame % BAKE_HEAP_CHECK_FRAMES == 0
+                    && let Some(baseline) = &mut bake_heap
+                {
+                    let heap = self.vm.heap_stats();
+                    if heap.collections != baseline.collections
+                        || heap.live_bytes < baseline.live_bytes
+                    {
+                        *baseline = heap;
+                    } else if heap.live_bytes - baseline.live_bytes >= BAKE_HEAP_GROWTH_BYTES {
+                        *baseline = self.vm.collect_garbage().map_err(|e| {
+                            format!(
+                                "failed to reclaim the song Lua bake heap at frame {frame}: {e}"
+                            )
+                        })?;
+                    }
                 }
                 let next_beat = exact_beat as f32;
                 let prior_time = frame_time(beat, seconds);

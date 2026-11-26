@@ -188,7 +188,15 @@ impl SongRuntime {
             for actor in actors {
                 rooted.push(&mut self.vm, *actor)?;
             }
-            self.sample_rooted_song_overlay_schedule(screen, capture, &rooted, states, seconds)
+            let access = self.actors.perframe_access();
+            capture.sample_schedule(states, seconds, |index, target, value| {
+                if let Some(&actor) = rooted.get(index) {
+                    access
+                        .update_getter(&mut self.vm, actor, target, value)
+                        .map_err(|e| e.to_string())?;
+                }
+                Ok(())
+            })
         })();
         rooted.release(&mut self.vm)?;
         result
@@ -205,15 +213,17 @@ impl SongRuntime {
         self.actor_scene_root(screen)
             .ok_or("released or foreign song screen")?;
         actors.validate(&self.vm)?;
-        let access = self.actors.perframe_access();
+        let mut writes = Vec::new();
         capture.sample_schedule(states, seconds, |index, target, value| {
-            if let Some(actor) = actors.get(index) {
-                access
-                    .update_getter(&mut self.vm, *actor, target, value)
-                    .map_err(|e| e.to_string())?;
+            if let Some(&actor) = actors.get(index) {
+                writes.push((actor, target, value.clone()));
             }
             Ok(())
-        })
+        })?;
+        self.actors
+            .perframe_access()
+            .update_rooted_getters(&mut self.vm, writes)
+            .map_err(|e| e.to_string())
     }
 
     /// Consume the active replay's complete ordered publication batch. Actor

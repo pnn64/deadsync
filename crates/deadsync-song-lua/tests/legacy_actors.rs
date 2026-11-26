@@ -9,12 +9,21 @@ fn scheduled_xml_runs_inline_lua_and_legacy_commands() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("default.xml");
     fs::write(
+        dir.path().join("legacy.MODEL"),
+        "[Model]\nMeshes=legacy.txt\n",
+    )
+    .unwrap();
+    fs::write(
         &path,
         r##"
 <ActorFrame><children>
   <Layer Type="Quad" Name="legacy" OnCommand="x,+13;diffuse,#804020;zoom,1.5;sleep,3" />
+  <Layer File="legacy.MODEL" OnCommand="%function(self)
+    legacy_placeholder_ran = true
+    self:sleep(3)
+  end" />
   <Layer Type="Quad" Name="inline" OnCommand="%function(self)
-    if 1 < 2 and 2 &lt; 3 then self:x(29):sleep(3) end
+    if legacy_placeholder_ran and 1 < 2 and 2 &lt; 3 then self:x(29):sleep(3) end
   end" />
 </children></ActorFrame>
 "##,
@@ -23,6 +32,12 @@ fn scheduled_xml_runs_inline_lua_and_legacy_commands() {
     let mut context = SongLuaCompileContext::new(dir.path(), "XML actors");
     context.music_length_seconds = 4.0;
     let compiled = compile_song_lua(&path, &context).unwrap();
+    assert!(
+        compiled
+            .overlays
+            .iter()
+            .all(|actor| !matches!(actor.kind, SongLuaOverlayKind::Model { .. }))
+    );
     for (name, x) in [("legacy", 13.0), ("inline", 29.0)] {
         let actor = compiled
             .overlays

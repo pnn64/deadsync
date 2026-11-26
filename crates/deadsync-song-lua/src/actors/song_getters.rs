@@ -2,9 +2,30 @@
 use super::*;
 use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update};
 
+pub(crate) type GetterWrite = (Value, Target, Update);
+
 pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
     let (target, value) = call.function_data::<(Target, Update)>().unwrap().clone();
     let actor = table(call, call.captures()[2])?;
+    write_value(call, actor, target, value)
+}
+
+pub(super) fn write_batch(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let batch = call.function_data::<Mutex<Vec<GetterWrite>>>().unwrap();
+    let writes = std::mem::take(&mut *batch.lock().unwrap());
+    for (actor, target, value) in writes {
+        let actor = table(call, actor)?;
+        write_value(call, actor, target, value)?;
+    }
+    Ok(())
+}
+
+fn write_value(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    target: Target,
+    value: Update,
+) -> Result<(), Error> {
     if matches!(
         target,
         Target::Zoom

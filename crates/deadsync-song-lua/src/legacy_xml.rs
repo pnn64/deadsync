@@ -138,6 +138,9 @@ fn actor(output: &mut String, node: &Node, source: &Path) -> Result<(), String> 
                 path_field(output, key, path);
             }
         }
+        // ITGmania does not render OpenITG .model descriptors. The dummy
+        // still runs the XML commands and contributes its tween lifetime.
+        ("Actor", Some(path)) if extension_is(path, "model") => {}
         ("Actor", Some(path)) => log::warn!(
             "Unknown legacy actor file type '{}', using a dummy Actor",
             path.display()

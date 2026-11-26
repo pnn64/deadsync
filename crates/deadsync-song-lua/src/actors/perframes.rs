@@ -118,6 +118,23 @@ impl Access {
         vm.call(callback, &[])?;
         Ok(())
     }
+    /// The caller keeps the actors rooted for the whole batch. The callback
+    /// consumes its writes before running any authored assignment hook.
+    pub fn update_rooted_getters(
+        &self,
+        vm: &mut Vm,
+        writes: Vec<super::song_getters::GetterWrite>,
+    ) -> Result<(), Error> {
+        if writes.is_empty() {
+            return Ok(());
+        }
+        let callback = vm.new_host_function_with_data(
+            super::song_getters::write_batch,
+            &[Value::Table(self.registry), Value::Table(self.helpers)],
+            Mutex::new(writes),
+        )?;
+        vm.call(callback, &[]).map(|_| ())
+    }
     pub fn write(&self, vm: &mut Vm, actor: Value, state: State) -> Result<(), Error> {
         self.write_state(vm, actor, state, false)
     }
