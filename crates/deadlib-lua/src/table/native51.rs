@@ -165,6 +165,7 @@ impl Table {
     ) -> Result<(), Error> {
         if let Some(index) = array_index(key.value()).filter(|&i| i < self.array.len()) {
             self.array[index] = value;
+            self.touch_array_at(index);
             return Ok(());
         }
         let identity_hash = key.hash();
@@ -391,6 +392,7 @@ impl Table {
         self.native_dead_keys = 0;
         self.next_hash_hint.store(0, Ordering::Relaxed);
         self.invalidate_trace();
+        self.touch_array();
         self.touch_fields();
         Ok(())
     }

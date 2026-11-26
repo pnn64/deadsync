@@ -3,6 +3,7 @@ use super::{BODY_LIMIT, EXACT_INTEGER, MATH_MAX, MATH_MIN, Series, Value, Vm};
 use crate::bytecode::{COMPARE_BRANCH, Instruction, Op, RK};
 
 mod array;
+pub(in crate::vm) use array::ArrayReduction;
 
 const MAX_TERMS: usize = 8;
 const MAX_ITERATIONS: usize = 16_384;

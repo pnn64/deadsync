@@ -4,6 +4,9 @@ use super::{Input, Registers, Sum, Symbol, Term, Value, Vm, ordered_extremum};
 use crate::bytecode::{Instruction, Op};
 use crate::vm::{Cell, FrameKind, TableId, slot_index};
 
+mod exact;
+pub(in crate::vm) use exact::ArrayReduction;
+
 struct Plan {
     table: TableId,
     sum: usize,
@@ -272,9 +275,24 @@ impl Vm {
         let Value::Number(sum) = self.registers[base + plan.sum] else {
             return None;
         };
-        let table = &self.tables[slot_index(plan.table.0)];
-        let values = table.array_slice(lower as i64, upper as i64)?;
-        let sum = plan.evaluate(sum, values, step > 0)?;
+        let bounds = (lower as i64, upper as i64);
+        let table = &mut self.tables[slot_index(plan.table.0)];
+        let before = self.array_reduction.storage_bytes();
+        let cached = self
+            .array_reduction
+            .evaluate(table, &plan, bounds, step > 0, sum);
+        let growth = self.array_reduction.storage_bytes() - before;
+        if growth != 0 {
+            self.gc_note_control(growth);
+        }
+        let sum = match cached {
+            Some(sum) => sum,
+            None => {
+                let table = &self.tables[slot_index(plan.table.0)];
+                let values = table.array_slice(bounds.0, bounds.1)?;
+                plan.evaluate(sum, values, step > 0)?
+            }
+        };
         if !self.numeric_call_ready(0) {
             return None;
         }

@@ -530,6 +530,7 @@ pub struct Vm {
     pattern_work: crate::pattern::Work,
     // Parser and code generator storage reused by unbudgeted source loads.
     compile_spare: loads::Spare,
+    array_reduction: reductions::while_numeric::ArrayReduction,
     pattern_locale: u64,
     native_closures: Arena<threads::NativeClosure>,
     builtin_envs: Buffer<Option<TableId>>,
@@ -667,6 +668,7 @@ impl Vm {
             patterns: crate::pattern::Cache::new_in(memory.clone()),
             pattern_work: crate::pattern::Work::new_in(memory.clone()),
             compile_spare: loads::Spare::default(),
+            array_reduction: reductions::while_numeric::ArrayReduction::new_in(memory.clone()),
             pattern_locale: crate::locale::revision(),
             native_closures: Arena::identified_in(memory.clone()),
             builtin_envs,

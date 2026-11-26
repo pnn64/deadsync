@@ -185,6 +185,16 @@ const INDEX_BITS: u32 = if cfg!(test) { 10 } else { 24 };
 const INDEX_MASK: u32 = (1 << INDEX_BITS) - 1;
 const TAGGED_SLOTS: usize = 1 << INDEX_BITS;
 
+pub(crate) const ARRAY_WATCH_BLOCK: usize = 32;
+pub(crate) const ARRAY_WATCH_LIMIT: usize = (u8::MAX as usize - 1) * ARRAY_WATCH_BLOCK;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ArrayChange {
+    Unwatched,
+    Clean,
+    Block(usize),
+}
+
 #[derive(Debug)]
 pub(crate) struct InvalidNextKey;
 
@@ -207,6 +217,9 @@ pub(crate) struct Table {
     host_state: u64,
     // Counts changes to keyed entries; see `fields_version`.
     fields_version: u32,
+    // Zero invalidates the watch, one is clean, and higher values identify a
+    // single changed block. This occupies the same byte as a validity flag.
+    array_watch: u8,
     pub trace: TableTrace,
 }
 
@@ -231,6 +244,7 @@ impl Table {
             metatable: 0,
             host_state: 0,
             fields_version: 0,
+            array_watch: 0,
             trace: TableTrace::Idle,
         }
     }
@@ -287,6 +301,33 @@ impl Table {
     }
     pub(crate) fn advance_fields_version(&mut self, writes: u32) {
         self.fields_version = self.fields_version.wrapping_add(writes);
+    }
+    pub(crate) fn array_change(&self) -> ArrayChange {
+        match self.array_watch {
+            0 => ArrayChange::Unwatched,
+            1 => ArrayChange::Clean,
+            block => ArrayChange::Block(usize::from(block - 2)),
+        }
+    }
+    pub(crate) fn watch_array(&mut self) {
+        self.array_watch = 1;
+    }
+    #[inline]
+    fn touch_array(&mut self) {
+        self.array_watch = 0;
+    }
+    #[inline]
+    fn touch_array_at(&mut self, index: usize) {
+        if self.array_watch != 0 {
+            let block = index / ARRAY_WATCH_BLOCK + 2;
+            self.array_watch = if block <= u8::MAX as usize
+                && (self.array_watch == 1 || usize::from(self.array_watch) == block)
+            {
+                block as u8
+            } else {
+                0
+            };
+        }
     }
     pub fn heap_bytes(&self) -> usize {
         self.array.capacity() * std::mem::size_of::<Value>()
@@ -427,18 +468,19 @@ impl Table {
         if self.metatable().is_some() {
             return None;
         }
-        let values = self.array.get_mut(..len)?;
-        values
-            .iter()
-            .all(|value| match value {
-                Value::Number(_) => true,
-                Value::Boolean(_) | Value::Nil => !numbers,
-                _ => false,
-            })
-            .then_some(values)
+        let values = self.array.get(..len)?;
+        if !values.iter().all(|value| match value {
+            Value::Number(_) => true,
+            Value::Boolean(_) | Value::Nil => !numbers,
+            _ => false,
+        }) {
+            return None;
+        }
+        self.touch_array();
+        Some(&mut self.array[..len])
     }
     pub(crate) fn sort_finite_numbers(&mut self, len: usize) -> bool {
-        let Some(values) = self.array.get_mut(..len) else {
+        let Some(values) = self.array.get(..len) else {
             return false;
         };
         if !values.iter().all(|value| {
@@ -447,7 +489,8 @@ impl Table {
         }) {
             return false;
         }
-        values.sort_unstable_by(|left, right| {
+        self.touch_array();
+        self.array[..len].sort_unstable_by(|left, right| {
             let (Value::Number(a), Value::Number(b)) = (*left, *right) else {
                 unreachable!("validated numeric array")
             };
@@ -483,6 +526,7 @@ impl Table {
     }
 
     pub(crate) fn clear_array_slots(&mut self, start: usize, mut mask: u64) {
+        self.touch_array();
         if mask == u64::MAX {
             self.array[start..start + 64].fill(Value::Nil);
             return;
@@ -516,6 +560,7 @@ impl Table {
             array.copy_within(1.., 0);
             array[end] = Value::Nil;
         }
+        self.touch_array();
         Some(previous)
     }
     /// String keys are already interned; field access need not classify them
@@ -604,6 +649,7 @@ impl Table {
         };
         if let Some(slot) = self.array.get_mut(index) {
             *slot = value;
+            self.touch_array_at(index);
             true
         } else if index == self.array.len()
             && index < self.array.capacity()
@@ -612,6 +658,7 @@ impl Table {
             && value != Value::Nil
         {
             self.array.push(value);
+            self.touch_array();
             true
         } else {
             false
@@ -714,11 +761,14 @@ impl Table {
         if let Some(i) = array_index(key) {
             if i < self.array.len() {
                 self.array[i] = value;
+                self.touch_array_at(i);
                 return Ok(());
             }
             if i == self.array.len() && value != Value::Nil {
                 if self.slots.is_empty() {
-                    return self.array.try_push(value);
+                    self.array.try_push(value)?;
+                    self.touch_array();
+                    return Ok(());
                 }
                 // Include every consecutive hash value that this insertion
                 // will migrate. Reserve before changing any value or trace.
@@ -740,6 +790,7 @@ impl Table {
                 {
                     self.array.push(v);
                 }
+                self.touch_array();
                 return Ok(());
             }
         }
@@ -808,6 +859,7 @@ impl Table {
     #[inline]
     pub(crate) fn set_grown_list(&mut self, index: usize, value: Value) {
         self.array[index] = value;
+        self.touch_array();
     }
     pub fn grow_list_array(&mut self, end: usize) -> Result<(), Error> {
         let first = self.array.len();
@@ -824,6 +876,7 @@ impl Table {
             .map_err(|_| Error::memory())?;
         self.invalidate_trace();
         self.array.resize(end, Value::Nil);
+        self.touch_array();
         if !self.entries.is_empty() {
             for index in first..end {
                 if let Some(value) = self.take_hash(Key::Number(((index + 1) as f64).to_bits())) {

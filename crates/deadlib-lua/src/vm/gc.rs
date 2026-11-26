@@ -691,6 +691,7 @@ impl Vm {
             + self.buffers.iter().map(Buffer::capacity).sum::<usize>()
             + self.output.as_ref().map_or(0, Vec::capacity)
             + self.pattern_work.heap_bytes()
+            + self.array_reduction.storage_bytes()
             + self.gc.work.capacity() * std::mem::size_of::<Trace>()
             + self.gc.live.capacity() * std::mem::size_of::<u64>()
             + self.gc.closed.capacity() * std::mem::size_of::<Trace>()

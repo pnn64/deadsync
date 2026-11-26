@@ -9,7 +9,7 @@ use super::{
 };
 use crate::bytecode::{Instruction, OPEN_ARGS, Op, Prototype, RK};
 
-mod while_numeric;
+pub(super) mod while_numeric;
 
 const EXACT_INTEGER: i128 = 1 << 53;
 const BODY_LIMIT: usize = 32;
