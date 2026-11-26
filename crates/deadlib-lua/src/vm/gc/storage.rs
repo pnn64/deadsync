@@ -182,7 +182,7 @@ impl Vm {
             Trace::Value(Value::ParserPrototype(id)) => {
                 let prototype = &self.parser_prototypes[slot_index(id.0)];
                 // The current work item supplies space for the source edge.
-                let additional = prototype.constants.len()
+                let additional = prototype.constant_strings.len()
                     + prototype.children.len()
                     + prototype.debug_strings.len();
                 if additional <= work.capacity() - work.len() {

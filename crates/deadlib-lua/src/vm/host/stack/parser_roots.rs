@@ -1,9 +1,6 @@
 //! Native-reader roots follow incremental parser/decoder events.
 use super::*;
-use crate::{
-    memory::fallible::SliceExt,
-    parser::{NativeRootEvent, RootText},
-};
+use crate::parser::{NativeRootEvent, RootText};
 
 impl NativeStack<'_, '_> {
     pub(super) fn apply_load_roots(&mut self, index: usize) -> Result<usize, Error> {
@@ -73,16 +70,19 @@ impl Vm {
                         source
                     } else {
                         let name = if binary {
-                            b"=?".try_to_vec()?
+                            b"=?".as_slice()
                         } else {
-                            self.loads[index].name.try_to_vec()?
+                            &self.loads[index].name
                         };
-                        self.try_intern(&name)?
+                        self.strings
+                            .try_intern(name)
+                            .map_err(|_| self.memory_failure())?
                     };
                     let id = ParserPrototypeId(self.parser_prototypes.try_insert(
                         loads::ParserPrototype {
                             source,
-                            constants: Buffer::new_in(self.registers.memory().clone()),
+                            constant_count: 0,
+                            constant_strings: Buffer::new_in(self.registers.memory().clone()),
                             children: Buffer::new_in(self.registers.memory().clone()),
                             debug_strings: Buffer::new_in(self.registers.memory().clone()),
                         },
@@ -128,7 +128,13 @@ impl Vm {
                     if let Some(table) = table {
                         let key = self.intern_parser_text(index, &text)?;
                         if self.tables[slot_index(table.0)].get_string(key) == Value::Nil {
-                            self.raw_set(table, Value::String(key), Value::Boolean(true))?;
+                            // The string key is valid and the scalar-overwrite
+                            // path would repeat the lookup before a miss.
+                            self.raw_set_valid_key(
+                                table,
+                                Value::String(key),
+                                Value::Boolean(true),
+                            )?;
                         }
                     }
                     continue;
@@ -165,7 +171,7 @@ impl Vm {
                                 )?;
                                 let p = &mut self.parser_prototypes[slot_index(parent.0)];
                                 let before = p.heap_bytes();
-                                p.children.try_push(Value::ParserPrototype(id))?;
+                                p.children.try_push(id)?;
                                 let growth = p.heap_bytes() - before;
                                 self.object_payload_bytes += growth;
                                 self.parser_prototypes.note_alloc(growth);
@@ -192,12 +198,17 @@ impl Vm {
                                 }
                                 _ => unreachable!("parser roots own their string constants"),
                             };
-                            self.reserve_gc_barrier(Value::ParserPrototype(id), value)?;
-                            let p = &mut self.parser_prototypes[slot_index(id.0)];
-                            let ordinal = p.constants.len();
-                            p.constants.try_push(value)?;
-                            self.gc_barrier(Value::ParserPrototype(id), value);
+                            if let Value::String(string) = value {
+                                self.reserve_gc_barrier(Value::ParserPrototype(id), value)?;
+                                self.parser_prototypes[slot_index(id.0)]
+                                    .constant_strings
+                                    .try_push(string)?;
+                                self.gc_barrier(Value::ParserPrototype(id), value);
+                            }
                             if let Some(table) = table {
+                                let p = &mut self.parser_prototypes[slot_index(id.0)];
+                                let ordinal = p.constant_count;
+                                p.constant_count += 1;
                                 let key = if value == Value::Nil {
                                     Value::Table(table)
                                 } else {
@@ -207,17 +218,25 @@ impl Vm {
                             }
                         }
                         NativeRootEvent::Source(bytes) => {
-                            let value = self.try_intern(&bytes)?;
+                            let string = self
+                                .strings
+                                .try_intern(&bytes)
+                                .map_err(|_| self.memory_failure())?;
+                            let value = Value::String(string);
                             self.reserve_gc_barrier(Value::ParserPrototype(id), value)?;
-                            self.parser_prototypes[slot_index(id.0)].source = value;
+                            self.parser_prototypes[slot_index(id.0)].source = string;
                             self.gc_barrier(Value::ParserPrototype(id), value);
                         }
                         NativeRootEvent::DebugString(bytes) => {
-                            let value = self.try_intern(&bytes)?;
+                            let string = self
+                                .strings
+                                .try_intern(&bytes)
+                                .map_err(|_| self.memory_failure())?;
+                            let value = Value::String(string);
                             self.reserve_gc_barrier(Value::ParserPrototype(id), value)?;
                             self.parser_prototypes[slot_index(id.0)]
                                 .debug_strings
-                                .try_push(value)?;
+                                .try_push(string)?;
                             self.gc_barrier(Value::ParserPrototype(id), value);
                         }
                         NativeRootEvent::Open

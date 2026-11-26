@@ -115,6 +115,7 @@ pub(crate) struct Spare {
     bindings: Option<Bindings>,
     resources: Resources,
     parsed_leaves: Vec<Option<recursive::ParsedLeaf>>,
+    numeric_leaves: Vec<recursive::NumericLeaf>,
     closed_tokens: crate::lexer::ClosedTokens,
     ast: Ast,
 }
@@ -163,6 +164,7 @@ pub(crate) struct Parser {
     function_line: u32,
     bindings: Bindings,
     parsed_leaves: Vec<Option<recursive::ParsedLeaf>>,
+    numeric_leaves: Vec<recursive::NumericLeaf>,
     resources: Resources,
     tasks: Vec<Task>,
     ast: Ast,
@@ -208,6 +210,7 @@ impl Parser {
             presized: false,
             started: false,
             parsed_leaves: Vec::new(),
+            numeric_leaves: Vec::new(),
         })
     }
     /// A parser for complete source reusing `spare` storage.
@@ -227,6 +230,8 @@ impl Parser {
         };
         let mut parsed_leaves = std::mem::take(&mut spare.parsed_leaves);
         parsed_leaves.clear();
+        let mut numeric_leaves = std::mem::take(&mut spare.numeric_leaves);
+        numeric_leaves.clear();
         let mut resources = std::mem::take(&mut spare.resources);
         resources.clear();
         resources.reuse_operands(&mut ast);
@@ -261,6 +266,7 @@ impl Parser {
             presized: false,
             started: false,
             parsed_leaves,
+            numeric_leaves,
         })
     }
     /// Whether this parser was built from reusable storage.
@@ -288,6 +294,7 @@ impl Parser {
         spare.bindings = Some(self.bindings);
         spare.resources = self.resources;
         spare.parsed_leaves = self.parsed_leaves;
+        spare.numeric_leaves = self.numeric_leaves;
         spare.closed_tokens = self.scanner.into_closed_tokens();
     }
 }
@@ -355,6 +362,7 @@ impl Parser {
             + self.bindings.heap_bytes()
             + self.resources.heap_bytes()
             + self.parsed_leaves.capacity() * size_of::<Option<recursive::ParsedLeaf>>()
+            + self.numeric_leaves.capacity() * size_of::<recursive::NumericLeaf>()
             + self.ast.zero_signs.capacity() * size_of::<(ExprId, bool)>()
             + self.ast.stacks.capacity() * size_of::<(ExprId, u16)>()
             + self.ast.constant_operands.capacity() * size_of::<(ExprId, ConstantOperand)>()
@@ -468,6 +476,7 @@ impl Parser {
             (STREAMING && self.native_events.is_some()).then(|| self.resources.constant_count());
         let result = action(&mut self.resources, &cx);
         if let Some(before) = before
+            && before != self.resources.constant_count()
             && let Some(events) = &mut self.native_events
         {
             self.resources

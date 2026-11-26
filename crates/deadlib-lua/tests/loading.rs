@@ -166,7 +166,7 @@ fn reader_roots_keep_source_and_escaped_text_through_reentry() {
     let program = compile(
         br#"
         local pieces = {
-            "local long_reader_identifier = 'prefix\\000suffix';\n",
+            "local scalar = 19; local long_reader_identifier = 'prefix\\000suffix';\n",
             "local result = long_reader_identifier;\nreturn result\n",
         }
         local cooked = "prefix\000suffix"
@@ -176,7 +176,7 @@ fn reader_roots_keep_source_and_escaped_text_through_reentry() {
             if call == 2 then
                 local _, constants = debug.getlocal(2, 4)
                 root = constants
-                assert(root.long_reader_identifier == true and root[cooked] == 0)
+                assert(root.long_reader_identifier == true and root[19] == 0 and root[cooked] == 1)
                 root.long_reader_identifier = nil
                 root[cooked] = 97
                 local nested_source = "return 42"

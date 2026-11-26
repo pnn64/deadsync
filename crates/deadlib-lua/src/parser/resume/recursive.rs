@@ -6,6 +6,9 @@
 //! the resumable parser, which reports the reference diagnostic.
 use super::*;
 
+mod numeric_leaves;
+pub(super) use numeric_leaves::NumericLeaf;
+
 // Larger chunks can amortize the lookup cost across repeated short bodies.
 const MIN_TEMPLATE_SOURCE: usize = 2048;
 const LEAF_SLOTS: usize = 32;
@@ -66,6 +69,7 @@ impl Parser {
     pub(super) fn restart(&mut self) -> Result<(), Error> {
         self.scanner.restart();
         self.parsed_leaves.clear();
+        self.numeric_leaves.clear();
         self.token = None;
         self.lookahead = None;
         self.previous_line = 1;
@@ -828,8 +832,15 @@ impl Parser {
         {
             return Ok(id);
         }
+        if source_candidate
+            && self.keep
+            && let Some(id) = self.repeated_numeric_leaf(input, line, source_start)?
+        {
+            return Ok(id);
+        }
         let first_expr = self.ast.exprs.len();
         let children = self.ast.stacks.len();
+        let saved_operands = self.resources.saved_operands();
         self.rexpect(input, Kind::LParen)?;
         let mark = self.scratch.names.len();
         if method {
@@ -889,6 +900,13 @@ impl Parser {
         self.bindings.leave();
         let (sign, stack) = self.resources.leave();
         let id = self.ast.exprs.len();
+        let parsed = ParsedLeaf {
+            id,
+            offsets: template_source,
+            depth: self.depth,
+            stack,
+            zero_sign: sign,
+        };
         if template_source[0] != template_source[1]
             && let Some(slot) = slot
             && self.ast.exprs[first_expr..].iter().all(|(expr, span)| {
@@ -898,19 +916,13 @@ impl Parser {
             if self.parsed_leaves.is_empty() {
                 self.parsed_leaves.try_resize(LEAF_SLOTS, None)?;
             }
-            self.parsed_leaves[slot] = Some(ParsedLeaf {
-                id,
-                offsets: template_source,
-                depth: self.depth,
-                stack,
-                zero_sign: sign,
-            });
+            self.parsed_leaves[slot] = Some(parsed);
         }
         self.ast.stacks.try_push((id, stack))?;
         if let Some(sign) = sign {
             self.ast.zero_signs.try_push((self.ast.exprs.len(), sign))?;
         }
-        self.expression_with::<false>(
+        let id = self.expression_with::<false>(
             input,
             Expr::Function {
                 params,
@@ -921,6 +933,14 @@ impl Parser {
                 template_line: 0,
             },
             line,
-        )
+        )?;
+        // A cloned body does not populate the parser's deferred operand map.
+        if self.keep
+            && template_source[0] != template_source[1]
+            && self.resources.saved_operands() == saved_operands
+        {
+            self.remember_numeric_leaf(input, first_expr, parsed);
+        }
+        Ok(id)
     }
 }

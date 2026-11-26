@@ -13,21 +13,24 @@ mod source_templates;
 /// A genuine, non-callable collector object for an unfinished/retained prototype.
 #[derive(Debug)]
 pub(super) struct ParserPrototype {
-    pub(super) source: Value,
-    pub(super) constants: Buffer<Value>,
-    pub(super) children: Buffer<Value>,
-    pub(super) debug_strings: Buffer<Value>,
+    pub(super) source: StringId,
+    // Counts ordinals in the reader's table. Only string constants contribute
+    // an edge to the prototype's collector roots.
+    pub(super) constant_count: usize,
+    pub(super) constant_strings: Buffer<StringId>,
+    pub(super) children: Buffer<ParserPrototypeId>,
+    pub(super) debug_strings: Buffer<StringId>,
 }
 impl ParserPrototype {
     pub(super) fn heap_bytes(&self) -> usize {
-        (self.constants.capacity() + self.children.capacity() + self.debug_strings.capacity())
-            * size_of::<Value>()
+        (self.constant_strings.capacity() + self.debug_strings.capacity()) * size_of::<StringId>()
+            + self.children.capacity() * size_of::<ParserPrototypeId>()
     }
     pub(super) fn roots(&self) -> impl Iterator<Item = Value> + '_ {
-        std::iter::once(self.source)
-            .chain(self.constants.iter().copied())
-            .chain(self.children.iter().copied())
-            .chain(self.debug_strings.iter().copied())
+        std::iter::once(Value::String(self.source))
+            .chain(self.constant_strings.iter().copied().map(Value::String))
+            .chain(self.children.iter().copied().map(Value::ParserPrototype))
+            .chain(self.debug_strings.iter().copied().map(Value::String))
     }
 }
 #[derive(Debug)]

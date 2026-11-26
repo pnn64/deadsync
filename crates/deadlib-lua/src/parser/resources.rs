@@ -346,6 +346,10 @@ impl Resources {
         self.child_pools[self.parents.len()] = child.pool;
         (child.zero_sign, child.max.max(2))
     }
+    pub(super) fn saved_operands(&self) -> usize {
+        self.constants.len()
+    }
+
     pub(super) fn finish(&mut self, ast: &mut Ast) {
         // An operand normally has a direct index. Only oversized operand
         // lists and conflicting entries require the ordered lookup path.
@@ -911,6 +915,17 @@ impl Resources {
 
     pub(super) fn push_number(&mut self, number: f64) -> Check {
         self.values.try_push(Value::number(number))
+    }
+
+    // A reused child body has already passed its register and constant checks.
+    // The parent only needs the index of the resulting closure expression.
+    pub(super) fn skip_child_values(&mut self, count: usize) -> Check {
+        let len = self
+            .values
+            .len()
+            .checked_add(count)
+            .ok_or_else(Error::memory)?;
+        self.values.try_resize(len, Value::new(Form::Void, 0))
     }
 
     pub(super) fn push_string(&mut self, id: ExprId, cx: &Context<'_>) -> Check<u32> {

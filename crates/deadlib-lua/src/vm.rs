@@ -1128,6 +1128,10 @@ impl Vm {
             return Ok(());
         }
         Table::validate_set_key(key).map_err(|error| self.operand_error(error))?;
+        self.raw_set_valid_key(id, key, value)
+    }
+
+    fn raw_set_valid_key(&mut self, id: TableId, key: Value, value: Value) -> Result<(), Error> {
         self.reserve_gc_table_write(id, key, value)?;
         let table = &mut self.tables[slot_index(id.0)];
         let before = table.heap_bytes();

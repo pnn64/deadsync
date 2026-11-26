@@ -446,7 +446,7 @@ impl Scanner {
                 (kind, end)
             }
             b'0'..=b'9' => {
-                if !DIAGNOSTICS && let Some((value, end)) = decimal_token(input, start, c) {
+                if let Some((value, end)) = decimal_token(input, start, c) {
                     number = value;
                     (Kind::Number, end)
                 } else {
