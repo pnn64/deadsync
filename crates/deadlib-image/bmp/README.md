@@ -1,8 +1,9 @@
 # deadlib-image-bmp
 
 A pure Rust BMP decoder and encoder with **zero Cargo dependencies**, including
-development dependencies. It uses `std`, forbids unsafe code, and owns its pixel
-model so it can be used independently of `deadlib-image` or the application.
+development dependencies. It owns its pixel model so it can be used independently
+of `deadlib-image` or the application. The x86-64 RGB24 shuffle uses a CPU-checked
+SIMD kernel with a portable Rust fallback.
 
 ```rust
 use deadlib_image_bmp::{decode, encode};

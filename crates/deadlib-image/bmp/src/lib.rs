@@ -16,7 +16,7 @@
 //! assert_eq!(decode(&bytes)?.to_rgba8()?, vec![255, 0, 128, 0]);
 //! # Ok::<(), deadlib_image_bmp::Error>(())
 //! ```
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 mod decode;
 mod encode;

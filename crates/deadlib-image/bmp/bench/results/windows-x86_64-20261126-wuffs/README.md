@@ -35,3 +35,12 @@ The direct decoder was within 1% or faster on 123 of 155 shared exact cases.
 The largest remaining case ratio was 1.685 for 511×257 top-down RGB24.
 The 511×257 and suite RGB24 cases still favor Wuffs. Some 8-bit palette and
 32-bit alpha cases also exceed the 1% target. [Raw milestone passes](direct-word-groups.tsv.gz).
+
+## x86-64 RGB24 shuffle
+
+The SSSE3 kernel reduced the suite RGB24 ratios from roughly 1.54 to 0.65
+on two focused repetitions. For all 26 matched RGB24 cases, 25 were within
+1% or faster on the combined cycle estimate. The 511×257 top-down image
+varied between 3.016× and 0.957× across the passes. The complete-pixel and
+padding checks also exercised the scalar path and the SIMD tail.
+[Raw RGB24 passes](direct-ssse3-rgb24.tsv.gz).

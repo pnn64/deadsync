@@ -1,5 +1,9 @@
 use crate::{Bitmap, Error, Limits, Pixels, model::pixel_count, reserve};
 
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+mod x86;
+
 /// Validated dimensions and storage information from a BMP header.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Info {
@@ -778,6 +782,12 @@ fn indexed8_rgba(
 }
 
 fn rgb24_rgba(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> {
+    #[cfg(target_arch = "x86_64")]
+    if header.pixel_count >= 512
+        && let Some(samples) = x86::rgb24_rgba(source, header)
+    {
+        return samples;
+    }
     let width = header.info.width as usize;
     let mut samples = Vec::new();
     reserve(&mut samples, header.pixel_count)?;
