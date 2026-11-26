@@ -173,3 +173,16 @@ The full benchmark at `e021087c8` matched FFmpeg on both clips in every output m
 `b4110122d` blends the two full-pel chroma predictions directly into the Cb and Cr planes for eligible 8-bit frame macroblocks. The isolated candidate matched FFmpeg on both bundled clips, MBAFF, the resolution change, High 4:2:2 and High 10. [Paired cycles](results/windows-x86_64-20261126/integer-chroma-paired.csv)
 
 Median paired cycles fell 6.46% on SRPG9 and 11.91% on SRPG10 when chroma was added to the full-pel luma build. The candidate used 11.85% and 13.47% more cycles than packed FFmpeg. A reference retirement prototype in the same batch freed DPB storage before copying the current picture. Its median paired cycle changes were +0.38% and −0.39% relative to the pre-luma baseline.
+
+The full benchmark of `b4110122d` matched FFmpeg on every output mode and reproduced the preceding allocation counts and byte totals. Median default cycles were 14.0% and 12.9% above the packed FFmpeg medians. Across the five runs, cycle spreads ranged from 3.4% to 6.7% for these modes. [Full cycle and allocation samples](results/windows-x86_64-20261126/full-pel-chroma)
+
+| Clip | Output mode | Mcycles/frame | Frames/billion cycles | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Deadlib | 42.28 | 23.65 | 16.73 | 3.34 |
+| SRPG9 | Deadlib recycled, SPS depth | 40.98 | 24.40 | 13.98 | 0.43 |
+| SRPG9 | FFmpeg native | 34.06 | 29.36 | 17.91 | 0.29 |
+| SRPG9 | FFmpeg packed | 37.08 | 26.97 | 18.91 | 3.26 |
+| SRPG10 | Deadlib | 31.09 | 32.16 | 14.39 | 3.22 |
+| SRPG10 | Deadlib recycled, SPS depth | 29.23 | 34.22 | 12.07 | 0.39 |
+| SRPG10 | FFmpeg native | 24.33 | 41.10 | 17.63 | 0.18 |
+| SRPG10 | FFmpeg packed | 27.54 | 36.31 | 18.63 | 3.15 |
