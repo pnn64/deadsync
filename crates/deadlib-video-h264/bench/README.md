@@ -75,3 +75,20 @@ On a 60-frame 320 × 240 MBAFF clip with two slices per picture, the median pair
 ```powershell
 ffmpeg -nostdin -f lavfi -i 'testsrc2=size=320x240:rate=60' -vf 'tinterlace=mode=interleave_top' -frames:v 60 -c:v libx264 -threads 1 -flags +ilme+ildct -x264-params 'tff=1:slices=2' -f h264 mbaff-motion.h264
 ```
+
+## Diagonal interpolation and spatial direct motion
+
+FFmpeg's x86 diagonal quarter-pel filters stage the result of one six-tap pass and use it across the block. `b267ad384` stages the horizontal taps once per source row and reuses them for the vertical pass and the horizontal quarter-pel average. The Rust x86 kernels handle 4-, 8-, and 16-sample block widths and match the scalar filter. [FFmpeg x86 filters](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/x86/h264_qpel_8bit.asm)
+
+`c3789c998` skips the co-located motion lookup when spatial direct refinement cannot change either motion vector. A uniform macroblock can then skip the per-block motion comparison before prediction. FFmpeg also uses uniform motion fills for spatial direct prediction. [FFmpeg spatial direct prediction](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264_direct.c)
+
+Median paired cycle changes relative to `46aadb9cf` are from five rotating rounds per clip with one candidate change enabled at a time. Both motion changes matched the FFmpeg output hashes on the two bundled clips.
+
+| Candidate | SRPG9 | SRPG10 |
+|---|---:|---:|
+| Luma edge tile | −0.8% | +0.4% |
+| Block diagonal interpolation | −3.4% | −3.4% |
+| Spatial direct motion | −4.1% | −3.1% |
+| Borrowed slice bytes and cached reference keys prototype | −1.9% | +2.1% |
+
+The slice prototype was left out of the measured combined revision. [Paired progressive cycle samples](results/windows-x86_64-20261126/motion-paired.csv)
