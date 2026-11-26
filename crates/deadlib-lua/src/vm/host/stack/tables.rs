@@ -11,14 +11,54 @@ impl NativeStack<'_, '_> {
     /// # Errors
     /// Rejects a pending error, full native stack, table overflow or allocation failure.
     pub fn create_table(&mut self, array: usize, records: usize) -> Result<(), Error> {
+        self.push_new_table(array, records).map(|_| ())
+    }
+
+    /// Create and push a table holding the supplied numbers at indices 1 onward.
+    ///
+    /// # Errors
+    /// Rejects a pending error, full native stack, table overflow or allocation failure.
+    pub fn create_number_array(&mut self, numbers: &[f64]) -> Result<(), Error> {
+        let table = self.push_new_table(numbers.len(), 0)?;
+        self.call.vm.tables[slot_index(table.0)].initialize_number_array(numbers);
+        Ok(())
+    }
+
+    /// Push a dense table of fresh row tables, each containing fresh number arrays.
+    ///
+    /// # Errors
+    /// Returns an error for a full stack, oversized table, pending error, or allocation failure.
+    pub fn create_nested_number_arrays<const AXES: usize, const NUMBERS: usize>(
+        &mut self,
+        rows: impl ExactSizeIterator<Item = [[f64; NUMBERS]; AXES]>,
+    ) -> Result<(), Error> {
+        let count = rows.len();
+        let root = self.push_new_table(count, 0)?;
+        let vm = &mut self.call.vm;
+        // This builds only fresh tables, with no collection or Lua reentry between
+        // allocations. Allocation already marks each new table during propagation.
+        for (index, row) in rows.take(count).enumerate() {
+            let row_id = vm.try_table_with_capacity(AXES, 0)?;
+            vm.tables[slot_index(root.0)].set_grown_list(index, Value::Table(row_id));
+            for (axis, values) in row.into_iter().enumerate() {
+                let leaf = vm.try_table_with_capacity(NUMBERS, 0)?;
+                vm.tables[slot_index(leaf.0)].initialize_number_array(&values);
+                vm.tables[slot_index(row_id.0)].set_grown_list(axis, Value::Table(leaf));
+            }
+        }
+        Ok(())
+    }
+
+    fn push_new_table(&mut self, array: usize, records: usize) -> Result<TableId, Error> {
         self.check_error()?;
         if self.top() == limits::MAX_CSTACK {
             return Err(self.error(b"native stack overflow"));
         }
         self.call.vm.reserve_registers(self.end() + 1)?;
-        let table = Value::Table(self.call.vm.try_table_with_capacity(array, records)?);
+        let table = self.call.vm.try_table_with_capacity(array, records)?;
         self.call.vm.gc.pending = true;
-        self.push(table)
+        self.push(Value::Table(table))?;
+        Ok(table)
     }
     fn read_table(
         &mut self,

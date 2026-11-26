@@ -154,8 +154,11 @@ pub(super) fn raw_numeric_point(call: &HostCall<'_>, value: Value) -> Result<Opt
         return Ok(None);
     };
     let mut result = [0.; 3];
-    for (axis, result) in result.iter_mut().enumerate() {
-        let coordinate = call.raw_table_get(point, Value::Number((axis + 1) as f64))?;
+    for (coordinate, result) in call
+        .raw_table_read_array::<3>(point)?
+        .into_iter()
+        .zip(&mut result)
+    {
         match coordinate {
             Value::Nil => {}
             Value::Number(number) => *result = number as f32,

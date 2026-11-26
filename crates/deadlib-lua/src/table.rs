@@ -198,9 +198,71 @@ pub(crate) enum ArrayChange {
 #[derive(Debug)]
 pub(crate) struct InvalidNextKey;
 
+// A dense native triplet has the same indexing, length and traversal as an
+// ordinary array, without a separate allocation for its three values.
+enum ArrayStorage {
+    Heap(Buffer<Value>),
+    Triplet { memory: Memory, values: [Value; 3] },
+}
+
+impl std::fmt::Debug for ArrayStorage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&**self, formatter)
+    }
+}
+
+impl Default for ArrayStorage {
+    fn default() -> Self {
+        Self::Heap(Buffer::default())
+    }
+}
+
+impl ArrayStorage {
+    fn memory(&self) -> &Memory {
+        match self {
+            Self::Heap(values) => values.memory(),
+            Self::Triplet { memory, .. } => memory,
+        }
+    }
+
+    fn heap_mut(&mut self) -> &mut Buffer<Value> {
+        let Self::Heap(values) = self else {
+            unreachable!("native arrays grow by replacing their storage");
+        };
+        values
+    }
+
+    fn allocated_capacity(&self) -> usize {
+        match self {
+            Self::Heap(values) => values.capacity(),
+            Self::Triplet { .. } => 0,
+        }
+    }
+}
+
+impl std::ops::Deref for ArrayStorage {
+    type Target = [Value];
+
+    fn deref(&self) -> &[Value] {
+        match self {
+            Self::Heap(values) => values,
+            Self::Triplet { values, .. } => values,
+        }
+    }
+}
+
+impl std::ops::DerefMut for ArrayStorage {
+    fn deref_mut(&mut self) -> &mut [Value] {
+        match self {
+            Self::Heap(values) => values,
+            Self::Triplet { values, .. } => values,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct Table {
-    array: Buffer<Value>,
+    array: ArrayStorage,
     entries: Buffer<Entry>,
     slots: Buffer<u32>,
     native51: bool,
@@ -234,7 +296,7 @@ pub(crate) enum TableTrace {
 impl Table {
     pub(crate) fn new_in(memory: Memory) -> Self {
         Self {
-            array: Buffer::new_in(memory.clone()),
+            array: ArrayStorage::Heap(Buffer::new_in(memory.clone())),
             entries: Buffer::new_in(memory.clone()),
             slots: Buffer::new_in(memory),
             native51: false,
@@ -255,8 +317,12 @@ impl Table {
     pub fn with_capacity_in(array: usize, records: usize, memory: Memory) -> Result<Self, Error> {
         let failed = Error::memory;
         let mut table = Self::new_in(memory);
-        table.array.try_reserve_exact(array).map_err(|_| failed())?;
-        table.array.resize(array, Value::Nil);
+        table
+            .array
+            .heap_mut()
+            .try_reserve_exact(array)
+            .map_err(|_| failed())?;
+        table.array.heap_mut().resize(array, Value::Nil);
         if records > (1 << 26) {
             return Err(Error::new(ErrorKind::Runtime, 0, "table overflow"));
         }
@@ -330,7 +396,7 @@ impl Table {
         }
     }
     pub fn heap_bytes(&self) -> usize {
-        self.array.capacity() * std::mem::size_of::<Value>()
+        self.array.allocated_capacity() * std::mem::size_of::<Value>()
             + self.entries.capacity() * std::mem::size_of::<Entry>()
             + self.slots.capacity() * 4
     }
@@ -451,6 +517,26 @@ impl Table {
             self.slots[slot] = index | Self::slot_tag(slots, hash).0;
         }
     }
+    pub(crate) fn is_small_scalar_array(&self) -> bool {
+        self.metatable == 0
+            && self.host_state == 0
+            && self.entries.is_empty()
+            && self.array.len() <= 4
+            && self.array.iter().copied().all(array_scalar)
+    }
+
+    pub(crate) fn array_values(&self) -> &[Value] {
+        &self.array
+    }
+
+    // This runs only while constructing a fresh table containing no references.
+    pub(crate) fn initialize_number_array(&mut self, values: &[f64]) {
+        debug_assert_eq!(self.array.len(), values.len());
+        for (slot, &number) in self.array.iter_mut().zip(values) {
+            *slot = Value::Number(number);
+        }
+    }
+
     fn take_hash(&mut self, key: Key) -> Option<Value> {
         let (_, Some(i)) = self.slot(key)? else {
             return None;
@@ -652,12 +738,12 @@ impl Table {
             self.touch_array_at(index);
             true
         } else if index == self.array.len()
-            && index < self.array.capacity()
+            && index < self.array.allocated_capacity()
             && !self.native51
             && self.slots.is_empty()
             && value != Value::Nil
         {
-            self.array.push(value);
+            self.array.heap_mut().push(value);
             self.touch_array();
             true
         } else {
@@ -766,7 +852,7 @@ impl Table {
             }
             if i == self.array.len() && value != Value::Nil {
                 if self.slots.is_empty() {
-                    self.array.try_push(value)?;
+                    self.array.heap_mut().try_push(value)?;
                     self.touch_array();
                     return Ok(());
                 }
@@ -780,15 +866,17 @@ impl Table {
                 {
                     end += 1;
                 }
+                let additional = end - self.array.len();
                 self.array
-                    .try_reserve(end - self.array.len())
+                    .heap_mut()
+                    .try_reserve(additional)
                     .map_err(|_| Error::memory())?;
-                self.array.push(value);
+                self.array.heap_mut().push(value);
                 self.take_hash(k);
                 while let Some(v) =
                     self.take_hash(Key::Number(((self.array.len() + 1) as f64).to_bits()))
                 {
-                    self.array.push(v);
+                    self.array.heap_mut().push(v);
                 }
                 self.touch_array();
                 return Ok(());
@@ -872,10 +960,11 @@ impl Table {
         // SETLIST includes nil fields in its array extent. Reserve before
         // changing traversal positions or moving any existing hash values.
         self.array
+            .heap_mut()
             .try_reserve(end - first)
             .map_err(|_| Error::memory())?;
         self.invalidate_trace();
-        self.array.resize(end, Value::Nil);
+        self.array.heap_mut().resize(end, Value::Nil);
         self.touch_array();
         if !self.entries.is_empty() {
             for index in first..end {

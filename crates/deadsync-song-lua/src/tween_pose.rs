@@ -18,6 +18,35 @@ macro_rules! tween_pose {
             $(Target::$target,)* Target::Diffuse, Target::VertexColors, Target::Glow, Target::Quaternion,
         ];
 
+        pub(crate) fn update_mask(delta: &crate::SongLuaOverlayStateDelta) -> u128 {
+            $( ((delta.$field.is_some() as u128) << Target::$target as usize) | )*
+                ((delta.diffuse.is_some() as u128) << Target::Diffuse as usize)
+                | ((delta.vertex_colors.is_some() as u128) << Target::VertexColors as usize)
+                | ((delta.glow.is_some() as u128) << Target::Glow as usize)
+                | ((delta.quaternion.is_some() as u128) << Target::Quaternion as usize)
+        }
+
+        pub(crate) fn visit_updates(
+            delta: &crate::SongLuaOverlayStateDelta,
+            mut visit: impl FnMut(Target, Value),
+        ) {
+            $(if let Some(value) = delta.$field {
+                visit(Target::$target, Value::F32(value));
+            })*
+            if let Some(value) = delta.diffuse {
+                visit(Target::Diffuse, Value::Vec4(value));
+            }
+            if let Some(value) = delta.vertex_colors {
+                visit(Target::VertexColors, Value::VertexColors(std::sync::Arc::new(value)));
+            }
+            if let Some(value) = delta.glow {
+                visit(Target::Glow, Value::Vec4(value));
+            }
+            if let Some(value) = delta.quaternion {
+                visit(Target::Quaternion, Value::Quaternion(value));
+            }
+        }
+
         impl From<SongLuaOverlayState> for TweenPose {
             fn from(state: SongLuaOverlayState) -> Self {
                 Self {
@@ -31,6 +60,14 @@ macro_rules! tween_pose {
         }
 
         impl TweenPose {
+            pub fn apply_delta(&mut self, delta: &crate::SongLuaOverlayStateDelta) {
+                $(if let Some(value) = delta.$field { self.$field = value; })*
+                if let Some(value) = delta.diffuse { self.diffuse = value; }
+                if let Some(value) = delta.vertex_colors { self.vertex_colors = Some(value); }
+                if let Some(value) = delta.glow { self.glow = value; }
+                if let Some(value) = delta.quaternion { self.quaternion = value; }
+            }
+
             pub fn write_to(self, state: &mut SongLuaOverlayState) {
                 // StretchTo's cached rectangle follows position at the export
                 // boundary. It is not itself a member of the tween queue.
@@ -158,6 +195,51 @@ mod tests {
                 ),
                 (Value::None, Value::None) => {}
                 _ => panic!("mismatched property {target:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn compact_delta_keeps_unwritten_fields_and_publication_order() {
+        let from = SongLuaOverlayState {
+            y: -0.0,
+            glow: [0.1, 0.2, 0.3, 0.4],
+            vertex_colors: Some([[0.8; 4]; 4]),
+            ..Default::default()
+        };
+        let delta = SongLuaOverlayStateDelta {
+            aux: Some(1.25),
+            x: Some(-0.0),
+            fadebottom: Some(0.5),
+            diffuse: Some([0.2, 0.4, 0.6, 0.8]),
+            quaternion: Some(crate::actor_quaternion::IDENTITY),
+            ..Default::default()
+        };
+        let mut expected = from;
+        crate::apply_overlay_delta(&mut expected, &delta);
+        let mut actual = TweenPose::from(from);
+        actual.apply_delta(&delta);
+        compare_bits(actual, expected);
+
+        let mut updates = Vec::new();
+        visit_updates(&delta, |target, value| updates.push((target, value)));
+        let present: Vec<_> = TARGETS
+            .iter()
+            .copied()
+            .filter(|&target| delta.has_update_target(target))
+            .collect();
+        assert_eq!(
+            updates
+                .iter()
+                .map(|(target, _)| *target)
+                .collect::<Vec<_>>(),
+            present
+        );
+        for (target, value) in updates {
+            let expected = crate::perframe::overlay_state_update_value(&expected, target);
+            match (value, expected) {
+                (Value::F32(a), Value::F32(b)) => assert_eq!(a.to_bits(), b.to_bits()),
+                (a, b) => assert_eq!(a, b),
             }
         }
     }

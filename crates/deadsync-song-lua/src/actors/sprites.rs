@@ -155,6 +155,16 @@ pub(super) fn vector<const N: usize>(
     })
 }
 pub(super) fn vector_value(call: &mut HostCall<'_>, values: &[f32]) -> Result<Value, Error> {
+    // Sequential native insertion uses the same array extent for these lengths.
+    if matches!(values.len(), 1 | 2 | 4) {
+        let mut numbers = [0.0; 4];
+        for (number, &value) in numbers.iter_mut().zip(values) {
+            *number = f64::from(value);
+        }
+        return call
+            .try_new_number_array(&numbers[..values.len()])
+            .map(Value::Table);
+    }
     let table = call.try_new_table()?;
     for (i, &value) in values.iter().enumerate() {
         call.raw_table_set(

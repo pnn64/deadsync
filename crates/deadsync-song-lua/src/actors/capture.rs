@@ -309,7 +309,7 @@ pub(super) fn write(call: &mut HostCall<'_>, id: TableId, delta: Delta, immediat
         retain_authored_transform(actor, &delta);
         record(actor, &delta, immediate, scope, fallback);
     }
-    song_immediate::record_pose_step(guard, id, &delta);
+    song_immediate::record_pose_step(guard, id, &delta, fallback);
     #[cfg(feature = "test-support")]
     song_messages::pose_write(call, id, &delta);
     if !song_pose::record(call, id, &delta) {
@@ -434,21 +434,10 @@ fn retain_authored_transform(actor: &mut Actor, delta: &Delta) {
 
 fn record(actor: &mut Actor, delta: &Delta, immediate: bool, scope: Option<f32>, fallback: bool) {
     if let Some(replay) = &mut actor.replay {
-        for target in crate::tween_pose::TARGETS {
-            if delta.has_update_target(target) {
-                replay.targets |= 1u128 << target as usize;
-            }
+        replay.targets |= crate::tween_pose::update_mask(delta);
+        if let Some(pose) = replay.getters.as_mut() {
+            pose.apply_delta(delta);
         }
-    }
-    if let Some(pose) = actor
-        .replay
-        .as_mut()
-        .and_then(|replay| replay.getters.as_mut())
-    {
-        let mut state = crate::SongLuaOverlayState::default();
-        pose.write_to(&mut state);
-        crate::apply_overlay_delta(&mut state, delta);
-        *pose = state.into();
     }
     if actor.replay.is_some() && !fallback {
         let current = actor.current;
@@ -780,7 +769,7 @@ pub(super) fn property(call: &mut HostCall<'_>, id: TableId, name: &str) {
         return;
     }
     record(actor, &delta, immediate, scope, fallback);
-    song_immediate::record_pose_step(guard, id, &delta);
+    song_immediate::record_pose_step(guard, id, &delta, fallback);
     #[cfg(feature = "test-support")]
     song_messages::pose_write(call, id, &delta);
     if !song_pose::record(call, id, &delta) {

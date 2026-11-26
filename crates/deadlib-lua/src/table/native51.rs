@@ -115,7 +115,21 @@ impl Table {
     ) -> Result<Self, Error> {
         let mut table = Self::new_in(memory);
         table.native51 = true;
-        if array == 0 && records == 0 {
+        if records == 0 {
+            if array > MAX_ARRAY {
+                return Err(Error::new(ErrorKind::Runtime, 0, "table overflow"));
+            }
+            // No live entries or iterator state need migrating on creation.
+            if array == 3 && table.array.memory().allocator().is_none() {
+                table.array = ArrayStorage::Triplet {
+                    memory: table.array.memory().clone(),
+                    values: [Value::Nil; 3],
+                };
+            } else {
+                let storage = table.array.heap_mut();
+                storage.try_reserve_exact(array)?;
+                storage.resize(array, Value::Nil);
+            }
             table.touch_fields();
         } else {
             table.native_resize(array, records)?;
@@ -352,11 +366,15 @@ impl Table {
         replacement.native51 = true;
         replacement
             .array
+            .heap_mut()
             .try_reserve_exact(array)
             .map_err(|_| Error::memory())?;
         let shared = array.min(self.array.len());
-        replacement.array.extend_from_slice(&self.array[..shared]);
-        replacement.array.resize(array, Value::Nil);
+        replacement
+            .array
+            .heap_mut()
+            .extend_from_slice(&self.array[..shared]);
+        replacement.array.heap_mut().resize(array, Value::Nil);
         replacement
             .entries
             .try_reserve_exact(records)

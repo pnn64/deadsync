@@ -500,8 +500,8 @@ fn benchmark_peach_bake() {
     context.song_display_bpms = [125.0; 2];
     context.song_timing = metadata.song_timing;
     context.global_offset_seconds = -0.008;
-    context.music_length_seconds = std::env::var("DEADSYNC_PEACH_DURATION")
-        .map_or(duration, |value| value.parse().unwrap());
+    context.music_length_seconds =
+        std::env::var("DEADSYNC_PEACH_DURATION").map_or(duration, |value| value.parse().unwrap());
     context.random_seed = 1;
     context.video_renderers =
         std::env::var("DEADSYNC_PEACH_RENDERER").unwrap_or_else(|_| "opengl".into());
@@ -550,12 +550,51 @@ fn benchmark_peach_bake() {
         .iter()
         .map(|track| track.frames.len())
         .sum();
-    let draw_ops: usize = compiled.draw_frames.iter().map(|frame| frame.ops.len()).sum();
+    let draw_ops: usize = compiled
+        .draw_frames
+        .iter()
+        .map(|frame| frame.ops.len())
+        .sum();
     println!(
         "peach_bake,{chart},{},{},{cpu},{seconds:.6},{spline_frames},{draw_ops}",
         context.video_renderers, context.music_length_seconds
     );
     assert!(spline_frames > 0);
+    if std::env::var_os("DEADSYNC_PEACH_FINGERPRINT").is_some() {
+        use std::hash::{Hash, Hasher};
+        let mut splines = twox_hash::XxHash64::with_seed(0);
+        for track in &compiled.column_splines {
+            track.player.hash(&mut splines);
+            track.column.hash(&mut splines);
+            track.time_offset.to_bits().hash(&mut splines);
+            track.frames.len().hash(&mut splines);
+            for frame in track.frames.iter() {
+                frame.second.to_bits().hash(&mut splines);
+                for curve in [&frame.position, &frame.rotation, &frame.zoom] {
+                    curve.is_some().hash(&mut splines);
+                    if let Some(curve) = curve {
+                        curve.absolute.hash(&mut splines);
+                        curve.constant.hash(&mut splines);
+                        curve.looping.hash(&mut splines);
+                        curve.beats_per_t.to_bits().hash(&mut splines);
+                        curve.receptor_t.to_bits().hash(&mut splines);
+                        curve.subtract_song_beat.hash(&mut splines);
+                        curve.coefficients.len().hash(&mut splines);
+                        for point in curve.coefficients.iter() {
+                            point.map(|axis| axis.map(f32::to_bits)).hash(&mut splines);
+                        }
+                    }
+                }
+            }
+        }
+        let mut draws = twox_hash::XxHash64::with_seed(0);
+        draws.write(format!("{:?}", compiled.draw_frames).as_bytes());
+        println!(
+            "peach_fingerprint,{:016x},{:016x}",
+            splines.finish(),
+            draws.finish()
+        );
+    }
 }
 
 #[test]

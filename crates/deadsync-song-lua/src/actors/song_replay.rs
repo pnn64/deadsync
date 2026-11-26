@@ -398,6 +398,8 @@ pub(super) fn sync_frame_getters(call: &mut HostCall<'_>, id: TableId) -> Result
     sync_getters_inner(call, id, true)
 }
 
+pub(super) const GETTER_SCALAR_COUNT: usize = 21;
+
 fn sync_getters_inner(
     call: &mut HostCall<'_>,
     id: TableId,
@@ -425,7 +427,7 @@ fn sync_getters_inner(
     let Some((current, dest)) = poses else {
         return Ok(());
     };
-    for (key, value) in [
+    let scalar_fields = [
         ("__songlua_state_aux", dest.aux),
         ("__songlua_state_x", dest.x),
         ("__songlua_state_y", dest.y),
@@ -447,9 +449,12 @@ fn sync_getters_inner(
         ("__songlua_state_faderight", dest.faderight),
         ("__songlua_state_fadetop", dest.fadetop),
         ("__songlua_state_fadebottom", dest.fadebottom),
-    ] {
-        raw_set(call, id, key, Value::Number(f64::from(value)))?;
-    }
+    ]
+    .map(|(key, value)| (key.as_bytes(), f64::from(value)));
+    let mut slots = std::mem::take(&mut call.store().replay_getter_slots);
+    let result = call.raw_table_set_cached_numbers(id, &scalar_fields, &mut slots);
+    call.store().replay_getter_slots = slots;
+    result?;
     let vectors = [
         ("__songlua_diffuse", dest.diffuse),
         ("__songlua_state_diffuse", dest.diffuse),
@@ -464,12 +469,7 @@ fn sync_getters_inner(
         stack.push(Value::Table(id))?;
         let actor = stack.top_offset();
         for (key, values) in vectors {
-            stack.create_table(values.len(), 0)?;
-            let array = stack.top_offset();
-            for (index, value) in (1..).zip(values) {
-                stack.push(Value::Number(f64::from(value)))?;
-                stack.raw_set_integer(array, index)?;
-            }
+            stack.create_number_array(&values.map(f64::from))?;
             let value = stack.value(-1).unwrap();
             stack.raw_set_static(actor, key.as_bytes(), value)?;
             stack.set_top(top + 1)?;

@@ -1137,6 +1137,13 @@ impl HostCall<'_> {
         self.vm.try_new_table()
     }
 
+    /// Fallibly create a dense array of numbers. Store, capture or return it before reentering Lua.
+    pub fn try_new_number_array(&mut self, values: &[f64]) -> Result<TableId, Error> {
+        let table = self.vm.try_table_with_capacity(values.len(), 0)?;
+        self.vm.tables[slot_index(table.0)].initialize_number_array(values);
+        Ok(table)
+    }
+
     /// Create a Rust callback with traced Lua captures in this VM.
     /// Store, capture or return the result before reentering Lua.
     pub fn new_host_function(
@@ -1289,6 +1296,35 @@ impl HostCall<'_> {
         Ok(self.vm.tables[slot_index(table.0)].get(key))
     }
 
+    /// Borrow the table's array storage. Integer keys past the returned
+    /// slice may still be present in the keyed part of the table.
+    ///
+    /// # Errors
+    /// Returns an error when the table handle is invalid or collected.
+    pub fn raw_table_array_values(&self, table: TableId) -> Result<&[Value], Error> {
+        self.vm.validate_value(Value::Table(table))?;
+        Ok(self.vm.tables[slot_index(table.0)].array_values())
+    }
+
+    /// Read the first N one-based integer keys without invoking metamethods.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid or collected table handle.
+    #[inline]
+    pub fn raw_table_read_array<const N: usize>(
+        &self,
+        table: TableId,
+    ) -> Result<[Value; N], Error> {
+        self.vm.validate_value(Value::Table(table))?;
+        let table = &self.vm.tables[slot_index(table.0)];
+        if let Some(values) = table.array_slice(1, N as i64) {
+            return Ok(values.try_into().expect("range has N values"));
+        }
+        Ok(std::array::from_fn(|index| {
+            table.get_integer(index as i64 + 1)
+        }))
+    }
+
     /// A counter that changes whenever a string-keyed entry of the table is
     /// added, replaced or removed, and possibly at other times. While it is
     /// unchanged, raw reads of string keys return what they returned before,
@@ -1328,6 +1364,33 @@ impl HostCall<'_> {
     /// Returns an error for invalid handles, nil keys or NaN keys.
     pub fn raw_table_set(&mut self, table: TableId, key: Value, value: Value) -> Result<(), Error> {
         self.vm.raw_table_set(table, key, value)
+    }
+
+    /// Write a fixed sequence of raw numeric fields, preserving insertion order.
+    ///
+    /// Hints cache entry positions. They may be reused with other tables or
+    /// stale shapes because each cached position is checked against its key.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid table or when an insertion fails.
+    pub fn raw_table_set_cached_numbers<const N: usize>(
+        &mut self,
+        table: TableId,
+        fields: &[(&'static [u8], f64); N],
+        hints: &mut [u32; N],
+    ) -> Result<(), Error> {
+        self.vm.validate_value(Value::Table(table))?;
+        let slot = slot_index(table.0);
+        for ((name, number), hint) in fields.iter().zip(hints) {
+            let Value::String(key) = self.vm.intern_static(name)? else {
+                unreachable!("interned literal");
+            };
+            let value = Value::Number(*number);
+            if !self.vm.tables[slot].set_string_scalar_cached(key, value, hint) {
+                self.vm.raw_set(table, Value::String(key), value)?;
+            }
+        }
+        Ok(())
     }
 
     /// Return a table's actual metatable, ignoring any `__metatable` field.

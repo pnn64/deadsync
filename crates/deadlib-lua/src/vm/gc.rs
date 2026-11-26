@@ -574,8 +574,17 @@ impl Vm {
     pub(super) fn gc_note_control(&mut self, bytes: usize) {
         self.gc.control_allocated = self.gc.control_allocated.saturating_add(bytes);
     }
+    #[inline]
     pub(super) fn validate_value(&self, value: Value) -> Result<(), Error> {
-        if self.is_live_value(value) {
+        let live = match value {
+            Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_) => true,
+            Value::Table(id) => {
+                self.tables.contains(id.0)
+                    && (self.gc.phase != Phase::Sweep || self.tables.marked(id.0))
+            }
+            _ => self.is_live_value(value),
+        };
+        if live {
             Ok(())
         } else {
             Err(Error::new(
@@ -1254,6 +1263,20 @@ impl Vm {
                 _ => false,
             };
             if handled {
+                work.pop();
+                visited += 1;
+                continue;
+            }
+            if let Trace::Value(Value::Table(id)) | Trace::MarkedValue(Value::Table(id)) = item
+                && self
+                    .tables
+                    .get(id.0)
+                    .is_some_and(Table::is_small_scalar_array)
+            {
+                // This still consumes one trace visit. Without any edges,
+                // metadata or hash nodes, the complete table fits in this step.
+                self.tables.mark(id.0);
+                self.tables[slot_index(id.0)].trace = TableTrace::Idle;
                 work.pop();
                 visited += 1;
                 continue;

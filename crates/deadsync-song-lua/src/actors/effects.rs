@@ -201,18 +201,28 @@ fn runtime<T>(
 }
 
 pub(super) fn values(call: &mut HostCall<'_>, delta: bool) -> Result<[f32; 2], Error> {
+    let (beat, seconds) = if delta {
+        (
+            crate::SONG_LUA_RUNTIME_DELTA_BEAT_KEY,
+            crate::SONG_LUA_RUNTIME_DELTA_SECONDS_KEY,
+        )
+    } else {
+        (
+            crate::SONG_LUA_RUNTIME_BEAT_KEY,
+            crate::SONG_LUA_RUNTIME_SECONDS_KEY,
+        )
+    };
+    // Normal clocks store both numbers directly. A missing field still goes
+    // through the original lookup, coercion and rooting path.
+    if let Value::Table(globals) = helper(call, 5)?
+        && let Value::Table(runtime) =
+            call.raw_table_get_static(globals, crate::SONG_LUA_RUNTIME_KEY.as_bytes())?
+        && let Value::Number(beat) = call.raw_table_get_static(runtime, beat.as_bytes())?
+        && let Value::Number(seconds) = call.raw_table_get_static(runtime, seconds.as_bytes())?
+    {
+        return Ok([beat as f32, seconds as f32]);
+    }
     runtime(call, |call, runtime| {
-        let (beat, seconds) = if delta {
-            (
-                crate::SONG_LUA_RUNTIME_DELTA_BEAT_KEY,
-                crate::SONG_LUA_RUNTIME_DELTA_SECONDS_KEY,
-            )
-        } else {
-            (
-                crate::SONG_LUA_RUNTIME_BEAT_KEY,
-                crate::SONG_LUA_RUNTIME_SECONDS_KEY,
-            )
-        };
         Ok([
             field(call, runtime, beat)? as f32,
             field(call, runtime, seconds)? as f32,

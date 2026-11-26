@@ -42,17 +42,13 @@ pub(super) fn record(
     if !mode(&call.store(), id) {
         return false;
     }
-    let mut state = crate::SongLuaOverlayState::default();
-    crate::apply_overlay_delta(&mut state, delta);
-    for target in crate::tween_pose::TARGETS {
-        if !delta.has_update_target(target) {
-            continue;
-        }
-        let value = crate::perframe::overlay_state_update_value(&state, target);
-        let scheduled = song_properties::record_inner(call, id, target, value.clone());
-        if scheduled == Some(false)
-            && let Update::F32(value) = value
-        {
+    crate::tween_pose::visit_updates(delta, |target, value| {
+        let number = match value {
+            Update::F32(number) => Some(number),
+            _ => None,
+        };
+        let scheduled = song_properties::record_inner(call, id, target, value);
+        if let (Some(false), Some(value)) = (scheduled, number) {
             let axis = match target {
                 Target::X => Some(0),
                 Target::Y => Some(1),
@@ -85,7 +81,7 @@ pub(super) fn record(
                 }
             }
         }
-    }
+    });
     true
 }
 

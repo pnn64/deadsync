@@ -411,6 +411,7 @@ pub(super) fn record_pose_step(
     store: &mut Store,
     id: TableId,
     delta: &crate::SongLuaOverlayStateDelta,
+    fallback: bool,
 ) {
     let Some((owner, index)) = context(store, id) else {
         return;
@@ -420,7 +421,7 @@ pub(super) fn record_pose_step(
     // physical entries after completion; their scheduled/retargeted updates
     // decide whether a setter changes a pending tween instead. Otherwise the
     // setter changes the current pose on this frame, never before.
-    if (!song_pose::mode(store, id) && !actor.queue.is_empty())
+    if (!fallback && !actor.queue.is_empty())
         || actor
             .capture
             .as_ref()
@@ -428,10 +429,7 @@ pub(super) fn record_pose_step(
     {
         return;
     }
-    let targets = crate::tween_pose::TARGETS
-        .into_iter()
-        .filter(|target| delta.has_update_target(*target))
-        .fold(0_u128, |mask, target| mask | (1_u128 << target as usize));
+    let targets = crate::tween_pose::update_mask(delta);
     if targets == 0 {
         return;
     }

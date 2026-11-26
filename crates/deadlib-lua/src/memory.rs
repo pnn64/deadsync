@@ -236,13 +236,6 @@ impl Memory {
         Ok(Self(Some(owner)))
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "C allocator entry points await complete storage migration"
-        )
-    )]
     pub(crate) fn allocator(&self) -> Option<Allocator> {
         self.owner().and_then(|owner| owner.lock().allocator)
     }

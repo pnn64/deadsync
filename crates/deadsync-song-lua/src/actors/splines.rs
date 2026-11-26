@@ -196,13 +196,8 @@ fn point(stack: &mut NativeStack<'_, '_>, owner: usize, index: usize) -> Result<
     stack.set_top(base)?;
     Ok(out)
 }
-fn push_vector(stack: &mut NativeStack<'_, '_>, values: &[f32]) -> Result<(), Error> {
-    stack.create_table(values.len(), 0)?;
-    let table = stack.top();
-    for (i, value) in values.iter().enumerate() {
-        raw_assign(stack, table, i + 1, Value::Number(*value as f64))?;
-    }
-    Ok(())
+fn push_vector(stack: &mut NativeStack<'_, '_>, values: [f32; 3]) -> Result<(), Error> {
+    stack.create_number_array(&values.map(f64::from))
 }
 
 fn spline_method(call: &mut HostCall<'_>) -> Result<(), Error> {
@@ -328,7 +323,7 @@ fn spline_method(call: &mut HostCall<'_>) -> Result<(), Error> {
                 .ok_or_else(|| stack.error(b"Spline evaluation requires a number"))?
                 as f32;
             let value = evaluate(&mut stack, target, t)?;
-            push_vector(&mut stack, &value)?;
+            push_vector(&mut stack, value)?;
             return stack.finish(1);
         }
         _ => unreachable!(),
@@ -361,21 +356,15 @@ fn set_numeric_point(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Er
     if call.raw_table_len(input)? != 3 {
         return Ok(false);
     }
-    let mut values = [0.0; 3];
-    for (axis, value) in values.iter_mut().enumerate() {
-        let Value::Number(number) = call.raw_table_get(input, Value::Number((axis + 1) as f64))?
-        else {
-            return Ok(false);
-        };
-        *value = number as f32;
-    }
-    let mut stack = call.native_stack()?;
-    stack.push(Value::Table(points))?;
-    let target = stack.top();
-    push_vector(&mut stack, &values)?;
-    stack.raw_set_integer(target as isize, index as i32)?;
-    stack.push(Value::Table(owner))?;
-    stack.finish(1)?;
+    let [Value::Number(x), Value::Number(y), Value::Number(z)] =
+        call.raw_table_read_array(input)?
+    else {
+        return Ok(false);
+    };
+    let values = [x as f32, y as f32, z as f32].map(f64::from);
+    let point = call.try_new_number_array(&values)?;
+    call.raw_table_set(points, Value::Number(index), Value::Table(point))?;
+    call.push(Value::Table(owner))?;
     Ok(true)
 }
 
@@ -422,8 +411,12 @@ fn solve_numeric(
         .points
         .try_reserve_exact(size as usize)
         .map_err(|_| call.error(b"spline point allocation failed"))?;
-    for index in 1..=size as usize {
-        let row = call.raw_table_get(points, Value::Number(index as f64))?;
+    let array = call.raw_table_array_values(points)?;
+    for index in 0..size as usize {
+        let row = match array.get(index) {
+            Some(&value) => value,
+            None => call.raw_table_get(points, Value::Number((index + 1) as f64))?,
+        };
         let Some(point) = super::song_columns::raw_numeric_point(call, row)? else {
             return Ok(false);
         };
@@ -450,22 +443,12 @@ fn write_coefficients(
     owner: usize,
     coefficients: &[deadsync_gameplay::SongLuaSplinePointCoefficients],
 ) -> Result<(), Error> {
-    stack.create_table(coefficients.len(), 0)?;
-    let result = stack.top();
-    for (index, point) in coefficients.iter().enumerate() {
-        stack.create_table(3, 0)?;
-        let axes = stack.top();
-        for (axis, values) in point.iter().enumerate() {
-            push_vector(stack, &values[1..])?;
-            let value = stack.value(-1).unwrap();
-            raw_assign(stack, axes, axis + 1, value)?;
-            stack.set_top(axes)?;
-        }
-        let value = stack.value(axes as isize).unwrap();
-        raw_assign(stack, result, index + 1, value)?;
-        stack.set_top(result)?;
-    }
-    let value = stack.value(result as isize).unwrap();
+    stack.create_nested_number_arrays(
+        coefficients
+            .iter()
+            .map(|point| point.map(|[_, b, c, d]| [b, c, d].map(f64::from))),
+    )?;
+    let value = stack.value(-1).unwrap();
     assign(stack, owner, b"__songlua_spline_coefficients", value)
 }
 fn evaluate(stack: &mut NativeStack<'_, '_>, owner: usize, t: f32) -> Result<[f32; 3], Error> {
