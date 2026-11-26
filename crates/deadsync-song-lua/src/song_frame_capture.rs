@@ -116,7 +116,7 @@ impl SongRuntime {
             for actor in actors {
                 rooted.push(&mut self.vm, *actor)?;
             }
-            self.publish_rooted_song_tween_frame(screen, &rooted)
+            self.publish_rooted_song_tween_frame(screen, &rooted, None)
         })();
         rooted.release(&mut self.vm)?;
         result
@@ -126,13 +126,14 @@ impl SongRuntime {
         &mut self,
         screen: ActorScene,
         actors: &RootedValues,
+        poses: Option<&mut [State]>,
     ) -> Result<(), String> {
         self.actor_scene_root(screen)
             .ok_or("released or foreign song screen")?;
         actors.validate(&self.vm)?;
         if self
             .actors
-            .publish_song_tween_frame(&mut self.vm, screen, actors)
+            .publish_song_tween_frame(&mut self.vm, screen, actors, poses)
         {
             Ok(())
         } else {

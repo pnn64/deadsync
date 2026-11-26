@@ -55,9 +55,10 @@ pub(super) struct Capture {
     recycled: Vec<SongReplayImmediateUpdates>,
     // Actual setters are discontinuities; published tween/effect poses are
     // samples of continuous motion. Retain that distinction until frame drain.
-    step_targets: HashMap<usize, u128>,
+    step_player_indices: [Option<usize>; crate::LUA_PLAYERS],
+    player_step_targets: [u128; crate::LUA_PLAYERS],
     pending: HashMap<usize, Vec<(Target, UpdateValue)>>,
-    pub(super) prior_positions: HashMap<usize, [f32; 3]>,
+    pub(super) prior_positions: Vec<[f32; 3]>,
 }
 
 const UNTOUCHED: usize = usize::MAX;
@@ -147,7 +148,7 @@ impl Capture {
     }
 
     fn drain(&mut self, include_empty: bool) -> Vec<SongReplayImmediateUpdates> {
-        self.step_targets.clear();
+        self.player_step_targets.fill(0);
         for frame in &self.frames {
             self.row_by_index[frame.overlay_index] = UNTOUCHED;
         }
@@ -178,25 +179,36 @@ impl Capture {
 }
 
 impl Actors {
+    pub(crate) fn track_song_player_steps(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+        indices: [Option<usize>; crate::LUA_PLAYERS],
+    ) {
+        let store = vm.store();
+        if let Some(capture) = store
+            .scenes
+            .get_mut(&screen.id)
+            .and_then(|scene| scene.song_session.as_mut())
+            .and_then(|session| session.messages.as_mut())
+        {
+            capture.immediate.step_player_indices = indices;
+        }
+    }
+
     pub(crate) fn song_player_step_targets(
         &self,
         vm: &Vm,
         screen: ActorScene,
-        indices: &[Option<usize>; crate::LUA_PLAYERS],
     ) -> [u128; crate::LUA_PLAYERS] {
-        let store = vm.store_ref();
-        let capture = store
+        vm.store_ref()
             .scenes
             .get(&screen.id)
             .and_then(|scene| scene.song_session.as_ref())
-            .and_then(|session| session.messages.as_ref());
-        std::array::from_fn(|player| {
-            indices[player]
-                .and_then(|index| {
-                    capture.and_then(|capture| capture.immediate.step_targets.get(&index).copied())
-                })
-                .unwrap_or(0)
-        })
+            .and_then(|session| session.messages.as_ref())
+            .map_or([0; crate::LUA_PLAYERS], |capture| {
+                capture.immediate.player_step_targets
+            })
     }
 
     pub(crate) fn set_song_pending_overlay_updates(
@@ -407,12 +419,10 @@ pub(super) fn context(store: &Store, id: TableId) -> Option<(u64, usize)> {
     Some((owner, *capture.indices.get(&id)?))
 }
 
-pub(super) fn record_pose_step(
-    store: &mut Store,
-    id: TableId,
-    delta: &crate::SongLuaOverlayStateDelta,
-    fallback: bool,
-) {
+pub(super) fn record_pose_step(store: &mut Store, id: TableId, targets: u128, fallback: bool) {
+    if targets == 0 {
+        return;
+    }
     let Some((owner, index)) = context(store, id) else {
         return;
     };
@@ -429,10 +439,6 @@ pub(super) fn record_pose_step(
     {
         return;
     }
-    let targets = crate::tween_pose::update_mask(delta);
-    if targets == 0 {
-        return;
-    }
     let capture = store
         .scenes
         .get_mut(&owner)
@@ -443,14 +449,28 @@ pub(super) fn record_pose_step(
         .messages
         .as_mut()
         .unwrap();
-    *capture.immediate.step_targets.entry(index).or_default() |= targets;
+    for (player_index, player_targets) in capture
+        .immediate
+        .step_player_indices
+        .into_iter()
+        .zip(&mut capture.immediate.player_step_targets)
+    {
+        if player_index == Some(index) {
+            *player_targets |= targets;
+        }
+    }
 }
 
 pub(super) fn record(call: &mut HostCall<'_>, id: TableId, target: Target, value: UpdateValue) {
     capture::retain_render_update(call.store(), id, target, &value, true);
     record_frame(call, id, target, value);
 }
-fn record_frame(call: &mut HostCall<'_>, id: TableId, target: Target, value: UpdateValue) {
+pub(super) fn record_frame(
+    call: &mut HostCall<'_>,
+    id: TableId,
+    target: Target,
+    value: UpdateValue,
+) {
     if context(&call.store(), id).is_none() {
         return;
     }

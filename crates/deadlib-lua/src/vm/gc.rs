@@ -578,10 +578,9 @@ impl Vm {
     pub(super) fn validate_value(&self, value: Value) -> Result<(), Error> {
         let live = match value {
             Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_) => true,
-            Value::Table(id) => {
-                self.tables.contains(id.0)
-                    && (self.gc.phase != Phase::Sweep || self.tables.marked(id.0))
-            }
+            // Marks already attest that the same generation occupies a slot.
+            Value::Table(id) if self.gc.phase == Phase::Sweep => self.tables.marked(id.0),
+            Value::Table(id) => self.tables.contains(id.0),
             _ => self.is_live_value(value),
         };
         if live {
@@ -867,6 +866,14 @@ impl Vm {
             self.reserve_gc_value(value)?;
         }
         Ok(())
+    }
+    #[inline]
+    pub(super) fn gc_mark_new_dense_table(&mut self, id: TableId) {
+        if self.gc.phase == Phase::Propagate {
+            // All references installed during construction are also marked.
+            // Leave the table idle so later metatable writes can queue a scan.
+            self.tables.mark(id.0);
+        }
     }
     pub(super) fn gc_new_value(&mut self, value: Value) {
         if self.gc.phase == Phase::Propagate && self.mark_barrier_value(value) {

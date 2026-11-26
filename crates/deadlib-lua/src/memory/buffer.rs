@@ -66,7 +66,11 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Buffer<T> {
     }
 }
 impl<T> Buffer<T> {
-    pub(crate) fn new_in(memory: Memory) -> Self {
+    pub(crate) const fn empty_global() -> Self {
+        Self::new_in(Memory(None))
+    }
+
+    pub(crate) const fn new_in(memory: Memory) -> Self {
         Self {
             raw: Raw {
                 pointer: NonNull::dangling(),

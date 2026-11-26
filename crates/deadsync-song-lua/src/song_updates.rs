@@ -379,6 +379,8 @@ impl SongRuntime {
             }
             self.actors
                 .replace_song_capture_indices(&mut self.vm, screen, &values);
+            self.actors
+                .track_song_player_steps(&mut self.vm, screen, player_indices);
             self.begin_actor_capture(false);
             self.actors
                 .begin_song_wrapper_capture(&mut self.vm, screen, values.len());
@@ -626,15 +628,14 @@ impl SongRuntime {
                         samples.push((next_time, text.into()));
                     }
                 }
-                self.publish_rooted_song_tween_frame(screen, values)?;
-                for (i, &value) in values.iter().enumerate().take(count) {
-                    self.update_pose(value, &mut replay_states[i]);
-                }
+                self.publish_rooted_song_tween_frame(
+                    screen,
+                    values,
+                    Some(&mut replay_states[..count]),
+                )?;
                 self.restore_update_messages(&access, &values, &replay_states, started)?;
                 let next_masks = self.update_masks(&players)?;
-                let mut player_steps =
-                    self.actors
-                        .song_player_step_targets(&self.vm, screen, &player_indices);
+                let mut player_steps = self.actors.song_player_step_targets(&self.vm, screen);
                 self.capture_rooted_song_overlay_frame(
                     screen,
                     &mut capture,

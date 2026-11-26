@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub(super) struct Capture {
     // Identities are owned by this song session's scene, never by this map.
     pub(super) indices: FxHashMap<TableId, usize>,
+    pub(super) index_extent: usize,
     pub(super) immediate: song_immediate::Capture,
     writes: BTreeMap<String, Vec<SongLuaStatefulMessageWrite>>,
     #[cfg(feature = "test-support")]
@@ -20,15 +21,24 @@ pub(super) struct Capture {
 
 impl Capture {
     pub(super) fn new(indices: impl IntoIterator<Item = (TableId, usize)>) -> Self {
-        Self {
-            indices: indices.into_iter().collect(),
+        let mut capture = Self {
+            indices: FxHashMap::default(),
+            index_extent: 0,
             immediate: Default::default(),
             writes: BTreeMap::new(),
             #[cfg(feature = "test-support")]
             observed: BTreeMap::new(),
             advances: BTreeMap::new(),
             wrappers: None,
-        }
+        };
+        capture.replace_indices(indices);
+        capture
+    }
+
+    pub(super) fn replace_indices(&mut self, indices: impl IntoIterator<Item = (TableId, usize)>) {
+        self.indices.clear();
+        self.indices.extend(indices);
+        self.index_extent = self.indices.values().max().map_or(0, |index| index + 1);
     }
 
     #[cfg(feature = "test-support")]

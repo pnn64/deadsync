@@ -50,7 +50,7 @@ impl Table {
         let start = if cursor & 1 == 0 { 0 } else { cursor >> 1 };
         while mask != 0 {
             let index = start + mask.trailing_zeros() as usize;
-            let entry = &mut self.entries[index];
+            let entry = &mut self.hash_part_mut().entries[index];
             debug_assert_ne!(entry.value, Value::Nil);
             let key = entry.key;
             entry.value = Value::Nil;
@@ -71,12 +71,12 @@ impl Table {
     // Lua 5.1 keeps a deleted collectable key only as a next() cursor.
     fn retire_native_entry(&mut self, slot: usize, index: usize, dead: Key) {
         self.native_index_remove_at(slot);
-        self.entries[index].key = dead;
+        self.hash_part_mut().entries[index].key = dead;
         self.touch_fields();
     }
 
     pub(crate) fn retire_native_keys_in_trace_slice(&mut self, cursor: usize, budget: usize) {
-        if self.native_dead_keys == 0 {
+        if self.hash_part().native_dead_keys == 0 {
             return;
         }
         let start = cursor >> 1;
@@ -85,23 +85,28 @@ impl Table {
             let hash_end = if array_end == self.array.len() {
                 budget
                     .saturating_sub(array_end - start)
-                    .min(self.entries.len())
+                    .min(self.hash_part().entries.len())
             } else {
                 0
             };
             (0, hash_end)
         } else {
-            (start, start.saturating_add(budget).min(self.entries.len()))
+            (
+                start,
+                start
+                    .saturating_add(budget)
+                    .min(self.hash_part().entries.len()),
+            )
         };
         for index in start..end {
-            let entry = &self.entries[index];
+            let entry = &self.hash_part().entries[index];
             if entry.value == Value::Nil
                 && let Some(dead) = entry.key.dead()
             {
                 let slot = self.native_identity_slot(index);
                 self.retire_native_entry(slot, index, dead);
-                self.native_dead_keys -= 1;
-                if self.native_dead_keys == 0 {
+                self.hash_part_mut().native_dead_keys -= 1;
+                if self.hash_part().native_dead_keys == 0 {
                     break;
                 }
             }
@@ -113,28 +118,32 @@ impl Table {
         records: usize,
         memory: Memory,
     ) -> Result<Self, Error> {
-        let mut table = Self::new_in(memory);
-        table.native51 = true;
-        if records == 0 {
-            if array > MAX_ARRAY {
-                return Err(Error::new(ErrorKind::Runtime, 0, "table overflow"));
-            }
-            // No live entries or iterator state need migrating on creation.
-            if array == 3 && table.array.memory().allocator().is_none() {
-                table.array = ArrayStorage::Triplet {
-                    memory: table.array.memory().clone(),
-                    values: [Value::Nil; 3],
-                };
-            } else {
-                let storage = table.array.heap_mut();
-                storage.try_reserve_exact(array)?;
-                storage.resize(array, Value::Nil);
-            }
-            table.touch_fields();
-        } else {
+        if records != 0 {
+            let mut table = Self::new_in(memory);
+            table.native51 = true;
             table.native_resize(array, records)?;
+            return Ok(table);
         }
-        Ok(table)
+        if array > MAX_ARRAY {
+            return Err(Error::new(ErrorKind::Runtime, 0, "table overflow"));
+        }
+        let array = if array == 3 && memory.allocator().is_none() {
+            ArrayStorage::Triplet {
+                memory,
+                values: [Value::Nil; 3],
+            }
+        } else {
+            let mut values = Buffer::new_in(memory);
+            values.try_reserve_exact(array)?;
+            values.resize(array, Value::Nil);
+            ArrayStorage::Heap(values)
+        };
+        Ok(Self {
+            array,
+            native51: true,
+            fields_version: 1,
+            ..Self::default()
+        })
     }
 
     pub(crate) fn native_string_hash(bytes: &[u8]) -> u32 {
@@ -143,32 +152,36 @@ impl Table {
 
     // An indexed entry is uniquely identified by its encoded slot word.
     fn native_identity_slot(&self, index: usize) -> usize {
-        let len = self.slots.len();
+        let len = self.hash_part().slots.len();
         let mask = len - 1;
-        let hash = self.entries[index].key.hash();
+        let hash = self.hash_part().entries[index].key.hash();
         let word = (index as u32 + 1) | Self::slot_tag(len, hash).0;
         let mut slot = hash & mask;
-        while self.slots[slot] != word {
-            debug_assert_ne!(self.slots[slot], 0, "native entry must be indexed");
+        while self.hash_part().slots[slot] != word {
+            debug_assert_ne!(
+                self.hash_part().slots[slot],
+                0,
+                "native entry must be indexed"
+            );
             slot = (slot + 1) & mask;
         }
         slot
     }
 
     fn native_index_remove_at(&mut self, mut hole: usize) {
-        let mask = self.slots.len() - 1;
-        let index_mask = Self::slot_tag(self.slots.len(), 0).1;
+        let mask = self.hash_part().slots.len() - 1;
+        let index_mask = Self::slot_tag(self.hash_part().slots.len(), 0).1;
         let mut next = (hole + 1) & mask;
-        while self.slots[next] != 0 {
-            let index = (self.slots[next] & index_mask) as usize - 1;
-            let home = self.entries[index].key.hash() & mask;
+        while self.hash_part().slots[next] != 0 {
+            let index = (self.hash_part().slots[next] & index_mask) as usize - 1;
+            let home = self.hash_part().entries[index].key.hash() & mask;
             if (next.wrapping_sub(home) & mask) >= (hole.wrapping_sub(home) & mask) {
-                self.slots[hole] = self.slots[next];
+                self.hash_part_mut().slots[hole] = self.hash_part().slots[next];
                 hole = next;
             }
             next = (next + 1) & mask;
         }
-        self.slots[hole] = 0;
+        self.hash_part_mut().slots[hole] = 0;
     }
 
     pub(super) fn native_set(
@@ -186,16 +199,16 @@ impl Table {
         let vacant = match self.slot_hashed(key, identity_hash) {
             Some((_, Some(index))) => {
                 if value == Value::Nil {
-                    if self.entries[index].value != Value::Nil && key.dead().is_some() {
-                        self.native_dead_keys += 1;
+                    if self.hash_part().entries[index].value != Value::Nil && key.dead().is_some() {
+                        self.hash_part_mut().native_dead_keys += 1;
                     }
-                } else if self.native_dead_keys != 0
-                    && self.entries[index].value == Value::Nil
+                } else if self.hash_part().native_dead_keys != 0
+                    && self.hash_part().entries[index].value == Value::Nil
                     && key.dead().is_some()
                 {
-                    self.native_dead_keys -= 1;
+                    self.hash_part_mut().native_dead_keys -= 1;
                 }
-                self.entries[index].value = value;
+                self.hash_part_mut().entries[index].value = value;
                 self.touch_fields();
                 if matches!(key, Key::String(_)) {
                     self.remember_hash_entry(index as u32 + 1);
@@ -217,9 +230,12 @@ impl Table {
         vacant: Option<usize>,
     ) -> Result<(), Error> {
         let (mut vacant, mut position) = match vacant {
-            Some(slot) => (slot, main_position(key, hash, self.entries.len())),
+            Some(slot) => (
+                slot,
+                main_position(key, hash, self.hash_part().entries.len()),
+            ),
             None if self.array.is_empty() => {
-                debug_assert!(self.entries.is_empty());
+                debug_assert!(self.hash_part().entries.is_empty());
                 // With one key, only array index 1 can exceed half occupancy.
                 let array =
                     usize::from(matches!(key, Key::Number(bits) if bits == 1.0_f64.to_bits()));
@@ -228,45 +244,46 @@ impl Table {
                     self.array[0] = value;
                     return Ok(());
                 }
-                (identity_hash & (self.slots.len() - 1), 0)
+                (identity_hash & (self.hash_part().slots.len() - 1), 0)
             }
             None => {
                 self.native_rehash(key)?;
                 return self.native_set(key, value, |_| hash);
             }
         };
-        if self.entries[position].value != Value::Nil {
-            let free = self.entries[..self.last_free as usize]
+        if self.hash_part().entries[position].value != Value::Nil {
+            let free = self.hash_part().entries[..self.hash_part().last_free as usize]
                 .iter()
                 .rposition(|entry| matches!(entry.key, Key::Vacant));
             let Some(free) = free else {
                 self.native_rehash(key)?;
                 return self.native_set(key, value, |_| hash);
             };
-            self.last_free = free as u32;
-            let old = self.entries[position];
-            let other = main_position(old.key, old.native_hash, self.entries.len());
+            self.hash_part_mut().last_free = free as u32;
+            let old = self.hash_part().entries[position];
+            let other = main_position(old.key, old.native_hash, self.hash_part().entries.len());
             if other != position {
                 let mut previous = other;
-                while self.entries[previous].next != position as u32 + 1 {
-                    previous = self.entries[previous].next as usize - 1;
+                while self.hash_part().entries[previous].next != position as u32 + 1 {
+                    previous = self.hash_part().entries[previous].next as usize - 1;
                 }
                 let slot = self.native_identity_slot(position);
-                self.entries[previous].next = free as u32 + 1;
-                self.entries[free] = old;
-                self.slots[slot] = self.slots[slot] - position as u32 + free as u32;
-                self.entries[position] = EMPTY;
+                self.hash_part_mut().entries[previous].next = free as u32 + 1;
+                self.hash_part_mut().entries[free] = old;
+                self.hash_part_mut().slots[slot] =
+                    self.hash_part().slots[slot] - position as u32 + free as u32;
+                self.hash_part_mut().entries[position] = EMPTY;
             } else {
-                self.entries[free].next = old.next;
-                self.entries[position].next = free as u32 + 1;
+                self.hash_part_mut().entries[free].next = old.next;
+                self.hash_part_mut().entries[position].next = free as u32 + 1;
                 position = free;
             }
-        } else if self.entries[position].key != Key::Vacant
-            && let Some((slot, Some(_))) = self.slot(self.entries[position].key)
+        } else if self.hash_part().entries[position].key != Key::Vacant
+            && let Some((slot, Some(_))) = self.slot(self.hash_part().entries[position].key)
         {
             // A deleted main node is reusable, but its collision chain remains.
-            if self.entries[position].key.dead().is_some() {
-                self.native_dead_keys -= 1;
+            if self.hash_part().entries[position].key.dead().is_some() {
+                self.hash_part_mut().native_dead_keys -= 1;
             }
             self.native_index_remove_at(slot);
             // Deletion can shift the identity probe chain before insertion.
@@ -275,14 +292,14 @@ impl Table {
                 .expect("allocated identity index")
                 .0;
         }
-        self.entries[position].key = key;
-        self.entries[position].value = value;
+        self.hash_part_mut().entries[position].key = key;
+        self.hash_part_mut().entries[position].value = value;
         if value == Value::Nil && key.dead().is_some() {
-            self.native_dead_keys += 1;
+            self.hash_part_mut().native_dead_keys += 1;
         }
-        self.entries[position].native_hash = hash;
-        self.slots[vacant] =
-            (position as u32 + 1) | Self::slot_tag(self.slots.len(), identity_hash).0;
+        self.hash_part_mut().entries[position].native_hash = hash;
+        self.hash_part_mut().slots[vacant] =
+            (position as u32 + 1) | Self::slot_tag(self.hash_part().slots.len(), identity_hash).0;
         self.touch_fields();
         self.invalidate_trace();
         if matches!(key, Key::String(_)) {
@@ -314,7 +331,7 @@ impl Table {
                 counts[bucket as usize] += 1;
             }
         };
-        for entry in &*self.entries {
+        for entry in &*self.hash_part().entries {
             if entry.value != Value::Nil {
                 total += 1;
                 count(entry.key);
@@ -341,9 +358,9 @@ impl Table {
         }
         // Resize visits each live key once, so probe directly for a vacant slot.
         let identity_hash = key.hash();
-        let vacant = self.slots.len().checked_sub(1).map(|mask| {
+        let vacant = self.hash_part().slots.len().checked_sub(1).map(|mask| {
             let mut slot = identity_hash & mask;
-            while self.slots[slot] != 0 {
+            while self.hash_part().slots[slot] != 0 {
                 slot = (slot + 1) & mask;
             }
             slot
@@ -375,22 +392,19 @@ impl Table {
             .heap_mut()
             .extend_from_slice(&self.array[..shared]);
         replacement.array.heap_mut().resize(array, Value::Nil);
-        replacement
-            .entries
-            .try_reserve_exact(records)
-            .map_err(|_| Error::memory())?;
-        replacement.entries.resize(records, EMPTY);
-        let slots = if records == 0 {
-            0
-        } else {
-            (records * 2).max(8)
-        };
-        replacement
-            .slots
-            .try_reserve_exact(slots)
-            .map_err(|_| Error::memory())?;
-        replacement.slots.resize(slots, 0);
-        replacement.last_free = records as u32;
+        if records != 0 {
+            let part = replacement.ensure_hash_part()?;
+            part.entries
+                .try_reserve_exact(records)
+                .map_err(|_| Error::memory())?;
+            part.entries.resize(records, EMPTY);
+            let slots = (records * 2).max(8);
+            part.slots
+                .try_reserve_exact(slots)
+                .map_err(|_| Error::memory())?;
+            part.slots.resize(slots, 0);
+            part.last_free = records as u32;
+        }
         for (index, &value) in self.array.iter().enumerate().skip(array) {
             if value != Value::Nil {
                 let key = Key::Number(((index + 1) as f64).to_bits());
@@ -400,15 +414,21 @@ impl Table {
                 replacement.native_reinsert(key, value, hash)?;
             }
         }
-        for entry in self.entries.iter().rev().filter(|e| e.value != Value::Nil) {
+        for entry in self
+            .hash_part()
+            .entries
+            .iter()
+            .rev()
+            .filter(|e| e.value != Value::Nil)
+        {
             replacement.native_reinsert(entry.key, entry.value, entry.native_hash)?;
         }
         self.array = replacement.array;
-        self.entries = replacement.entries;
-        self.slots = replacement.slots;
-        self.last_free = replacement.last_free;
-        self.native_dead_keys = 0;
-        self.next_hash_hint.store(0, Ordering::Relaxed);
+        self.hash = replacement.hash;
+        if let Some(part) = self.hash.as_deref_mut() {
+            part.native_dead_keys = 0;
+            part.next_hash_hint.store(0, Ordering::Relaxed);
+        }
         self.invalidate_trace();
         self.touch_array();
         self.touch_fields();
@@ -428,25 +448,25 @@ mod tests {
         let hash = |id: StringId| id.0 as u32;
         table.native_set(key(1), Value::Nil, hash).unwrap();
         table.native_set(key(1), Value::Nil, hash).unwrap();
-        assert_eq!(table.native_dead_keys, 1);
+        assert_eq!(table.hash_part().native_dead_keys, 1);
         table.native_set(key(1), Value::Number(1.0), hash).unwrap();
-        assert_eq!(table.native_dead_keys, 0);
+        assert_eq!(table.hash_part().native_dead_keys, 0);
         table.native_set(key(1), Value::Nil, hash).unwrap();
         table.retire_native_keys_in_trace_slice(1, 512);
-        assert_eq!(table.native_dead_keys, 0);
+        assert_eq!(table.hash_part().native_dead_keys, 0);
         assert!(table.slot(key(1)).unwrap().1.is_none());
 
         for index in 2..=256 {
             table.native_set(key(index), Value::Nil, hash).unwrap();
         }
-        assert_eq!(table.native_dead_keys, 255);
+        assert_eq!(table.hash_part().native_dead_keys, 255);
         table.retire_native_keys_in_trace_slice(1, 512);
-        assert_eq!(table.native_dead_keys, 0);
+        assert_eq!(table.hash_part().native_dead_keys, 0);
         assert!((2..=256).all(|index| table.slot(key(index)).unwrap().1.is_none()));
         table.native_set(key(256), Value::Nil, hash).unwrap();
-        assert_eq!(table.native_dead_keys, 1);
+        assert_eq!(table.hash_part().native_dead_keys, 1);
         table.native_resize(0, 512).unwrap();
-        assert_eq!(table.native_dead_keys, 0);
+        assert_eq!(table.hash_part().native_dead_keys, 0);
     }
     #[test]
     fn reusing_a_deleted_main_node_keeps_the_new_key_reachable() {
@@ -485,7 +505,8 @@ mod tests {
 
     #[test]
     fn native_resize_failures_preserve_values_order_and_gc_cursor() {
-        for nth in 0..=3 {
+        // Array, hash header, hash entries and the identity index.
+        for nth in 0..=4 {
             let mut table = Table::with_native51_capacity(2, 8, Memory::default()).unwrap();
             for i in [1, 2, 5, 7, 11] {
                 table
@@ -496,7 +517,7 @@ mod tests {
             table.trace = TableTrace::Pending(false, false);
             let (result, stats) = probe(nth, || table.native_resize(8, 16));
             if nth == 0 {
-                assert_eq!(stats.attempts, 3);
+                assert_eq!(stats.attempts, 4);
                 result.unwrap();
             } else {
                 assert_eq!(stats.rejected, 1);

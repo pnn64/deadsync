@@ -2,7 +2,7 @@
 
 mod native51;
 pub(crate) mod sort;
-use crate::memory::{Buffer, Memory};
+use crate::memory::{Buffer, Memory, Unique};
 use crate::{
     Error, ErrorKind, FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value,
 };
@@ -260,18 +260,29 @@ impl std::ops::DerefMut for ArrayStorage {
     }
 }
 
+#[derive(Debug)]
+struct HashPart {
+    entries: Buffer<Entry>,
+    slots: Buffer<u32>,
+    native_dead_keys: u32,
+    last_free: u32,
+    // Two one-based indices. Keys are checked before using either hint.
+    next_hash_hint: AtomicU64,
+}
+
+static EMPTY_HASH: HashPart = HashPart {
+    entries: Buffer::empty_global(),
+    slots: Buffer::empty_global(),
+    native_dead_keys: 0,
+    last_free: 0,
+    next_hash_hint: AtomicU64::new(0),
+};
+
 #[derive(Debug, Default)]
 pub(crate) struct Table {
     array: ArrayStorage,
-    entries: Buffer<Entry>,
-    slots: Buffer<u32>,
+    hash: Option<Unique<HashPart>>,
     native51: bool,
-    // Both native counters are bounded by the native hash node limit.
-    native_dead_keys: u32,
-    last_free: u32,
-    // Two one-based hash entry indices, packed into one atomic word. Always
-    // compare keys before reuse: mutations can move or remove entries.
-    next_hash_hint: AtomicU64,
     // Arena identities have a nonzero generation; zero denotes no metatable.
     // The private attachment below uses the same optional-identity encoding.
     metatable: u64,
@@ -296,13 +307,9 @@ pub(crate) enum TableTrace {
 impl Table {
     pub(crate) fn new_in(memory: Memory) -> Self {
         Self {
-            array: ArrayStorage::Heap(Buffer::new_in(memory.clone())),
-            entries: Buffer::new_in(memory.clone()),
-            slots: Buffer::new_in(memory),
+            array: ArrayStorage::Heap(Buffer::new_in(memory)),
+            hash: None,
             native51: false,
-            native_dead_keys: 0,
-            last_free: 0,
-            next_hash_hint: AtomicU64::new(0),
             metatable: 0,
             host_state: 0,
             fields_version: 0,
@@ -334,14 +341,41 @@ impl Table {
                 .and_then(|n| (n / 3 + 1).max(8).checked_next_power_of_two())
                 .ok_or_else(failed)?
         };
-        table
-            .entries
-            .try_reserve_exact(records)
-            .map_err(|_| failed())?;
-        table.slots.try_reserve_exact(slots).map_err(|_| failed())?;
-        table.slots.resize(slots, 0);
+        if records != 0 {
+            let part = table.ensure_hash_part()?;
+            part.entries
+                .try_reserve_exact(records)
+                .map_err(|_| failed())?;
+            part.slots.try_reserve_exact(slots).map_err(|_| failed())?;
+            part.slots.resize(slots, 0);
+        }
         Ok(table)
     }
+    #[inline]
+    fn hash_part(&self) -> &HashPart {
+        self.hash.as_deref().unwrap_or(&EMPTY_HASH)
+    }
+
+    #[inline]
+    fn hash_part_mut(&mut self) -> &mut HashPart {
+        self.hash.as_deref_mut().expect("keyed table storage")
+    }
+
+    fn ensure_hash_part(&mut self) -> Result<&mut HashPart, Error> {
+        if self.hash.is_none() {
+            let memory = self.array.memory().clone();
+            let part = HashPart {
+                entries: Buffer::new_in(memory.clone()),
+                slots: Buffer::new_in(memory.clone()),
+                native_dead_keys: 0,
+                last_free: 0,
+                next_hash_hint: AtomicU64::new(0),
+            };
+            self.hash = Some(Unique::try_new_in(part, memory)?);
+        }
+        Ok(self.hash_part_mut())
+    }
+
     pub fn metatable(&self) -> Option<TableId> {
         (self.metatable != 0).then_some(TableId(self.metatable))
     }
@@ -396,9 +430,12 @@ impl Table {
         }
     }
     pub fn heap_bytes(&self) -> usize {
-        self.array.allocated_capacity() * std::mem::size_of::<Value>()
-            + self.entries.capacity() * std::mem::size_of::<Entry>()
-            + self.slots.capacity() * 4
+        self.array.allocated_capacity() * size_of::<Value>()
+            + self.hash.as_ref().map_or(0, |part| {
+                part.heap_bytes()
+                    + part.entries.capacity() * size_of::<Entry>()
+                    + part.slots.capacity() * size_of::<u32>()
+            })
     }
     #[cfg(test)]
     pub fn pairs(&self) -> impl Iterator<Item = (Value, Value)> + '_ {
@@ -408,7 +445,8 @@ impl Table {
             .filter(|(_, v)| **v != Value::Nil)
             .map(|(i, v)| (Value::Number((i + 1) as f64), *v))
             .chain(
-                self.entries
+                self.hash_part()
+                    .entries
                     .iter()
                     .filter(|e| e.value != Value::Nil)
                     .map(|e| (e.key.value(), e.value)),
@@ -430,22 +468,30 @@ impl Table {
         let (array, entries, next) = if cursor & 1 == 0 {
             let end = start.saturating_add(budget).min(self.array.len());
             let hash_end = if end == self.array.len() {
-                budget.saturating_sub(end - start).min(self.entries.len())
+                budget
+                    .saturating_sub(end - start)
+                    .min(self.hash_part().entries.len())
             } else {
                 0
             };
             let next = if end < self.array.len() {
                 Some(end << 1)
             } else {
-                (hash_end < self.entries.len()).then_some((hash_end << 1) | 1)
+                (hash_end < self.hash_part().entries.len()).then_some((hash_end << 1) | 1)
             };
-            (&self.array[start..end], &self.entries[..hash_end], next)
+            (
+                &self.array[start..end],
+                &self.hash_part().entries[..hash_end],
+                next,
+            )
         } else {
-            let end = start.saturating_add(budget).min(self.entries.len());
+            let end = start
+                .saturating_add(budget)
+                .min(self.hash_part().entries.len());
             (
                 &self.array[..0],
-                &self.entries[start..end],
-                (end < self.entries.len()).then_some((end << 1) | 1),
+                &self.hash_part().entries[start..end],
+                (end < self.hash_part().entries.len()).then_some((end << 1) | 1),
             )
         };
         (
@@ -476,23 +522,26 @@ impl Table {
         }
     }
     fn slot(&self, key: Key) -> Option<(usize, Option<usize>)> {
-        if self.slots.is_empty() {
+        if self.hash_part().slots.is_empty() {
             return None;
         }
         self.slot_hashed(key, key.hash())
     }
     fn slot_hashed(&self, key: Key, hash: usize) -> Option<(usize, Option<usize>)> {
-        let mask = self.slots.len().checked_sub(1)?;
-        let (tag, index) = Self::slot_tag(self.slots.len(), hash);
+        let Some(part) = &self.hash else {
+            return None;
+        };
+        let mask = part.slots.len().checked_sub(1)?;
+        let (tag, index) = Self::slot_tag(part.slots.len(), hash);
         let mut slot = hash & mask;
         loop {
-            let word = self.slots[slot];
+            let word = part.slots[slot];
             if word == 0 {
                 return Some((slot, None));
             }
             if word & !index == tag {
                 let entry = (word & index) as usize - 1;
-                if self.entries[entry].key == key {
+                if part.entries[entry].key == key {
                     return Some((slot, Some(entry)));
                 }
             }
@@ -501,26 +550,29 @@ impl Table {
     }
     // All storage was reserved before tombstones or traversal positions change.
     fn rebuild(&mut self, slots: usize, live: usize) {
-        if live < self.entries.len() {
-            self.entries.retain(|entry| entry.value != Value::Nil);
+        if live < self.hash_part().entries.len() {
+            self.hash_part_mut()
+                .entries
+                .retain(|entry| entry.value != Value::Nil);
             self.invalidate_trace();
         }
-        self.slots.resize(slots, 0);
-        self.slots.fill(0);
-        for (i, entry) in self.entries.iter().enumerate() {
+        let part = self.hash_part_mut();
+        part.slots.resize(slots, 0);
+        part.slots.fill(0);
+        for (i, entry) in part.entries.iter().enumerate() {
             let hash = entry.key.hash();
-            let mut slot = hash & (self.slots.len() - 1);
-            while self.slots[slot] != 0 {
-                slot = (slot + 1) & (self.slots.len() - 1);
+            let mut slot = hash & (part.slots.len() - 1);
+            while part.slots[slot] != 0 {
+                slot = (slot + 1) & (part.slots.len() - 1);
             }
             let index = u32::try_from(i + 1).expect("Lua table exhausted addressable entries");
-            self.slots[slot] = index | Self::slot_tag(slots, hash).0;
+            part.slots[slot] = index | Self::slot_tag(slots, hash).0;
         }
     }
     pub(crate) fn is_small_scalar_array(&self) -> bool {
         self.metatable == 0
             && self.host_state == 0
-            && self.entries.is_empty()
+            && self.hash_part().entries.is_empty()
             && self.array.len() <= 4
             && self.array.iter().copied().all(array_scalar)
     }
@@ -541,7 +593,7 @@ impl Table {
         let (_, Some(i)) = self.slot(key)? else {
             return None;
         };
-        let old = std::mem::replace(&mut self.entries[i].value, Value::Nil);
+        let old = std::mem::replace(&mut self.hash_part_mut().entries[i].value, Value::Nil);
         if old != Value::Nil {
             self.invalidate_trace();
             self.touch_fields();
@@ -660,23 +712,22 @@ impl Table {
     /// load the current value so overwrites, removal and compaction remain visible.
     #[inline]
     pub(crate) fn get_string_cached(&self, key: StringId, hint: &mut u32) -> Value {
-        if self.entries.is_empty() {
+        if self.hash_part().entries.is_empty() {
             return Value::Nil;
         }
-        let key = Key::String(key);
-        if let Some(entry) = self.entries.get(hint.wrapping_sub(1) as usize)
-            && entry.key == key
+        if let Some(entry) = self.hash_part().entries.get(hint.wrapping_sub(1) as usize)
+            && matches!(entry.key, Key::String(id) if id == key)
             && entry.value != Value::Nil
         {
             return entry.value;
         }
-        self.find_string_entry(key, hint)
+        self.find_string_entry(Key::String(key), hint)
     }
 
     #[cold]
     fn find_string_entry(&self, key: Key, hint: &mut u32) -> Value {
         if let Some((_, Some(index))) = self.slot(key) {
-            let value = self.entries[index].value;
+            let value = self.hash_part().entries[index].value;
             if value != Value::Nil {
                 *hint = (index + 1) as u32;
             }
@@ -687,20 +738,23 @@ impl Table {
     }
     #[inline]
     fn get_key(&self, key: Key) -> Value {
-        if self.slots.is_empty() {
+        let Some(part) = &self.hash else {
+            return Value::Nil;
+        };
+        if part.slots.is_empty() {
             return Value::Nil;
         }
-        let mask = self.slots.len() - 1;
+        let mask = part.slots.len() - 1;
         let hash = key.hash();
-        let (tag, index) = Self::slot_tag(self.slots.len(), hash);
+        let (tag, index) = Self::slot_tag(part.slots.len(), hash);
         let mut slot = hash & mask;
         loop {
-            let word = self.slots[slot];
+            let word = part.slots[slot];
             if word == 0 {
                 return Value::Nil;
             }
             if word & !index == tag {
-                let entry = &self.entries[(word & index) as usize - 1];
+                let entry = &part.entries[(word & index) as usize - 1];
                 if entry.key == key {
                     return entry.value;
                 }
@@ -733,14 +787,12 @@ impl Table {
         let Some(index) = array_index(key) else {
             return false;
         };
-        if let Some(slot) = self.array.get_mut(index) {
-            *slot = value;
-            self.touch_array_at(index);
+        if self.replace_array_value(index, value) {
             true
         } else if index == self.array.len()
             && index < self.array.allocated_capacity()
             && !self.native51
-            && self.slots.is_empty()
+            && self.hash_part().slots.is_empty()
             && value != Value::Nil
         {
             self.array.heap_mut().push(value);
@@ -749,6 +801,15 @@ impl Table {
         } else {
             false
         }
+    }
+    #[inline]
+    pub(crate) fn replace_array_value(&mut self, index: usize, value: Value) -> bool {
+        let Some(slot) = self.array.get_mut(index) else {
+            return false;
+        };
+        *slot = value;
+        self.touch_array_at(index);
+        true
     }
     /// A live string-keyed hash entry already owns its key. Replacing its
     /// scalar value cannot allocate, add a GC edge or change traversal order.
@@ -760,12 +821,15 @@ impl Table {
         ) {
             return false;
         }
-        let hints = self.next_hash_hint.load(Ordering::Relaxed);
+        let Some(part) = self.hash.as_deref_mut() else {
+            return false;
+        };
+        let hints = part.next_hash_hint.load(Ordering::Relaxed);
         for hint in [hints as u32, (hints >> 32) as u32] {
             if let Some(entry) = hint
                 .checked_sub(1)
-                .and_then(|index| self.entries.get_mut(index as usize))
-                && entry.key == Key::String(key)
+                .and_then(|index| part.entries.get_mut(index as usize))
+                && matches!(entry.key, Key::String(id) if id == key)
                 && entry.value != Value::Nil
             {
                 entry.value = value;
@@ -774,9 +838,9 @@ impl Table {
             }
         }
         if let Some((_, Some(index))) = self.slot(Key::String(key))
-            && self.entries[index].value != Value::Nil
+            && self.hash_part().entries[index].value != Value::Nil
         {
-            self.entries[index].value = value;
+            self.hash_part_mut().entries[index].value = value;
             self.touch_fields();
             self.remember_hash_entry((index + 1) as u32);
             return true;
@@ -797,8 +861,11 @@ impl Table {
         ) {
             return false;
         }
-        if let Some(entry) = self.entries.get_mut(hint.wrapping_sub(1) as usize)
-            && entry.key == Key::String(key)
+        let Some(part) = self.hash.as_deref_mut() else {
+            return false;
+        };
+        if let Some(entry) = part.entries.get_mut(hint.wrapping_sub(1) as usize)
+            && matches!(entry.key, Key::String(id) if id == key)
             && entry.value != Value::Nil
         {
             entry.value = value;
@@ -811,9 +878,9 @@ impl Table {
     #[cold]
     fn find_and_set_string_scalar(&mut self, key: StringId, value: Value, hint: &mut u32) -> bool {
         if let Some((_, Some(index))) = self.slot(Key::String(key))
-            && self.entries[index].value != Value::Nil
+            && self.hash_part().entries[index].value != Value::Nil
         {
-            self.entries[index].value = value;
+            self.hash_part_mut().entries[index].value = value;
             self.touch_fields();
             *hint = (index + 1) as u32;
             true
@@ -823,8 +890,13 @@ impl Table {
     }
     #[inline]
     fn remember_hash_entry(&self, index: u32) {
-        let previous = self.next_hash_hint.load(Ordering::Relaxed) as u32;
-        self.next_hash_hint.store(
+        let hints = &self
+            .hash
+            .as_deref()
+            .expect("keyed table storage")
+            .next_hash_hint;
+        let previous = hints.load(Ordering::Relaxed) as u32;
+        hints.store(
             (u64::from(previous) << 32) | u64::from(index),
             Ordering::Relaxed,
         );
@@ -851,7 +923,7 @@ impl Table {
                 return Ok(());
             }
             if i == self.array.len() && value != Value::Nil {
-                if self.slots.is_empty() {
+                if self.hash_part().slots.is_empty() {
                     self.array.heap_mut().try_push(value)?;
                     self.touch_array();
                     return Ok(());
@@ -862,7 +934,7 @@ impl Table {
                 while self
                     .slot(Key::Number(((end + 1) as f64).to_bits()))
                     .and_then(|(_, i)| i)
-                    .is_some_and(|i| self.entries[i].value != Value::Nil)
+                    .is_some_and(|i| self.hash_part().entries[i].value != Value::Nil)
                 {
                     end += 1;
                 }
@@ -884,7 +956,7 @@ impl Table {
         }
         let vacant = match self.slot(k) {
             Some((_, Some(i))) => {
-                self.entries[i].value = value;
+                self.hash_part_mut().entries[i].value = value;
                 self.touch_fields();
                 if matches!(k, Key::String(_)) {
                     self.remember_hash_entry((i + 1) as u32);
@@ -897,31 +969,34 @@ impl Table {
         if value == Value::Nil {
             return Ok(());
         }
-        let rebuild = (self.entries.len() + 1) * 4 >= self.slots.len() * 3;
+        let rebuild = (self.hash_part().entries.len() + 1) * 4 >= self.hash_part().slots.len() * 3;
         let live = if rebuild {
-            self.entries
+            self.hash_part()
+                .entries
                 .iter()
                 .filter(|e| e.value != Value::Nil)
                 .count()
         } else {
-            self.entries.len()
+            self.hash_part().entries.len()
         };
         let index = u32::try_from(live + 1)
             .map_err(|_| Error::new(ErrorKind::Runtime, 0, "table overflow"))?;
-        let slots = if rebuild && (live + 1) * 4 >= self.slots.len() * 3 {
-            self.slots
+        let slots = if rebuild && (live + 1) * 4 >= self.hash_part().slots.len() * 3 {
+            self.hash_part()
+                .slots
                 .len()
                 .checked_mul(2)
                 .ok_or_else(Error::memory)?
                 .max(8)
         } else {
-            self.slots.len()
+            self.hash_part().slots.len()
         };
-        self.entries
-            .try_reserve((live + 1).saturating_sub(self.entries.len()))
+        let part = self.ensure_hash_part()?;
+        part.entries
+            .try_reserve((live + 1).saturating_sub(part.entries.len()))
             .map_err(|_| Error::memory())?;
-        self.slots
-            .try_reserve(slots.saturating_sub(self.slots.len()))
+        part.slots
+            .try_reserve(slots.saturating_sub(part.slots.len()))
             .map_err(|_| Error::memory())?;
         if rebuild {
             self.rebuild(slots, live);
@@ -931,8 +1006,9 @@ impl Table {
         } else {
             vacant.expect("nonempty table has a vacant hash slot")
         };
-        self.slots[slot] = index | Self::slot_tag(self.slots.len(), k.hash()).0;
-        self.entries.push(Entry {
+        let part = self.hash_part_mut();
+        part.slots[slot] = index | Self::slot_tag(part.slots.len(), k.hash()).0;
+        self.hash_part_mut().entries.push(Entry {
             key: k,
             value,
             native_hash: 0,
@@ -949,13 +1025,29 @@ impl Table {
         self.array[index] = value;
         self.touch_array();
     }
+    // All values must be scalar. Otherwise the caller applies write barriers
+    // in SETLIST order. A same-size copy leaves the array's shape intact.
+    #[inline]
+    pub(crate) fn set_scalar_list_in_place(&mut self, start: usize, values: &[Value]) -> bool {
+        let Some(slots) = self.array.get_mut(start..start + values.len()) else {
+            return false;
+        };
+        if !values.iter().copied().all(array_scalar) {
+            return false;
+        }
+        slots.copy_from_slice(values);
+        if !values.is_empty() {
+            self.touch_array();
+        }
+        true
+    }
     pub fn grow_list_array(&mut self, end: usize) -> Result<(), Error> {
         let first = self.array.len();
         if end <= first {
             return Ok(());
         }
         if self.native51 {
-            return self.native_resize(end, self.entries.len());
+            return self.native_resize(end, self.hash_part().entries.len());
         }
         // SETLIST includes nil fields in its array extent. Reserve before
         // changing traversal positions or moving any existing hash values.
@@ -966,7 +1058,7 @@ impl Table {
         self.invalidate_trace();
         self.array.heap_mut().resize(end, Value::Nil);
         self.touch_array();
-        if !self.entries.is_empty() {
+        if !self.hash_part().entries.is_empty() {
             for index in first..end {
                 if let Some(value) = self.take_hash(Key::Number(((index + 1) as f64).to_bits())) {
                     self.array[index] = value;
@@ -989,7 +1081,7 @@ impl Table {
             }
             return lo;
         }
-        if self.native51 && !self.entries.is_empty() {
+        if self.native51 && !self.hash_part().entries.is_empty() {
             // luaH_getn searches past the array part when its last slot is live.
             let mut upper = hi + 1;
             while self.get_key(Key::Number((upper as f64).to_bits())) != Value::Nil {
@@ -1027,7 +1119,7 @@ impl Table {
         } else {
             self.array.len() as f64
         };
-        for entry in &self.entries {
+        for entry in &self.hash_part().entries {
             if let Key::Number(bits) = entry.key
                 && entry.value != Value::Nil
             {
@@ -1083,11 +1175,12 @@ impl Table {
             (i + 1, 0)
         } else {
             let key = Key::from_value(key).ok_or(InvalidNextKey)?;
-            let hints = self.next_hash_hint.load(Ordering::Relaxed);
+            let hints = self.hash_part().next_hash_hint.load(Ordering::Relaxed);
             let first = hints as u32 as usize;
             let second = (hints >> 32) as u32 as usize;
             let index = if first != 0
                 && self
+                    .hash_part()
                     .entries
                     .get(first - 1)
                     .is_some_and(|entry| entry.key.matches_next(key))
@@ -1095,6 +1188,7 @@ impl Table {
                 first - 1
             } else if second != 0
                 && self
+                    .hash_part()
                     .entries
                     .get(second - 1)
                     .is_some_and(|entry| entry.key.matches_next(key))
@@ -1106,7 +1200,8 @@ impl Table {
                     .or_else(|| {
                         self.native51
                             .then(|| {
-                                self.entries
+                                self.hash_part()
+                                    .entries
                                     .iter()
                                     .position(|entry| entry.key.matches_next(key))
                             })
@@ -1126,11 +1221,14 @@ impl Table {
                 return Ok(Some((Value::Number((array + index + 2) as f64), value)));
             }
         }
-        let Some(entry) = self.entries.get(hash) else {
+        let Some(part) = &self.hash else {
+            return Ok(None);
+        };
+        let Some(entry) = part.entries.get(hash) else {
             return Ok(None);
         };
         let (index, entry) = if matches!(entry.value, Value::Nil) {
-            let tail = &self.entries[hash + 1..];
+            let tail = &part.entries[hash + 1..];
             let Some((index, entry)) =
                 Self::first_live_slot(tail, |entry| !matches!(entry.value, Value::Nil))
             else {
@@ -1142,7 +1240,7 @@ impl Table {
         };
         // A sequential cursor uses the primary hint. Discarding the secondary
         // avoids a read-modify-write on each key.
-        self.next_hash_hint
+        part.next_hash_hint
             .store((index + 1) as u64, Ordering::Relaxed);
         Ok(Some((entry.key.value(), entry.value)))
     }
@@ -1353,7 +1451,10 @@ mod allocation_tests {
             key = pair.0;
         }
         assert_eq!(actual, expected);
-        assert_eq!(table.next_hash_hint.load(Ordering::Relaxed) as u32, 5);
+        assert_eq!(
+            table.hash_part().next_hash_hint.load(Ordering::Relaxed) as u32,
+            5
+        );
         // Another iterator can overwrite the hint; the original cursor still
         // locates its exact key through the ordinary hash lookup.
         assert_eq!(
@@ -1369,6 +1470,7 @@ mod allocation_tests {
             Some((keys[0], Value::Number(30.)))
         );
         table
+            .hash_part()
             .next_hash_hint
             .store(u64::from(u32::MAX), Ordering::Relaxed);
         assert_eq!(
@@ -1396,10 +1498,10 @@ mod allocation_tests {
         let a = StringId((1_u64 << 32) | 11);
         let b = StringId((1_u64 << 32) | 12);
         let mut table = Table::with_capacity(0, 4).unwrap();
-        assert_eq!(table.next_hash_hint.load(Ordering::Relaxed), 0);
+        assert_eq!(table.hash_part().next_hash_hint.load(Ordering::Relaxed), 0);
         assert!(!table.set_existing_string_scalar(a, Value::Number(1.)));
         table.set(Value::String(a), Value::Number(2.)).unwrap();
-        assert_eq!(table.next_hash_hint.load(Ordering::Relaxed), 1);
+        assert_eq!(table.hash_part().next_hash_hint.load(Ordering::Relaxed), 1);
         let (updated, stats) = probe(1, || table.set_existing_string_scalar(a, Value::Number(3.)));
         assert!(updated);
         assert_eq!(stats.attempts, 0);
@@ -1414,6 +1516,7 @@ mod allocation_tests {
         assert!(!table.set_existing_string_scalar(a, Value::Number(7.)));
         table.set(Value::String(a), Value::Number(8.)).unwrap();
         table
+            .hash_part()
             .next_hash_hint
             .store(u64::from(u32::MAX), Ordering::Relaxed);
         assert!(table.set_existing_string_scalar(a, Value::Number(9.)));
@@ -1513,16 +1616,16 @@ mod allocation_tests {
                 }
             }
         }
-        assert!(table.slots.len() > TAGGED_SLOTS);
+        assert!(table.hash_part().slots.len() > TAGGED_SLOTS);
     }
     // The longest distance from an entry's home slot to the slot that holds it.
     fn longest_probe(table: &Table) -> usize {
-        let mask = table.slots.len() - 1;
-        let (_, index) = Table::slot_tag(table.slots.len(), 0);
+        let mask = table.hash_part().slots.len() - 1;
+        let (_, index) = Table::slot_tag(table.hash_part().slots.len(), 0);
         let mut longest = 0;
-        for (slot, &word) in table.slots.iter().enumerate() {
+        for (slot, &word) in table.hash_part().slots.iter().enumerate() {
             if word != 0 {
-                let entry = &table.entries[(word & index) as usize - 1];
+                let entry = &table.hash_part().entries[(word & index) as usize - 1];
                 let home = entry.key.hash() & mask;
                 longest = longest.max(slot.wrapping_sub(home) & mask);
             }
@@ -1547,7 +1650,7 @@ mod allocation_tests {
                     .set(Value::Number(key(n)), Value::Boolean(true))
                     .unwrap();
             }
-            if table.slots.is_empty() {
+            if table.hash_part().slots.is_empty() {
                 continue;
             }
             let longest = longest_probe(&table);
@@ -1566,7 +1669,9 @@ mod allocation_tests {
     fn hash_reservations_preserve_values_and_pending_traversal_on_failure() {
         for initialized in [false, true] {
             let mut points = 0;
-            for nth in 0..=2 {
+            // A table without keyed storage also reserves its hash header.
+            let expected_points = if initialized { 2 } else { 3 };
+            for nth in 0..=expected_points {
                 let mut table = if initialized {
                     Table::with_capacity(0, 5).unwrap()
                 } else {
@@ -1581,7 +1686,7 @@ mod allocation_tests {
                 let (result, stats) = probe(nth, || table.set(hash_key(6), Value::Number(42.)));
                 if nth == 0 {
                     points = stats.attempts;
-                    assert_eq!(points, 2);
+                    assert_eq!(points, expected_points);
                     result.unwrap();
                 } else {
                     assert!(nth <= points);

@@ -362,8 +362,7 @@ fn set_numeric_point(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Er
         return Ok(false);
     };
     let values = [x as f32, y as f32, z as f32].map(f64::from);
-    let point = call.try_new_number_array(&values)?;
-    call.raw_table_set(points, Value::Number(index), Value::Table(point))?;
+    call.raw_table_set_number_array(points, index as u32, &values)?;
     call.push(Value::Table(owner))?;
     Ok(true)
 }

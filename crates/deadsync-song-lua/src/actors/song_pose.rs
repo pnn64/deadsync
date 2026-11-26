@@ -31,17 +31,14 @@ pub(super) fn prior_position(store: &Store, id: TableId) -> Option<[f32; 3]> {
         .as_ref()?
         .immediate
         .prior_positions
-        .get(&index)
+        .get(index)
         .copied()
 }
 pub(super) fn record(
     call: &mut HostCall<'_>,
     id: TableId,
     delta: &crate::SongLuaOverlayStateDelta,
-) -> bool {
-    if !mode(&call.store(), id) {
-        return false;
-    }
+) {
     crate::tween_pose::visit_updates(delta, |target, value| {
         let number = match value {
             Update::F32(number) => Some(number),
@@ -74,7 +71,7 @@ pub(super) fn record(
                         .get_mut(&owner)
                         .and_then(|scene| scene.song_session.as_mut())
                         .and_then(|session| session.messages.as_mut())
-                        .and_then(|capture| capture.immediate.prior_positions.get_mut(&index))
+                        .and_then(|capture| capture.immediate.prior_positions.get_mut(index))
                     {
                         position[axis] = value;
                     }
@@ -82,7 +79,6 @@ pub(super) fn record(
             }
         }
     });
-    true
 }
 
 /// Advance the fallback pose, returning whether it owns this actor's queue.
@@ -316,12 +312,13 @@ impl Actors {
         else {
             return false;
         };
-        let count = capture.indices.values().max().map_or(0, |i| i + 1);
-        for (index, state) in states.iter().take(count).enumerate() {
-            capture
-                .immediate
-                .prior_positions
-                .insert(index, [state.x, state.y, state.z]);
+        let count = capture.index_extent.min(states.len());
+        let positions = &mut capture.immediate.prior_positions;
+        if count > positions.len() {
+            positions.resize(count, [0.; 3]);
+        }
+        for (position, state) in positions[..count].iter_mut().zip(states) {
+            *position = [state.x, state.y, state.z];
         }
         true
     }

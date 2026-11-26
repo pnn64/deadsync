@@ -1139,9 +1139,31 @@ impl HostCall<'_> {
 
     /// Fallibly create a dense array of numbers. Store, capture or return it before reentering Lua.
     pub fn try_new_number_array(&mut self, values: &[f64]) -> Result<TableId, Error> {
-        let table = self.vm.try_table_with_capacity(values.len(), 0)?;
+        let table = self.vm.try_allocate_dense_table(values.len())?;
         self.vm.tables[slot_index(table.0)].initialize_number_array(values);
         Ok(table)
+    }
+
+    /// Store a fresh dense number array at a raw integer index.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid table or a failed allocation.
+    pub fn raw_table_set_number_array(
+        &mut self,
+        table: TableId,
+        index: u32,
+        numbers: &[f64],
+    ) -> Result<(), Error> {
+        let value = Value::Table(self.try_new_number_array(numbers)?);
+        self.vm.validate_value(Value::Table(table))?;
+        let owner = &mut self.vm.tables[slot_index(table.0)];
+        // The key is scalar and the new array is already protected in either
+        // collector phase. Overwriting an existing array slot adds no work.
+        if index != 0 && owner.replace_array_value((index - 1) as usize, value) {
+            return Ok(());
+        }
+        self.vm
+            .raw_set(table, Value::Number(f64::from(index)), value)
     }
 
     /// Create a Rust callback with traced Lua captures in this VM.
@@ -1317,8 +1339,8 @@ impl HostCall<'_> {
     ) -> Result<[Value; N], Error> {
         self.vm.validate_value(Value::Table(table))?;
         let table = &self.vm.tables[slot_index(table.0)];
-        if let Some(values) = table.array_slice(1, N as i64) {
-            return Ok(values.try_into().expect("range has N values"));
+        if let Some(values) = table.array_values().first_chunk::<N>() {
+            return Ok(*values);
         }
         Ok(std::array::from_fn(|index| {
             table.get_integer(index as i64 + 1)

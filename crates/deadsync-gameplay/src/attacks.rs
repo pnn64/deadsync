@@ -1023,9 +1023,7 @@ pub fn solve_song_lua_spline(points: &[[f32; 3]]) -> Vec<[[f32; 4]; 3]> {
 #[derive(Default)]
 pub struct SongLuaSplineSolver {
     coefficients: Vec<[[f32; 4]; 3]>,
-    diagonals: Vec<f32>,
-    multiples: Vec<f32>,
-    right_column: Vec<f32>,
+    factors: SplineFactors,
 }
 
 impl SongLuaSplineSolver {
@@ -1034,19 +1032,80 @@ impl SongLuaSplineSolver {
     }
 
     pub fn solve_with_loop(&mut self, points: &[[f32; 3]], looping: bool) -> &[[[f32; 4]; 3]] {
-        solve_song_lua_spline_into(points, &mut self.coefficients, &mut self.diagonals,
-            looping, &mut self.multiples, &mut self.right_column);
+        solve_song_lua_spline_into(points, &mut self.coefficients, looping, &mut self.factors);
         &self.coefficients
+    }
+}
+
+#[derive(Default)]
+struct SplineFactors {
+    shape: Option<(usize, bool)>,
+    diagonals: Vec<f32>,
+    multiples: Vec<f32>,
+    right_column: Vec<f32>,
+}
+
+impl SplineFactors {
+    fn prepare(&mut self, size: usize, looping: bool) {
+        let shape = (size, looping);
+        if self.shape == Some(shape) {
+            return;
+        }
+        self.shape = Some(shape);
+        let Self {
+            diagonals,
+            multiples,
+            right_column,
+            ..
+        } = self;
+        diagonals.clear();
+        diagonals.resize(size, 4.0);
+        if !looping {
+            diagonals[0] = 2.0;
+            diagonals[size - 1] = 2.0;
+            multiples.clear();
+            multiples.reserve(size);
+            for i in 0..size - 1 {
+                let reciprocal = 1.0 / diagonals[i];
+                diagonals[i + 1] -= reciprocal;
+                multiples.push(reciprocal);
+            }
+            multiples.push(1.0 / diagonals[size - 1]);
+            return;
+        }
+        // CubicSpline.cpp's cyclic elimination, preserving its float order.
+        right_column.clear();
+        right_column.resize(size - 1, 0.0);
+        right_column[0] = 1.0;
+        right_column[size - 2] = 1.0;
+        multiples.clear();
+        multiples.reserve(3 * size - 3);
+        for i in 0..size - 2 {
+            let reciprocal = 1.0 / diagonals[i];
+            diagonals[i + 1] -= reciprocal;
+            right_column[i + 1] -= right_column[i] * reciprocal;
+            multiples.push(reciprocal);
+        }
+        let reciprocal = 1.0 / diagonals[size - 2];
+        diagonals[size - 1] -= right_column[size - 2] * reciprocal;
+        multiples.push(reciprocal);
+        for i in (1..size - 1).rev() {
+            let reciprocal = 1.0 / diagonals[i];
+            right_column[i - 1] -= right_column[i] * reciprocal;
+            multiples.push(reciprocal);
+        }
+        let reciprocal = 1.0 / diagonals[0];
+        right_column[0] -= right_column[1] * reciprocal;
+        multiples.push(reciprocal);
+        multiples.extend(right_column.iter().map(|value| value / diagonals[size - 1]));
     }
 }
 
 fn solve_song_lua_spline_into(
     points: &[[f32; 3]],
     out: &mut Vec<[[f32; 4]; 3]>,
-    diagonals: &mut Vec<f32>,
     looping: bool,
-    multiples: &mut Vec<f32>,
-    right_column: &mut Vec<f32>,
+    factors: &mut SplineFactors,
 ) {
     let size = points.len();
     out.clear();
@@ -1075,42 +1134,20 @@ fn solve_song_lua_spline_into(
     if !active.iter().any(|&axis| axis) {
         return;
     }
-    // The three axes share the same tridiagonal matrix. Factor it once,
-    // keeping each axis's slopes in its already allocated output coefficient.
-    diagonals.clear();
-    diagonals.reserve_exact(size);
-    diagonals.resize(size, 4.0);
+    // The tridiagonal matrix depends on size and loop mode alone.
+    factors.prepare(size, looping);
+    let SplineFactors {
+        diagonals,
+        multiples,
+        ..
+    } = factors;
     if looping {
-        // CubicSpline.cpp's cyclic elimination, preserving its float order.
-        right_column.clear();
-        right_column.resize(size - 1, 0.0);
-        right_column[0] = 1.0;
-        right_column[size - 2] = 1.0;
-        multiples.clear();
-        multiples.reserve(3 * size - 3);
-        for i in 0..size - 2 {
-            let reciprocal = 1.0 / diagonals[i];
-            diagonals[i + 1] -= reciprocal;
-            right_column[i + 1] -= right_column[i] * reciprocal;
-            multiples.push(reciprocal);
-        }
-        let reciprocal = 1.0 / diagonals[size - 2];
-        diagonals[size - 1] -= right_column[size - 2] * reciprocal;
-        multiples.push(reciprocal);
-        for i in (1..size - 1).rev() {
-            let reciprocal = 1.0 / diagonals[i];
-            right_column[i - 1] -= right_column[i] * reciprocal;
-            multiples.push(reciprocal);
-        }
-        let reciprocal = 1.0 / diagonals[0];
-        right_column[0] -= right_column[1] * reciprocal;
-        multiples.push(reciprocal);
-        multiples.extend(right_column.iter().map(|value| value / diagonals[size - 1]));
         for axis in 0..3 {
             if !active[axis] { continue; }
             for i in 0..size {
-                out[i][axis][1] = 3.0 * (points[(i + 1) % size][axis]
-                    - points[(i + size - 1) % size][axis]);
+                let next = if i + 1 == size { 0 } else { i + 1 };
+                let prior = if i == 0 { size - 1 } else { i - 1 };
+                out[i][axis][1] = 3.0 * (points[next][axis] - points[prior][axis]);
             }
             for i in 0..size - 1 {
                 out[i + 1][axis][1] -= out[i][axis][1] * multiples[i];
@@ -1130,7 +1167,7 @@ fn solve_song_lua_spline_into(
                 out[i][axis][1] /= diagonals[i];
             }
             for i in 0..size {
-                let next = (i + 1) % size;
+                let next = if i + 1 == size { 0 } else { i + 1 };
                 let diff = points[next][axis] - points[i][axis];
                 let slope = out[i][axis][1];
                 let next_slope = out[next][axis][1];
@@ -1143,8 +1180,6 @@ fn solve_song_lua_spline_into(
         }
         return;
     }
-    diagonals[0] = 2.0;
-    diagonals[size - 1] = 2.0;
     if active.iter().filter(|&&axis| axis).count() == 1 {
         let axis = active.iter().position(|&axis| axis).unwrap();
         // A single varying axis needs no inner axis loop. Keep its original
@@ -1155,18 +1190,17 @@ fn solve_song_lua_spline_into(
         }
         out[size - 1][axis][1] = 3.0 * (points[size - 1][axis] - points[size - 2][axis]);
         for i in 0..size - 1 {
-            let multiple = 1.0 / diagonals[i];
-            diagonals[i + 1] -= multiple;
+            let multiple = multiples[i];
             out[i + 1][axis][1] -= out[i][axis][1] * multiple;
         }
         for i in (1..size).rev() {
-            out[i - 1][axis][1] -= out[i][axis][1] * (1.0 / diagonals[i]);
+            out[i - 1][axis][1] -= out[i][axis][1] * multiples[i];
         }
         for i in 0..size {
             out[i][axis][1] /= diagonals[i];
         }
         for i in 0..size {
-            let next = (i + 1) % size;
+            let next = if i + 1 == size { 0 } else { i + 1 };
             let diff = points[next][axis] - points[i][axis];
             let slope = out[i][axis][1];
             let next_slope = out[next][axis][1];
@@ -1186,8 +1220,7 @@ fn solve_song_lua_spline_into(
         out[size - 1][axis][1] = 3.0 * (points[size - 1][axis] - points[size - 2][axis]);
     }
     for i in 0..size - 1 {
-        let multiple = 1.0 / diagonals[i];
-        diagonals[i + 1] -= multiple;
+        let multiple = multiples[i];
         for axis in 0..3 {
             if active[axis] {
                 out[i + 1][axis][1] -= out[i][axis][1] * multiple;
@@ -1195,7 +1228,7 @@ fn solve_song_lua_spline_into(
         }
     }
     for i in (1..size).rev() {
-        let multiple = 1.0 / diagonals[i];
+        let multiple = multiples[i];
         for axis in 0..3 {
             if active[axis] {
                 out[i - 1][axis][1] -= out[i][axis][1] * multiple;
@@ -1210,7 +1243,7 @@ fn solve_song_lua_spline_into(
         }
     }
     for i in 0..size {
-        let next = (i + 1) % size;
+        let next = if i + 1 == size { 0 } else { i + 1 };
         for axis in 0..3 {
             if active[axis] {
                 let diff = points[next][axis] - points[i][axis];

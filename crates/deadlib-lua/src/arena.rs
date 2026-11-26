@@ -141,11 +141,11 @@ impl<T> Arena<T> {
         reserved
     }
     pub fn try_insert(&mut self, value: T) -> Result<u64, Error> {
-        self.try_reserve(1)?;
         let slot = if let Some(slot) = self.free.pop() {
             self.values[slot as usize] = Some(value);
             slot as usize
         } else {
+            self.try_reserve(1)?;
             let slot = self.values.len();
             self.values.push(Some(value));
             self.generations.push(1);
@@ -197,13 +197,16 @@ impl<T> Arena<T> {
     }
     fn remove_at(&mut self, slot: usize) -> Option<T> {
         let value = self.values[slot].take()?;
+        self.release_slot(slot);
+        Some(value)
+    }
+    fn release_slot(&mut self, slot: usize) {
         self.live -= 1;
         // Retire a slot at generation exhaustion rather than alias an old handle.
         if let Some(next) = self.generations[slot].checked_add(1) {
             self.generations[slot] = next;
             self.free.push(slot as u32);
         }
-        Some(value)
     }
     pub fn get_mut(&mut self, key: u64) -> Option<&mut T> {
         let slot = index(key);
@@ -375,7 +378,9 @@ impl<T> Arena<T> {
                 if self.values[slot].is_some() {
                     before_remove(self, slot);
                     // Sweeping only visits slots whose mark is already clear.
-                    self.remove_at(slot);
+                    // Drop in place instead of copying the object out of the arena.
+                    self.release_slot(slot);
+                    self.values[slot] = None;
                     reclaimed += 1;
                 }
             }

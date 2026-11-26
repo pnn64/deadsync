@@ -11,7 +11,8 @@ impl NativeStack<'_, '_> {
     /// # Errors
     /// Rejects a pending error, full native stack, table overflow or allocation failure.
     pub fn create_table(&mut self, array: usize, records: usize) -> Result<(), Error> {
-        self.push_new_table(array, records).map(|_| ())
+        self.push_new_table(|vm| vm.try_table_with_capacity(array, records))
+            .map(|_| ())
     }
 
     /// Create and push a table holding the supplied numbers at indices 1 onward.
@@ -19,7 +20,7 @@ impl NativeStack<'_, '_> {
     /// # Errors
     /// Rejects a pending error, full native stack, table overflow or allocation failure.
     pub fn create_number_array(&mut self, numbers: &[f64]) -> Result<(), Error> {
-        let table = self.push_new_table(numbers.len(), 0)?;
+        let table = self.push_new_table(|vm| vm.try_allocate_dense_table(numbers.len()))?;
         self.call.vm.tables[slot_index(table.0)].initialize_number_array(numbers);
         Ok(())
     }
@@ -33,15 +34,15 @@ impl NativeStack<'_, '_> {
         rows: impl ExactSizeIterator<Item = [[f64; NUMBERS]; AXES]>,
     ) -> Result<(), Error> {
         let count = rows.len();
-        let root = self.push_new_table(count, 0)?;
+        let root = self.push_new_table(|vm| vm.try_allocate_dense_table(count))?;
         let vm = &mut self.call.vm;
         // This builds only fresh tables, with no collection or Lua reentry between
         // allocations. Allocation already marks each new table during propagation.
         for (index, row) in rows.take(count).enumerate() {
-            let row_id = vm.try_table_with_capacity(AXES, 0)?;
+            let row_id = vm.try_allocate_dense_table(AXES)?;
             vm.tables[slot_index(root.0)].set_grown_list(index, Value::Table(row_id));
             for (axis, values) in row.into_iter().enumerate() {
-                let leaf = vm.try_table_with_capacity(NUMBERS, 0)?;
+                let leaf = vm.try_allocate_dense_table(NUMBERS)?;
                 vm.tables[slot_index(leaf.0)].initialize_number_array(&values);
                 vm.tables[slot_index(row_id.0)].set_grown_list(axis, Value::Table(leaf));
             }
@@ -49,13 +50,16 @@ impl NativeStack<'_, '_> {
         Ok(())
     }
 
-    fn push_new_table(&mut self, array: usize, records: usize) -> Result<TableId, Error> {
+    fn push_new_table(
+        &mut self,
+        allocate: impl FnOnce(&mut Vm) -> Result<TableId, Error>,
+    ) -> Result<TableId, Error> {
         self.check_error()?;
         if self.top() == limits::MAX_CSTACK {
             return Err(self.error(b"native stack overflow"));
         }
         self.call.vm.reserve_registers(self.end() + 1)?;
-        let table = self.call.vm.try_table_with_capacity(array, records)?;
+        let table = allocate(self.call.vm)?;
         self.call.vm.gc.pending = true;
         self.push(Value::Table(table))?;
         Ok(table)

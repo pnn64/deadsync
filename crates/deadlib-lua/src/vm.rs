@@ -1230,6 +1230,22 @@ impl Vm {
         self.try_table_with_capacity(0, 0)
     }
     fn try_table_with_capacity(&mut self, array: usize, records: usize) -> Result<TableId, Error> {
+        self.try_allocate_table(array, records, true)
+    }
+
+    // The host builds these with only scalars or other fresh dense arrays,
+    // without collection checkpoints or Lua reentry during construction.
+    fn try_allocate_dense_table(&mut self, array: usize) -> Result<TableId, Error> {
+        self.try_allocate_table(array, 0, false)
+    }
+
+    #[inline]
+    fn try_allocate_table(
+        &mut self,
+        array: usize,
+        records: usize,
+        needs_trace: bool,
+    ) -> Result<TableId, Error> {
         let create = if self.lua51_table_order {
             Table::with_native51_capacity
         } else {
@@ -1242,7 +1258,9 @@ impl Vm {
                 error
             }
         })?;
-        self.reserve_gc_new_value()?;
+        if needs_trace {
+            self.reserve_gc_new_value()?;
+        }
         let bytes = table.heap_bytes();
         let id = TableId(
             self.tables
@@ -1252,7 +1270,11 @@ impl Vm {
         self.object_payload_bytes += bytes;
         self.tables.note_alloc(bytes);
         self.gc.pending |= bytes != 0;
-        self.gc_new_value(Value::Table(id));
+        if needs_trace {
+            self.gc_new_value(Value::Table(id));
+        } else {
+            self.gc_mark_new_dense_table(id);
+        }
         Ok(id)
     }
     fn new_record_table(&mut self, capacity: usize) -> Result<TableId, Error> {
@@ -2220,31 +2242,39 @@ impl Vm {
                             .and_then(|end| end.checked_sub(1))
                             .ok_or_else(|| self.memory_failure())?;
                         let target = &mut self.tables[slot_index(id.0)];
-                        let before = target.heap_bytes();
-                        let result = target.grow_list_array(end);
-                        let after = target.heap_bytes();
-                        self.note_table_resize(before, after);
-                        result.map_err(|_| self.memory_failure())?;
-                        if end <= u32::MAX as usize {
-                            for offset in 0..count {
-                                let value = self.registers[a + 1 + offset];
-                                let index = c + offset - 1;
-                                if matches!(
-                                    value,
-                                    Value::Nil | Value::Boolean(_) | Value::Number(_)
-                                ) {
-                                    self.tables[slot_index(id.0)].set_grown_list(index, value);
-                                } else {
-                                    let key = Value::Number((index + 1) as f64);
-                                    self.reserve_gc_table_write(id, key, value)?;
-                                    self.tables[slot_index(id.0)].set_grown_list(index, value);
-                                    self.gc_table_write(id, key, value);
+                        if c == 0
+                            || end > u32::MAX as usize
+                            || !target.set_scalar_list_in_place(
+                                c - 1,
+                                &self.registers[a + 1..a + 1 + count],
+                            )
+                        {
+                            let before = target.heap_bytes();
+                            let result = target.grow_list_array(end);
+                            let after = target.heap_bytes();
+                            self.note_table_resize(before, after);
+                            result.map_err(|_| self.memory_failure())?;
+                            if end <= u32::MAX as usize {
+                                for offset in 0..count {
+                                    let value = self.registers[a + 1 + offset];
+                                    let index = c + offset - 1;
+                                    if matches!(
+                                        value,
+                                        Value::Nil | Value::Boolean(_) | Value::Number(_)
+                                    ) {
+                                        self.tables[slot_index(id.0)].set_grown_list(index, value);
+                                    } else {
+                                        let key = Value::Number((index + 1) as f64);
+                                        self.reserve_gc_table_write(id, key, value)?;
+                                        self.tables[slot_index(id.0)].set_grown_list(index, value);
+                                        self.gc_table_write(id, key, value);
+                                    }
                                 }
-                            }
-                        } else {
-                            for offset in 0..count {
-                                let value = self.registers[a + 1 + offset];
-                                self.raw_set(id, Value::Number((c + offset) as f64), value)?;
+                            } else {
+                                for offset in 0..count {
+                                    let value = self.registers[a + 1 + offset];
+                                    self.raw_set(id, Value::Number((c + offset) as f64), value)?;
+                                }
                             }
                         }
                         if self.gc.pending {

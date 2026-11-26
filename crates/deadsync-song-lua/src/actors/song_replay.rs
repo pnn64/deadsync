@@ -654,6 +654,7 @@ impl Actors {
         vm: &mut Vm,
         screen: ActorScene,
         actors: &[Value],
+        mut poses: Option<&mut [crate::SongLuaOverlayState]>,
     ) -> bool {
         let store = vm.store();
         let Some((owner, second)) = store.replay_frame else {
@@ -680,8 +681,8 @@ impl Actors {
                 lifecycle::sample_replay(actor, second as f32);
             }
         }
-        for value in actors {
-            let Value::Table(id) = *value else {
+        for (pose_index, &value) in actors.iter().enumerate() {
+            let Value::Table(id) = value else {
                 continue;
             };
             let Some(actor) = store.actors.get(&id).filter(|a| a.capture.is_none()) else {
@@ -691,6 +692,12 @@ impl Actors {
                 continue;
             };
             let (targets, pose) = (replay.targets, actor.current);
+            if let Some(state) = poses
+                .as_deref_mut()
+                .and_then(|poses| poses.get_mut(pose_index))
+            {
+                pose.write_to(state);
+            }
             if let Some(&index) = capture.indices.get(&id) {
                 capture.immediate.publish_pose(index, targets, pose);
             }

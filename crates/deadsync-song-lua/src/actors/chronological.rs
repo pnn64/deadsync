@@ -68,17 +68,13 @@ impl Actors {
             .messages
             .as_mut()
             .unwrap();
-        capture.indices = values
-            .iter()
-            .enumerate()
-            .filter_map(|(i, v)| {
-                if let Value::Table(id) = v {
-                    Some((*id, i))
-                } else {
-                    None
-                }
-            })
-            .collect();
+        capture.replace_indices(values.iter().enumerate().filter_map(|(i, v)| {
+            if let Value::Table(id) = v {
+                Some((*id, i))
+            } else {
+                None
+            }
+        }));
     }
     pub(crate) fn song_message_advances(
         &self,

@@ -305,14 +305,21 @@ pub(super) fn write(call: &mut HostCall<'_>, id: TableId, delta: Delta, immediat
     let guard = call.store();
     let scope = guard.capture_scope;
     let fallback = song_pose::mode(&guard, id);
+    let pose_targets = crate::tween_pose::update_mask(&delta);
     if let Some(actor) = guard.actors.get_mut(&id) {
         retain_authored_transform(actor, &delta);
-        record(actor, &delta, immediate, scope, fallback);
+        record(actor, &delta, immediate, scope, fallback, pose_targets);
     }
-    song_immediate::record_pose_step(guard, id, &delta, fallback);
+    song_immediate::record_pose_step(guard, id, pose_targets, fallback);
     #[cfg(feature = "test-support")]
     song_messages::pose_write(call, id, &delta);
-    if !song_pose::record(call, id, &delta) {
+    #[cfg(feature = "test-support")]
+    let fallback = song_pose::mode(call.store(), id);
+    if fallback {
+        if pose_targets != 0 {
+            song_pose::record(call, id, &delta);
+        }
+    } else {
         song_messages::record(call, id, &delta);
     }
     song_immediate::delta(call, id, &delta, immediate);
@@ -381,61 +388,66 @@ pub(super) fn retain_render_update(
     if let Some(actor) = guard.actors.get_mut(&id) {
         retain_authored_transform(actor, &delta);
         if retain_command {
-            record(actor, &delta, immediate, scope, fallback);
+            let pose_targets = crate::tween_pose::update_mask(&delta);
+            record(actor, &delta, immediate, scope, fallback, pose_targets);
         }
     }
 }
 
 fn retain_authored_transform(actor: &mut Actor, delta: &Delta) {
-    use crate::SongLuaOverlayUpdateTarget as Target;
     if actor.authored_transform {
         return;
     }
     // A native Player also writes its HUD roots every frame. Only Lua setter
     // calls opt those roots into the captured transform path, including writes
     // equal to their defaults; otherwise the theme owns profile-aware placement.
-    actor.authored_transform |= [
-        Target::X,
-        Target::Y,
-        Target::Z,
-        Target::Zoom,
-        Target::ZoomX,
-        Target::ZoomY,
-        Target::ZoomZ,
-        Target::RotationX,
-        Target::RotationY,
-        Target::RotationZ,
-        Target::Quaternion,
-        Target::SkewX,
-        Target::SkewY,
-        Target::BaseZoom,
-        Target::BaseZoomX,
-        Target::BaseZoomY,
-        Target::BaseZoomZ,
-        Target::BaseRotation,
-        Target::Diffuse,
-        Target::BaseAlpha,
-        Target::Vibrate,
-        Target::Rainbow,
-        Target::EffectMode,
-        Target::EffectPeriod,
-        Target::EffectTiming,
-        Target::EffectMagnitude,
-        Target::EffectColor1,
-        Target::EffectColor2,
-        Target::EffectOffset,
-        Target::EffectClock,
-        Target::EffectNoOffset,
-        Target::EffectTimer,
-    ]
-    .into_iter()
-    .any(|target| delta.has_update_target(target));
+    actor.authored_transform = delta.x.is_some()
+        || delta.y.is_some()
+        || delta.z.is_some()
+        || delta.zoom.is_some()
+        || delta.zoom_x.is_some()
+        || delta.zoom_y.is_some()
+        || delta.zoom_z.is_some()
+        || delta.rot_x_deg.is_some()
+        || delta.rot_y_deg.is_some()
+        || delta.rot_z_deg.is_some()
+        || delta.quaternion.is_some()
+        || delta.skew_x.is_some()
+        || delta.skew_y.is_some()
+        || delta.basezoom.is_some()
+        || delta.basezoom_x.is_some()
+        || delta.basezoom_y.is_some()
+        || delta.basezoom_z.is_some()
+        || delta.base_rotation.is_some()
+        || delta.diffuse.is_some()
+        || delta.base_alpha.is_some()
+        || delta.vibrate.is_some()
+        || delta.rainbow.is_some()
+        || delta.effect_mode.is_some()
+        || delta.effect_period.is_some()
+        || delta.effect_timing.is_some()
+        || delta.effect_magnitude.is_some()
+        || delta.effect_color1.is_some()
+        || delta.effect_color2.is_some()
+        || delta.effect_offset.is_some()
+        || delta.effect_clock.is_some()
+        || delta.effect_no_offset.is_some()
+        || delta.effect_timer.is_some();
 }
 
-fn record(actor: &mut Actor, delta: &Delta, immediate: bool, scope: Option<f32>, fallback: bool) {
+fn record(
+    actor: &mut Actor,
+    delta: &Delta,
+    immediate: bool,
+    scope: Option<f32>,
+    fallback: bool,
+    pose_targets: u128,
+) {
     if let Some(replay) = &mut actor.replay {
-        replay.targets |= crate::tween_pose::update_mask(delta);
-        if let Some(pose) = replay.getters.as_mut() {
+        replay.targets |= pose_targets;
+        if pose_targets != 0
+            && let Some(pose) = replay.getters.as_mut()
+        {
             pose.apply_delta(delta);
         }
     }
@@ -649,6 +661,9 @@ pub(super) fn property(call: &mut HostCall<'_>, id: TableId, name: &str) {
     ) {
         actor.pose_exported = true;
     }
+    if actor.authored_transform && actor.capture.is_none() && actor.replay.is_none() {
+        return;
+    }
     let pose = actor.destination();
     let state = &actor.state;
     let render = &state.render;
@@ -768,15 +783,33 @@ pub(super) fn property(call: &mut HostCall<'_>, id: TableId, name: &str) {
     if actor.capture.is_none() && actor.replay.is_none() {
         return;
     }
-    record(actor, &delta, immediate, scope, fallback);
-    song_immediate::record_pose_step(guard, id, &delta, fallback);
+    let pose_targets = crate::tween_pose::update_mask(&delta);
+    record(actor, &delta, immediate, scope, fallback, pose_targets);
+    song_immediate::record_pose_step(guard, id, pose_targets, fallback);
     #[cfg(feature = "test-support")]
     song_messages::pose_write(call, id, &delta);
-    if !song_pose::record(call, id, &delta) {
+    #[cfg(feature = "test-support")]
+    let fallback = song_pose::mode(call.store(), id);
+    if fallback {
+        if pose_targets != 0 {
+            song_pose::record(call, id, &delta);
+        }
+    } else {
         song_messages::record(call, id, &delta);
     }
-    song_immediate::delta(call, id, &delta, immediate);
-    song_media::delta(call, id, &delta);
+    // This setter group only publishes pose and immediate properties.
+    if let Some(visible) = delta.visible {
+        if immediate {
+            song_immediate::record_frame(
+                call,
+                id,
+                crate::SongLuaOverlayUpdateTarget::Visible,
+                crate::SongLuaOverlayUpdateValue::Bool(visible),
+            );
+        }
+    } else {
+        song_immediate::delta(call, id, &delta, immediate);
+    }
 }
 
 // Once a fallback actor queues during an update, that queue belongs to frame

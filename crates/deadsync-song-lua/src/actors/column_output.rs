@@ -204,11 +204,30 @@ fn read_splines(call: &mut HostCall<'_>, state: &mut State) -> Result<(), Error>
 }
 fn same_coefficients(a: &[[[f32; 4]; 3]], b: &[[[f32; 4]; 3]]) -> bool {
     a.len() == b.len()
-        && a.iter()
-            .flatten()
-            .flatten()
-            .zip(b.iter().flatten().flatten())
+        && a.as_flattened()
+            .as_flattened()
+            .iter()
+            .zip(b.as_flattened().as_flattened())
             .all(|(a, b)| a.to_bits() == b.to_bits())
+}
+
+fn read_numeric_coefficients(
+    call: &HostCall<'_>,
+    entry: Value,
+    values: [f32; 3],
+) -> Result<Option<PointCoefficients>, Error> {
+    let mut row = values.map(|a| [a, 0., 0., 0.]);
+    if entry != Value::Nil {
+        let entry = table(call, entry)?;
+        let axes = call.raw_table_read_array::<3>(entry)?;
+        for (axis, coefficients) in axes.into_iter().zip(&mut row) {
+            let Some(axis_values) = raw_numeric_point(call, axis)? else {
+                return Ok(None);
+            };
+            coefficients[1..].copy_from_slice(&axis_values);
+        }
+    }
+    Ok(Some(row))
 }
 
 fn read_coefficients(
@@ -216,27 +235,17 @@ fn read_coefficients(
     entry: Value,
     values: [f32; 3],
 ) -> Result<PointCoefficients, Error> {
-    let mut row = values.map(|a| [a, 0., 0., 0.]);
-    if entry == Value::Nil {
+    if let Some(row) = read_numeric_coefficients(call, entry, values)? {
         return Ok(row);
     }
     let entry_id = table(call, entry)?;
-    // Ordinary coefficient rows use only raw numeric reads, so they need no
-    // temporary roots. Root the row before the slow path can reenter Lua.
-    for (axis, coefficients) in row.iter_mut().enumerate() {
-        let axis_row = call.raw_table_get(entry_id, Value::Number((axis + 1) as f64))?;
-        let Some(axis_values) = raw_numeric_point(call, axis_row)? else {
-            return call.with_roots(&[entry], |call| {
-                let mut row = values.map(|a| [a, 0., 0., 0.]);
-                for (axis, coefficients) in row.iter_mut().enumerate() {
-                    coefficients[1..].copy_from_slice(&point(call, entry_id, axis + 1)?);
-                }
-                Ok(row)
-            });
-        };
-        coefficients[1..].copy_from_slice(&axis_values);
-    }
-    Ok(row)
+    call.with_roots(&[entry], |call| {
+        let mut row = values.map(|a| [a, 0., 0., 0.]);
+        for (axis, coefficients) in row.iter_mut().enumerate() {
+            coefficients[1..].copy_from_slice(&point(call, entry_id, axis + 1)?);
+        }
+        Ok(row)
+    })
 }
 
 fn read_spline(
@@ -278,7 +287,18 @@ fn read_spline(
                 scratch.points.clear();
                 scratch.points.reserve_exact(size);
                 let looping = field(call, spline, "__songlua_spline_loop")?.is_truthy();
-                for index in 1..=size {
+                // Borrow only the plain numeric prefix. The first coercion may
+                // enter Lua, so process the remaining rows in their old order.
+                for &point in call.raw_table_array_values(points)?.iter().take(size) {
+                    let Some(values) = raw_numeric_point(call, point)? else {
+                        break;
+                    };
+                    if values.iter().any(|value| !value.is_finite()) {
+                        break;
+                    }
+                    scratch.points.push(values);
+                }
+                for index in scratch.points.len() + 1..=size {
                     let values = point(call, points, index)?;
                     if values.iter().any(|v| !v.is_finite()) {
                         // Legacy Offset zoom uses -infinity as a binary note hide.
@@ -295,7 +315,24 @@ fn read_spline(
                     if let Some(encoded) = encoded
                         && call.raw_table_get(encoded, Value::Number(1.0))? != Value::Nil
                     {
-                        for (index, values) in scratch.points.iter().enumerate() {
+                        for (&entry, &values) in call
+                            .raw_table_array_values(encoded)?
+                            .iter()
+                            .zip(&scratch.points)
+                        {
+                            let Some(coefficients) =
+                                read_numeric_coefficients(call, entry, values)?
+                            else {
+                                break;
+                            };
+                            scratch.coefficients.push(coefficients);
+                        }
+                        for (index, values) in scratch
+                            .points
+                            .iter()
+                            .enumerate()
+                            .skip(scratch.coefficients.len())
+                        {
                             let entry =
                                 call.raw_table_get(encoded, Value::Number((index + 1) as f64))?;
                             let coefficients = read_coefficients(call, entry, *values)?;
