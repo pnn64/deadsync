@@ -1,5 +1,6 @@
 use deadlib_image_bmp::{
-    Bitmap, Error, Info, Limits, Pixels, decode, decode_with_limits, probe, probe_with_limits,
+    Bitmap, Error, Info, Limits, Pixels, decode, decode_rgba8, decode_rgba8_with_limits,
+    decode_with_limits, probe, probe_with_limits,
 };
 
 #[derive(Clone, Copy)]
@@ -158,6 +159,10 @@ fn indexed_headers_preserve_indices_palettes_orientation_and_packed_tails() {
                         .collect();
                     assert_eq!(image.to_rgba8().unwrap(), expected);
                     assert_info(probe(&bytes).unwrap(), width as u32, 3, bits, top_down);
+                    assert_eq!(
+                        decode_rgba8(&bytes).unwrap(),
+                        (probe(&bytes).unwrap(), expected)
+                    );
                 }
             }
         }
@@ -167,7 +172,7 @@ fn indexed_headers_preserve_indices_palettes_orientation_and_packed_tails() {
 #[test]
 fn rgb24_headers_decode_bgr_rows_with_every_padding_length() {
     for size in [12, 40, 52, 56, 108, 124] {
-        for width in [1usize, 2, 3, 4, 5, 12, 17] {
+        for width in [1usize, 2, 3, 4, 5, 12, 17, 31, 32, 33, 511] {
             for top_down in [false, true] {
                 if size == 12 && top_down {
                     continue;
@@ -193,6 +198,14 @@ fn rgb24_headers_decode_bgr_rows_with_every_padding_length() {
                 let bytes = bmp(header, &[], &rows);
                 assert_rgb(&decode(&bytes).unwrap(), &expected);
                 assert_info(probe(&bytes).unwrap(), width as u32, 2, 24, top_down);
+                assert_eq!(
+                    decode_rgba8(&bytes).unwrap(),
+                    (probe(&bytes).unwrap(), rgba(&expected))
+                );
+                assert_eq!(
+                    decode_rgba8(&bytes[..bytes.len() - 1]),
+                    Err(Error::Truncated)
+                );
             }
         }
     }
@@ -646,6 +659,24 @@ fn input_pixel_and_decoded_limits_apply_to_decode_and_header_only_probe() {
         decode_with_limits(&bytes, limits).unwrap();
         probe_with_limits(&bytes, limits).unwrap();
         probe_with_limits(&bytes[..header_end], limits).unwrap();
+        let rgba_limits = Limits {
+            max_decoded_bytes: 8,
+            ..limits
+        };
+        assert_eq!(
+            decode_rgba8_with_limits(&bytes, rgba_limits).unwrap().1,
+            decode(&bytes).unwrap().into_rgba8().unwrap(),
+        );
+        assert_eq!(
+            decode_rgba8_with_limits(
+                &bytes,
+                Limits {
+                    max_decoded_bytes: 7,
+                    ..rgba_limits
+                }
+            ),
+            Err(Error::LimitExceeded),
+        );
         for limited in [
             Limits {
                 max_input_bytes: bytes.len() - 1,

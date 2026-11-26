@@ -22,7 +22,10 @@ mod decode;
 mod encode;
 mod model;
 
-pub use decode::{Info, decode, decode_with_limits, probe, probe_with_limits};
+pub use decode::{
+    Info, decode, decode_rgba8, decode_rgba8_with_limits, decode_with_limits, probe,
+    probe_with_limits,
+};
 pub use encode::{EncodeOptions, encode, encode_with_options};
 pub use model::{Bitmap, Limits, Pixels};
 

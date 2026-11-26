@@ -56,6 +56,7 @@ fn measure<T>(span: Duration, count: usize, mut task: impl FnMut() -> T) -> (u64
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Codec {
     Deadlib,
+    DeadlibRgba,
     Image,
     Oxide,
     Foreign(u32),
@@ -85,6 +86,7 @@ impl Codec {
     fn name(self) -> &'static str {
         match self {
             Self::Deadlib => "deadlib",
+            Self::DeadlibRgba => "deadlib-rgba",
             Self::Image => "image",
             Self::Oxide => "oxideav-bmp",
             Self::Foreign(i) => ["stb", "wuffs", "sdl3", "wic", "libnsbmp", "ffmpeg"][i as usize],
@@ -137,6 +139,10 @@ fn decode<'a>(
                 shape,
                 Bytes::Vec(bmp.into_rgba8().map_err(|e| e.to_string())?),
             ))
+        }
+        Codec::DeadlibRgba => {
+            let (info, rgba) = deadlib_image_bmp::decode_rgba8(input).map_err(|e| e.to_string())?;
+            Ok(((info.width, info.height), Bytes::Vec(rgba)))
         }
         Codec::Image => {
             let bmp = image::load_from_memory_with_format(input, image::ImageFormat::Bmp)
@@ -209,6 +215,7 @@ fn encode<'a>(lib: &'a Libraries, codec: Codec, src: &Source) -> Result<Bytes<'a
         return Err("top-down output unavailable".into());
     }
     match codec {
+        Codec::DeadlibRgba => unreachable!("decode-only codec"),
         Codec::Deadlib => deadlib_image_bmp::encode_with_options(
             &src.bmp,
             deadlib_image_bmp::EncodeOptions {
@@ -359,7 +366,7 @@ fn main() {
         assert_eq!(s, "--verify-only");
         true
     });
-    assert!(matches!(mode.as_str(), "decode" | "encode") && args.next().is_none());
+    assert!(matches!(mode.as_str(), "decode" | "decode-wuffs" | "encode") && args.next().is_none());
     let lib = Libraries {
         core: foreign::Bridge::load(&dir.join("bench_bmp.dll")),
         ffmpeg: dir
@@ -411,7 +418,11 @@ fn main() {
         };
         let real_len = data.len();
         data.resize(real_len + 64, 0); // FFmpeg may read its required padding.
-        let codecs: &[Codec] = if encoding { &ENCODE } else { &DECODE };
+        let codecs: &[Codec] = match mode.as_str() {
+            "encode" => &ENCODE,
+            "decode-wuffs" => &[Codec::Deadlib, Codec::DeadlibRgba, Codec::Foreign(1)],
+            _ => &DECODE,
+        };
         for offset in 0..codecs.len() {
             let offset = if reversed {
                 codecs.len() - 1 - offset

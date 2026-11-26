@@ -62,3 +62,8 @@ comparisons to identical verified cases. A 3% band is used when counting
 pairwise wins and losses. `summarize.py REPORT_DIR` rebuilds the summary from
 saved results and checks that every case and codec produced identical
 non-timing fields across both passes.
+
+`compare.exe decode-wuffs MANIFEST DLL_DIRECTORY` compares the staged native
+API, the direct `decode_rgba8` API, and Wuffs in the same process. Its TSV
+labels are `deadlib`, `deadlib-rgba`, and `wuffs`. Use the full decode manifest
+for coverage or a filtered copy for shorter experiments.

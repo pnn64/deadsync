@@ -20,7 +20,7 @@ pub fn probe(input: &[u8]) -> Result<Info, Error> {
 
 /// Inspect a header and check input, pixel count, and decoded storage limits.
 pub fn probe_with_limits(input: &[u8], limits: Limits) -> Result<Info, Error> {
-    Ok(parse_header(input, limits)?.info)
+    Ok(parse_header(input, limits, Output::Native)?.info)
 }
 
 /// Decode a BMP with default limits, retaining indexed pixels and their palette.
@@ -32,18 +32,54 @@ pub fn decode(input: &[u8]) -> Result<Bitmap, Error> {
 /// indices, and malformed masks are errors. Advisory size/palette-count fields
 /// and bytes after the complete pixel array do not alter pixel interpretation.
 pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error> {
-    let header = parse_header(input, limits)?;
+    let header = parse_header(input, limits, Output::Native)?;
+    let source = pixel_source(input, &header)?;
+    let pixels = decode_pixels(input, &header, source)?;
+    Ok(bitmap(header.info, pixels))
+}
+
+/// Decode directly into packed, top-down RGBA8 with the default limits.
+/// The returned metadata describes the source BMP.
+pub fn decode_rgba8(input: &[u8]) -> Result<(Info, Vec<u8>), Error> {
+    decode_rgba8_with_limits(input, Limits::default())
+}
+
+/// Decode into packed, top-down RGBA8 with explicit resource limits.
+/// `max_decoded_bytes` bounds the four-byte-per-pixel raster.
+pub fn decode_rgba8_with_limits(input: &[u8], limits: Limits) -> Result<(Info, Vec<u8>), Error> {
+    let header = parse_header(input, limits, Output::Rgba)?;
+    let source = pixel_source(input, &header)?;
+    let samples = match header.format {
+        Format::Rgb24 => rgb24_rgba(source, &header)?,
+        _ => bitmap(header.info, decode_pixels(input, &header, source)?)
+            .into_rgba8_with_limits(limits)?,
+    };
+    Ok((header.info, samples))
+}
+
+fn bitmap(info: Info, pixels: Pixels) -> Bitmap {
+    Bitmap {
+        width: info.width,
+        height: info.height,
+        pixels,
+    }
+}
+
+fn pixel_source<'a>(input: &'a [u8], header: &Header) -> Result<&'a [u8], Error> {
     // Validate the complete source extent before allocating any pixel buffers.
     let source_end = header
         .pixel_offset
         .checked_add(header.source_bytes)
         .ok_or(Error::LimitExceeded)?;
-    let source = input
+    input
         .get(header.pixel_offset..source_end)
-        .ok_or(Error::Truncated)?;
+        .ok_or(Error::Truncated)
+}
+
+fn decode_pixels(input: &[u8], header: &Header, source: &[u8]) -> Result<Pixels, Error> {
     let width = header.info.width as usize;
 
-    let pixels = match header.format {
+    Ok(match header.format {
         Format::Indexed {
             palette_start,
             palette_len,
@@ -158,14 +194,9 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                     append(source, &mut indices, width, block_bytes, validate_indices)?;
                 } else if width < 512 && header.info.height > 1 {
                     if check_indices {
-                        append_padded_index_blocks(
-                            source,
-                            &header,
-                            &mut indices,
-                            validate_indices,
-                        )?;
+                        append_padded_index_blocks(source, header, &mut indices, validate_indices)?;
                     } else {
-                        append_full_palette_rows(source, &header, &mut indices);
+                        append_full_palette_rows(source, header, &mut indices);
                     }
                 } else {
                     for row in rows {
@@ -178,13 +209,13 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 if tight_packed {
                     indices = unpack_contiguous(source, |byte| [byte >> 4, byte & 15])?;
                 } else {
-                    append_four_bit_rows(source, &header, &mut indices);
+                    append_four_bit_rows(source, header, &mut indices);
                 }
                 validate_indices(&indices)?;
             } else if tight_packed {
                 indices = unpack_contiguous(source, expand_one_bit_byte)?;
             } else if byte_aligned_mono {
-                indices = unpack_byte_aligned_mono(source, &header)?;
+                indices = unpack_byte_aligned_mono(source, header)?;
             } else {
                 let top_down = header.info.top_down;
                 match width {
@@ -192,7 +223,7 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                     16 => append_mono_word_rows::<16>(source, &mut indices, top_down),
                     24 => append_mono_word_rows::<24>(source, &mut indices, top_down),
                     32 => append_mono_word_rows::<32>(source, &mut indices, top_down),
-                    _ => append_one_bit_rows(source, &header, &mut indices),
+                    _ => append_one_bit_rows(source, header, &mut indices),
                 }
             }
             Pixels::Indexed {
@@ -205,12 +236,12 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
             if (cfg!(target_arch = "x86") && header.info.width.is_multiple_of(4))
                 || (header.info.width == 4 && !header.info.top_down) =>
         {
-            Pixels::Rgb(decode_rgb24_quads(source, &header)?)
+            Pixels::Rgb(decode_rgb24_quads(source, header)?)
         }
-        Format::Rgb24 => Pixels::Rgb(map_rows(source, &header, |[blue, green, red]| {
+        Format::Rgb24 => Pixels::Rgb(map_rows(source, header, |[blue, green, red]| {
             [red, green, blue]
         })?),
-        Format::Rgb555 => Pixels::Rgb(map_rows(source, &header, rgb16::<5>)?),
+        Format::Rgb555 => Pixels::Rgb(map_rows(source, header, rgb16::<5>)?),
         Format::Bgra32 => {
             let all_zero = if header.info.top_down {
                 bgra_alpha_is_zero(source, false)
@@ -219,11 +250,11 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 bgra_alpha_is_zero(first_row, false) && bgra_alpha_is_zero(rest, true)
             };
             let samples = if all_zero {
-                map_rows(source, &header, |[blue, green, red, _]| {
+                map_rows(source, header, |[blue, green, red, _]| {
                     [red, green, blue, 255]
                 })?
             } else {
-                map_rows(source, &header, |[blue, green, red, alpha]| {
+                map_rows(source, header, |[blue, green, red, alpha]| {
                     [red, green, blue, alpha]
                 })?
             };
@@ -235,18 +266,13 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
             blue,
             alpha,
         } => {
-            let samples = masked_samples(source, &header, [red, green, blue], alpha)?;
+            let samples = masked_samples(source, header, [red, green, blue], alpha)?;
             if alpha.is_some() {
                 Pixels::Rgba(samples)
             } else {
                 Pixels::Rgb(samples)
             }
         }
-    };
-    Ok(Bitmap {
-        width: header.info.width,
-        height: header.info.height,
-        pixels,
     })
 }
 
@@ -699,6 +725,39 @@ fn decode_rgb24_quads(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> 
     Ok(samples.into_flattened())
 }
 
+fn rgb24_rgba(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> {
+    let width = header.info.width as usize;
+    let mut samples = Vec::new();
+    reserve(&mut samples, header.pixel_count)?;
+    let mut append = |row: &[u8]| {
+        let (quads, tail) = row.as_chunks::<12>();
+        samples.extend(quads.iter().flat_map(
+            |&[b0, g0, r0, b1, g1, r1, b2, g2, r2, b3, g3, r3]| {
+                [
+                    [r0, g0, b0, 255],
+                    [r1, g1, b1, 255],
+                    [r2, g2, b2, 255],
+                    [r3, g3, b3, 255],
+                ]
+            },
+        ));
+        samples.extend(
+            tail.as_chunks::<3>()
+                .0
+                .iter()
+                .map(|&[b, g, r]| [r, g, b, 255]),
+        );
+    };
+    if header.info.top_down && header.row_pitch == width * 3 {
+        append(source);
+    } else {
+        for row in display_rows(source, header.row_pitch, header.info.top_down) {
+            append(&row[..width * 3]);
+        }
+    }
+    Ok(samples.into_flattened())
+}
+
 fn bgra_alpha_is_zero(source: &[u8], reverse: bool) -> bool {
     const ALPHA_MASK: u128 = 0xff00_0000_ff00_0000_ff00_0000_ff00_0000;
     let (blocks, tail) = source.as_chunks::<16>();
@@ -858,6 +917,11 @@ struct Header {
     pixel_count: usize,
 }
 
+enum Output {
+    Native,
+    Rgba,
+}
+
 #[derive(Clone, Copy)]
 enum Format {
     Indexed {
@@ -972,7 +1036,7 @@ fn masks_format(masks: [u32; 4], bit_depth: u16) -> Result<Format, Error> {
 }
 
 #[inline(always)]
-fn parse_header(input: &[u8], limits: Limits) -> Result<Header, Error> {
+fn parse_header(input: &[u8], limits: Limits, output: Output) -> Result<Header, Error> {
     if input.len() > limits.max_input_bytes {
         return Err(Error::LimitExceeded);
     }
@@ -1100,9 +1164,11 @@ fn parse_header(input: &[u8], limits: Limits) -> Result<Header, Error> {
     // Dimensions are at most i32::MAX and each raster uses at most four
     // bytes per pixel, so even adding the palette stays within u64.
     let pixels = count as u64;
-    let decoded_bytes = match format {
-        Format::Indexed { palette_len, .. } => pixels + palette_len as u64 * 3,
-        Format::Bgra32 | Format::Masked { alpha: Some(_), .. } => pixels * 4,
+    let decoded_bytes = match (output, format) {
+        (Output::Rgba, _) | (_, Format::Bgra32 | Format::Masked { alpha: Some(_), .. }) => {
+            pixels * 4
+        }
+        (_, Format::Indexed { palette_len, .. }) => pixels + palette_len as u64 * 3,
         _ => pixels * 3,
     };
     if decoded_bytes > limits.max_decoded_bytes as u64 {

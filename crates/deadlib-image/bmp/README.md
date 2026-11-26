@@ -81,6 +81,10 @@ copying. RGB and indexed input use the same expansion as the borrowed methods.
 Both variants validate public models and apply the same pixel/output limits;
 consuming RGBA preserves the buffer's existing spare capacity.
 
+`decode_rgba8` / `decode_rgba8_with_limits` return the source `Info` and owned,
+packed RGBA samples in top-down order. RGB24 goes directly from BGR to RGBA
+in one traversal. The decoded byte limit applies to the RGBA raster.
+
 `probe` / `probe_with_limits` inspect dimensions, source depth, and orientation
 without allocating or requiring palette/pixel bytes. They require a complete
 DIB and any external masks, validate header structure, and enforce the same
