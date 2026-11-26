@@ -42,6 +42,37 @@ fn dense_overwrites_preserve_native_array_extent_and_order() {
 }
 
 #[test]
+fn copied_scalar_list_prefixes_keep_later_fields_and_tables_independent() {
+    let fields = (1..=100)
+        .map(|index| if index % 2 == 0 { "false" } else { "17" })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = format!(
+        r#"
+        local function last(value) return value, true end
+        local function make(value)
+            return {{ {fields}, last(value) }}
+        end
+        local first, second = make(11), make(22)
+        first[51] = 5
+        for i = 1, 100 do
+            local expected = i % 2 ~= 0 and 17 or false
+            assert(second[i] == expected)
+            assert(first[i] == (i == 51 and 5 or expected))
+        end
+        return #first == 102 and #second == 102
+            and first[101] == 11 and second[101] == 22 and second[102] == true
+        "#,
+    );
+    let program = compile(source.as_bytes()).unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
+        vm.set_instruction_limit(Some(100_000));
+        assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
+    }
+}
+
+#[test]
 fn numeric_sums_preserve_loop_carried_values_and_rounding() {
     check(
         br#"

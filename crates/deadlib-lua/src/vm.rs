@@ -32,6 +32,7 @@ mod reductions;
 mod simple;
 mod standalone;
 mod strings;
+mod table_literals;
 mod tables;
 mod threads;
 mod traces;
@@ -1258,6 +1259,9 @@ impl Vm {
                 error
             }
         })?;
+        self.try_insert_table(table, needs_trace)
+    }
+    fn try_insert_table(&mut self, table: Table, needs_trace: bool) -> Result<TableId, Error> {
         if needs_trace {
             self.reserve_gc_new_value()?;
         }
@@ -1968,6 +1972,7 @@ impl Vm {
         let mut held: Option<crate::memory::Shared<ProgramData>> = None;
         let mut numeric_call_cache = numeric_leaf::Cache::default();
         let mut forwarding_cache = forwarding::Cache::default();
+        let mut table_literal_cache = table_literals::Cache::default();
         let mut field_hints = [[0; 2]; simple::FIELD_HINTS];
         let mut reduction_retry: Option<reductions::Retry> = None;
         'frames: loop {
@@ -2206,22 +2211,28 @@ impl Vm {
                         }
                     }
                     Op::NewTable => {
-                        let id = if self.lua51_table_order {
-                            let size = |hint: u32| -> Result<usize, Error> {
-                                if hint < 8 {
-                                    return Ok(hint as usize);
-                                }
-                                1usize
-                                    .checked_shl((hint >> 3) - 1)
-                                    .and_then(|scale| scale.checked_mul((hint & 7) as usize + 8))
-                                    .filter(|&size| size <= 1 << 26)
-                                    .ok_or_else(|| Error::runtime_static("table overflow"))
-                            };
-                            self.try_table_with_capacity(size(u32::from(i.b))?, size(i.c)?)?
+                        if i.c == 0
+                            && i.b >= table_literals::MIN_ARRAY_HINT
+                            && let Some(end) = self.copy_table_literal(
+                                &mut table_literal_cache,
+                                function,
+                                prototype,
+                                base,
+                                pc,
+                            )?
+                        {
+                            pc = end;
+                            self.frames[frame_index].pc = pc as u32;
                         } else {
-                            self.try_new_table()?
-                        };
-                        self.registers[a] = Value::Table(id);
+                            let id = if self.lua51_table_order {
+                                let array = table_literals::allocation_hint(u32::from(i.b))?;
+                                let records = table_literals::allocation_hint(i.c)?;
+                                self.try_table_with_capacity(array, records)?
+                            } else {
+                                self.try_new_table()?
+                            };
+                            self.registers[a] = Value::Table(id);
+                        }
                         self.maybe_gc()?;
                     }
                     Op::SetList => {

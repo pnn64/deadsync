@@ -381,6 +381,21 @@ impl Table {
         }
         Ok(table)
     }
+    pub(crate) fn with_scalar_array(
+        scalars: &[Value],
+        array: usize,
+        native51: bool,
+        memory: Memory,
+    ) -> Result<Self, Error> {
+        let mut table = Self::new_in(memory);
+        let slots = table.array.heap_mut();
+        slots.try_reserve_exact(array.max(scalars.len()))?;
+        slots.extend_from_slice(scalars);
+        slots.resize(array.max(scalars.len()), Value::Nil);
+        table.native51 = native51;
+        table.fields_version = u32::from(native51);
+        Ok(table)
+    }
     #[inline]
     fn hash_part(&self) -> &HashPart {
         self.hash.as_deref().unwrap_or(&EMPTY_HASH)

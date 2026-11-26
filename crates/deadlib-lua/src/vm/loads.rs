@@ -1346,7 +1346,7 @@ impl Vm {
             && self.reader_context_allows_root_elision()
             && reader::cannot_inspect_stack(self, reader)
             && !self.load_has_inherited_error_handler(job.owner)
-            && !self.reader_gc_may_call_out()
+            && !self.gc_may_call_out()
     }
 
     fn reader_context_allows_root_elision(&self) -> bool {
@@ -1375,7 +1375,7 @@ impl Vm {
             || bytes[0] == 27
             || !self.reader_context_allows_root_elision()
             || !eof::returns_nil(self, self.registers[base])
-            || self.reader_gc_may_call_out()
+            || self.gc_may_call_out()
         {
             return Ok(None);
         }

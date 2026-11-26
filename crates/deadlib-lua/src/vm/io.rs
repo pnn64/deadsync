@@ -391,10 +391,9 @@ impl Vm {
         }
         user.file.map(NonZeroU64::get)
     }
-    // A reader can omit parser roots only when automatic collection
-    // cannot invoke code that observes the parser stack.
-    pub(super) fn reader_gc_may_call_out(&self) -> bool {
-        if self.userdata.len() > 64 {
+    // Automatic collection can reenter Lua through userdata finalizers.
+    pub(super) fn gc_may_call_out(&self) -> bool {
+        if !self.gc.finalizers.is_empty() || self.userdata.len() > 64 {
             return true;
         }
         let file_metatable = self.file_metatable();
