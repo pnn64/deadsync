@@ -1,0 +1,7 @@
+name	url	commit
+turbo	https://github.com/libjpeg-turbo/libjpeg-turbo.git	5b2e0e9269f1fff760d867be97b7ba5f79188227
+mozjpeg	https://github.com/mozilla/mozjpeg.git	08265790774cd0714832c9e675522acbe5581437
+jpegli	https://github.com/google/jpegli.git	c7d342c25d3587ac0110c915989ad94f414b6c8d
+wuffs	https://github.com/google/wuffs.git	a87f0bb85b9406d29f48a1c03b6f42c4585145f6
+sjpeg	https://github.com/webmproject/sjpeg.git	dd4d9857c58a25713711a46d37385ad23ca2177e
+jpgd	https://github.com/richgel999/jpeg-compressor.git	92cb85398975de03581a57a2e61a9d4f54b37703

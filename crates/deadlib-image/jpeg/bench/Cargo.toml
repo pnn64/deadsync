@@ -6,6 +6,11 @@ publish = false
 [workspace]
 [features]
 allocations = []
+comparison = ["dep:libloading", "dep:zenjpeg", "dep:jpeg-encoder"]
+[[bin]]
+name = "compare"
+path = "src/bin/compare/main.rs"
+required-features = ["comparison"]
 [dependencies]
 deadlib-image-jpeg = { path = ".." }
 native_samples = { package = "deadlib-image", path = "../.." }
@@ -13,6 +18,9 @@ image = { version = "=0.25.10", default-features = false, features = ["jpeg"] }
 zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
 jpeg-decoder = "=0.3.2"
+libloading = { version = "=0.8.9", optional = true }
+zenjpeg = { version = "=0.8.4", optional = true, default-features = false, features = ["decoder"] }
+jpeg-encoder = { version = "=0.7.1", optional = true, features = ["simd"] }
 [profile.release]
 opt-level = 3
 lto = true

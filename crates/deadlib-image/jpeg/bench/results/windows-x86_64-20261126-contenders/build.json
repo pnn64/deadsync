@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-26",
+  "repository_head": "d704798101838fc9fc30eea1a425787115fc1304",
+  "jpeg_last_source_commit": "7d13d080adfd2b1fe55ea73d8af059826b5f1010",
+  "fixture_submodule": "5fe120fae6d3a022eddc2ba629c19287142db93a",
+  "windows": "11 Pro 10.0.26100",
+  "cpu": "Intel Xeon E5-2696 v4 @ 2.20 GHz, 22 cores / 44 logical processors, AVX2",
+  "rustc": [
+    "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+    "binary: rustc",
+    "commit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a",
+    "commit-date: 2026-11-09",
+    "host: x86_64-pc-windows-msvc",
+    "release: 1.100.0",
+    "LLVM version: 23.1.5"
+  ],
+  "msvc": "19.44.35230.0",
+  "cmake": "4.2.1",
+  "nasm": "3.01",
+  "pillow": "12.3.0",
+  "jpegli_highway": "271a9a0ed9de1232d9117f1572c3fe28f8542ec1",
+  "environment": {
+    "JPEG_BENCH_CPU": "2",
+    "JPEG_BENCH_MS": "8",
+    "RAYON_NUM_THREADS": "1"
+  },
+  "sequence": [
+    "encode-run1",
+    "decode-run1",
+    "decode-run2",
+    "encode-run2",
+    "decode-assets-repeat"
+  ],
+  "sha256_build_outputs": {
+    "rust-build/release/compare.exe": "f5bdc1ad14ef96b768dd8f38ddefba695c32e256f11ac859f7cd4ce682e0b166",
+    "bridges/Release/bench_extra.dll": "3229114bf6212f95a839389b84353ed29c0c996d1519c17931cdbe909b16a527",
+    "bridges/Release/bench_jpegli.dll": "2929fcfc01ae468680716cabe511983b17e3b26aee61ef8124c45ab0a175fdd3",
+    "bridges/Release/bench_mozjpeg.dll": "11dd7cdc404711bfd532438f0ccb4be667ad4e4f1252632dfb9340a2e2645748",
+    "bridges/Release/bench_turbo.dll": "e36c5c381670383b09ef67cc79b7de435207b598a92975b45bf7952dc8b2d984",
+    "turbo-build/Release/cjpeg-static.exe": "b4965d24414a32cf8f88c9a253134cdbdbd7e6cb0ca63124103f963261676a5d"
+  }
+}

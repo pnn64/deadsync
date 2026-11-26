@@ -4,6 +4,9 @@ This isolated workspace compares the native codec with `zune-jpeg 0.5.15`,
 `jpeg-decoder 0.3.2` (default features), and `image 0.25.10`. It adds no
 production dependencies. Current numbers are in [RESULTS.md](RESULTS.md).
 
+The [JPEG codec comparison](contenders/README.md) adds native-library and
+Rust contenders, specialized JPEG processes, and encoder measurements.
+
 The [105-input qualification archive](results/windows-x86_64-20261119-rgba8/README.md)
 pins the corpus, encoder, build identities and before/after measurements.
 
