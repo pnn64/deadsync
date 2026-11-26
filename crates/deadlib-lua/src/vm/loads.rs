@@ -4,6 +4,8 @@ use crate::memory::bytes::ByteOutput;
 use crate::memory::compilation::Workspace;
 use crate::memory::fallible::{self, SliceExt, VecExt};
 
+mod eof;
+
 /// A genuine, non-callable collector object for an unfinished/retained prototype.
 #[derive(Debug)]
 pub(super) struct ParserPrototype {
@@ -421,7 +423,9 @@ impl Loading {
         let Some(ast) = self.parser.resume(&self.source, self.closed)? else {
             return Ok(None);
         };
-        if !self.parser.reusable() {
+        if !self.parser.reusable()
+            || (self.native.is_some() && self.source.len() > SPARE_SOURCE_LIMIT)
+        {
             return crate::compiler::compile(ast, &self.source, &self.name).map(Some);
         }
         let program =
@@ -473,7 +477,12 @@ impl Vm {
                 self.loads
                     .try_reserve(1)
                     .map_err(|_| self.memory_failure())?;
-                let mut parser = crate::parser::Parser::with_native_depth(depth)?;
+                let mut parser =
+                    if file.is_none() && self.registers.memory().uses_global_allocator() {
+                        crate::parser::Parser::try_new_in(&mut self.compile_spare.parser, depth)?
+                    } else {
+                        crate::parser::Parser::with_native_depth(depth)?
+                    };
                 parser.enable_native_roots()?;
                 Ok(Loading {
                     owner,
@@ -544,10 +553,11 @@ impl Vm {
         message(&job.name, error, job.binary_mode)
     }
     pub(super) fn end_native_load(&mut self, owner: usize) {
-        if let Some(job) = self.loads.pop_if(|job| job.owner == owner)
-            && self.buffers.len() < self.buffers.capacity()
-        {
-            self.buffers.push(job.source);
+        if let Some(job) = self.loads.pop_if(|job| job.owner == owner) {
+            if job.binary_mode || job.source.len() <= SPARE_SOURCE_LIMIT {
+                job.parser.recycle(&mut self.compile_spare.parser);
+            }
+            self.recycle_buffer(job.source);
         }
     }
     /// Load a file, or stdin when `path` is absent, through the native Lua loader.
@@ -956,6 +966,13 @@ impl Vm {
                 }
                 Value::String(id) => {
                     self.registers[base + 2] = result;
+                    if first && let Some(compiled) = self.try_complete_reader(index, base, id)? {
+                        self.check_calls()?;
+                        self.registers[base + frame.argc()] = Value::Nil;
+                        frame.vararg_count += 1;
+                        self.truncate_registers(base + frame.argc());
+                        return self.finish_reader(index, frame, compiled, false);
+                    }
                     let bytes = &self.strings.bytes[slot_index(id.0)];
                     let job = &mut self.loads[index];
                     if first {
@@ -993,36 +1010,7 @@ impl Vm {
             Ok(None) => None,
         };
         if let Some(compiled) = compiled {
-            match compiled {
-                Ok(program) => {
-                    let function = self.load_fresh(&program)?;
-                    self.retain_load_prototypes(index, function)?;
-                    let job = self.loads.pop().expect("completed reader job");
-                    if self.buffers.len() < self.buffers.capacity() {
-                        self.buffers.push(job.source);
-                    }
-                    let result = base + frame.argc();
-                    self.reserve_registers(result + 1)?;
-                    self.resize_registers(self.registers.len().max(result + 1));
-                    self.registers[result] = Value::Function(function);
-                    frame.vararg_count += 1;
-                    self.frames[owner] = frame;
-                    return self.return_frame(frame, result, 1);
-                }
-                Err(error) => {
-                    if error.kind() == ErrorKind::Memory {
-                        return Err(self.memory_failure());
-                    }
-                    let message = message(
-                        &self.loads[index].name,
-                        &error,
-                        self.loads[index].binary_mode,
-                    )?;
-                    let value = self.try_intern(&message)?;
-                    self.protected_failure(owner, value);
-                    return Ok(None);
-                }
-            }
+            return self.finish_reader(index, frame, compiled, true);
         }
         self.check_c_call()?;
         self.loads[index].awaiting = true;
@@ -1035,6 +1023,78 @@ impl Vm {
         }
         Ok(None)
     }
+    fn try_complete_reader(
+        &mut self,
+        index: usize,
+        base: usize,
+        source: StringId,
+    ) -> Result<Option<Result<Program, Error>>, Error> {
+        let job = &self.loads[index];
+        let bytes = &self.strings.bytes[slot_index(source.0)];
+        if !job.parser.reusable()
+            || job.native_depth + usize::from(crate::parser::MAX_RECURSIVE_DEPTH) + 1
+                >= usize::from(limits::MAX_C_CALL_DEPTH)
+            || bytes.is_empty()
+            || bytes.len() > SPARE_SOURCE_LIMIT
+            || bytes[0] == 27
+            || self.hooks.mask != 0
+            || self.budget.is_some()
+            || self.native_protected
+            || !self.native_bodies.is_empty()
+            || self.gc.running != 0
+            || self.gc.closing
+            || !self.gc.finalizers.is_empty()
+            || !eof::returns_nil(self, self.registers[base])
+            || self.reader_gc_may_call_out()
+        {
+            return Ok(None);
+        }
+
+        // The EOF path cannot call out or change Lua state. A valid complete
+        // parse can consume this borrowed block without publishing parser roots.
+        let job = &mut self.loads[index];
+        let Some(ast) = job.parser.try_complete_reader(bytes)? else {
+            return Ok(None);
+        };
+        let result =
+            crate::compiler::compile_in(&ast, bytes, &job.name, &mut self.compile_spare.compiler);
+        self.compile_spare.parser.keep_ast(ast);
+        Ok(Some(result))
+    }
+
+    fn finish_reader(
+        &mut self,
+        index: usize,
+        mut frame: Frame,
+        compiled: Result<Program, Error>,
+        has_parser_roots: bool,
+    ) -> Result<Option<usize>, Error> {
+        let owner = self.loads[index].owner;
+        let program = match compiled {
+            Ok(program) => program,
+            Err(error) if error.kind() == ErrorKind::Memory => return Err(self.memory_failure()),
+            Err(error) => {
+                let job = &self.loads[index];
+                let diagnostic = message(&job.name, &error, job.binary_mode)?;
+                let value = self.try_intern(&diagnostic)?;
+                self.protected_failure(owner, value);
+                return Ok(None);
+            }
+        };
+        let function = self.load_fresh(&program)?;
+        if has_parser_roots {
+            self.retain_load_prototypes(index, function)?;
+        }
+        self.end_native_load(owner);
+        let result = frame.base + frame.argc();
+        self.reserve_registers(result + 1)?;
+        self.resize_registers(self.registers.len().max(result + 1));
+        self.registers[result] = Value::Function(function);
+        frame.vararg_count += 1;
+        self.frames[owner] = frame;
+        self.return_frame(frame, result, 1)
+    }
+
     pub(super) fn retain_load_prototypes(
         &mut self,
         index: usize,

@@ -7,6 +7,8 @@ use crate::{
 };
 
 pub(crate) const MAX_SYNTAX_DEPTH: u16 = 200;
+/// The complete grammar falls back to continuations above this nesting depth.
+pub(crate) const MAX_RECURSIVE_DEPTH: u16 = 48;
 
 pub(crate) type ExprId = usize;
 pub(crate) type StmtId = usize;
@@ -36,6 +38,7 @@ impl Span {
 #[derive(Debug)]
 pub(crate) enum NativeRootEvent {
     Open,
+    OpenWithoutTable,
     Close,
     Anchor(Text),
     Constant(crate::bytecode::Constant),

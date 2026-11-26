@@ -124,6 +124,87 @@ return a, b
 }
 
 #[test]
+fn readers_keep_parser_tables_that_cross_a_chunk_boundary() {
+    let program = compile(
+        br#"
+        local pieces = {
+            "local function closed() return 41 end\nlocal function open(x) local value = 'kept';\n",
+            "local function also_closed() return 1 end\nreturn x + also_closed() end\nreturn open(closed())\n",
+        }
+        local call, retained, prototype = 0
+        local compiled = assert(load(function()
+            call = call + 1
+            if call == 2 then
+                local _, root = debug.getlocal(2, 4)
+                local _, nested = debug.getlocal(2, 6)
+                local _, proto = debug.getlocal(2, 7)
+                assert(type(root) == 'table' and root.closed == true and root.open == true)
+                assert(type(nested) == 'table' and nested.kept == 0 and type(proto) == 'proto')
+                nested.tag = 71
+                retained, prototype = nested, proto
+                collectgarbage()
+                assert(retained.kept == 0 and retained.tag == 71)
+            elseif call == 3 then
+                assert(debug.getlocal(2, 6) == nil)
+                collectgarbage()
+                assert(type(prototype) == 'proto' and retained.tag == 71)
+            end
+            return pieces[call]
+        end))
+        assert(call == 3)
+        return compiled()
+"#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+    }
+}
+
+#[test]
+fn one_chunk_reader_can_finish_without_publishing_parser_roots() {
+    let program = compile(
+        br#"
+        local source = 'return 42'
+        return assert(load(function()
+            local payload = source
+            source = nil
+            return payload
+        end))
+        "#,
+    )
+    .unwrap();
+    let mut vm = Vm::new();
+    let function = vm.execute(&program).unwrap()[0];
+    assert_eq!(vm.heap_stats().parser_prototypes, 0);
+    assert_eq!(vm.call(function, &[]).unwrap(), [Value::Number(42.0)]);
+}
+
+#[test]
+fn one_chunk_reader_publishes_roots_when_file_finalizers_can_call_lua() {
+    let program = compile(
+        br#"
+        local env = debug.getfenv(io.stdout)
+        local close = env.__close
+        env.__close = function() end
+        local emitted = false
+        local compiled = assert(load(function()
+            if emitted then return nil end
+            emitted = true
+            return 'return 42'
+        end))
+        env.__close = close
+        return compiled
+        "#,
+    )
+    .unwrap();
+    let mut vm = Vm::new();
+    let function = vm.execute(&program).unwrap()[0];
+    assert!(vm.heap_stats().parser_prototypes > 0);
+    assert_eq!(vm.call(function, &[]).unwrap(), [Value::Number(42.0)]);
+}
+
+#[test]
 fn lua_readers_expose_and_retain_real_parser_tables_through_eof_and_return_hooks() {
     compare(br#"
 local out={};local loadfn=load

@@ -391,6 +391,42 @@ impl Vm {
         }
         user.file.map(NonZeroU64::get)
     }
+    // During an elided EOF call, an automatic collection must not be able
+    // to invoke Lua or host code that can observe the parser stack.
+    pub(super) fn reader_gc_may_call_out(&self) -> bool {
+        if self.userdata.len() > 64 {
+            return true;
+        }
+        let file_metatable = self.file_metatable();
+        let gc = self.meta_names[Meta::Gc as usize];
+        let close = self.strings.find(b"__close");
+        self.userdata.iter().any(|user| {
+            if user.finalized {
+                return false;
+            }
+            let Some(meta) = user.metatable else {
+                return false;
+            };
+            let handler = self.tables[slot_index(meta.0)].get_string(gc);
+            if handler == Value::Nil {
+                return false;
+            }
+            if handler != Value::Native(GC) || Some(meta) != file_metatable {
+                return true;
+            }
+            let Some(stream) = user.file.and_then(|key| self.io.files.get(key.get())) else {
+                return true;
+            };
+            // A closed file returns directly. Standard streams use a
+            // built-in close handler that neither runs Lua nor closes them.
+            stream.resource.is_some()
+                && close.is_none_or(|name| {
+                    let env = &self.tables[slot_index(user.env.0)];
+                    env.metatable().is_some() || env.get_string(name) != Value::Native(NO_CLOSE)
+                })
+        })
+    }
+
     fn file_metatable(&self) -> Option<TableId> {
         let tag = self.io.file_tag.or_else(|| self.strings.find(b"FILE*"))?;
         match self.tables[slot_index(self.registry.0)].get(Value::String(tag)) {

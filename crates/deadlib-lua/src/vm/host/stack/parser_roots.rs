@@ -26,7 +26,8 @@ impl Vm {
         use crate::parser::NativeRootEvent;
         let storage_before = self.loads[index].native.as_ref().unwrap().storage_bytes();
         let job = &mut self.loads[index];
-        let events = if job.binary_mode {
+        let binary = job.binary_mode;
+        let mut events = if binary {
             job.decoder
                 .as_mut()
                 .map_or_else(Vec::new, |decoder| decoder.take_native_events())
@@ -35,9 +36,27 @@ impl Vm {
         } else {
             Vec::new()
         };
+        if !binary && self.registers.memory().uses_global_allocator() {
+            // A constants table is visible only if its function is still
+            // open at a reader boundary. No guest code runs inside this batch.
+            let mut closed = 0;
+            for event in events.iter_mut().rev() {
+                match event {
+                    NativeRootEvent::Close => closed += 1,
+                    NativeRootEvent::Open if closed != 0 => {
+                        *event = NativeRootEvent::OpenWithoutTable;
+                        closed -= 1;
+                    }
+                    _ => {}
+                }
+            }
+        }
         let result = (|| -> Result<(), Error> {
             for event in events {
-                if matches!(event, NativeRootEvent::Open) {
+                if matches!(
+                    event,
+                    NativeRootEvent::Open | NativeRootEvent::OpenWithoutTable
+                ) {
                     let job = &self.loads[index];
                     let source = job
                         .native
@@ -49,7 +68,7 @@ impl Vm {
                     let source = if let Some(source) = source {
                         source
                     } else {
-                        let name = if self.loads[index].binary_mode {
+                        let name = if binary {
                             b"=?".try_to_vec()?
                         } else {
                             self.loads[index].name.try_to_vec()?
@@ -64,7 +83,7 @@ impl Vm {
                             debug_strings: Buffer::new_in(self.registers.memory().clone()),
                         },
                     )?);
-                    let table = (!self.loads[index].binary_mode)
+                    let table = (!binary && matches!(event, NativeRootEvent::Open))
                         .then(|| self.try_new_table())
                         .transpose()?;
                     self.loads[index]
@@ -73,7 +92,7 @@ impl Vm {
                         .unwrap()
                         .active
                         .try_push((table, id))?;
-                    if self.loads[index].binary_mode {
+                    if binary {
                         self.loads[index]
                             .native
                             .as_mut()
@@ -83,8 +102,13 @@ impl Vm {
                     }
                     self.reserve_gc_value(Value::ParserPrototype(id))?;
                     self.gc_new_value(Value::ParserPrototype(id));
-                    if let Some(table) = table {
-                        self.native_load_push(base, top, Value::Table(table), limit_base)?;
+                    if !binary {
+                        self.native_load_push(
+                            base,
+                            top,
+                            table.map_or(Value::Nil, Value::Table),
+                            limit_base,
+                        )?;
                     }
                     self.native_load_push(base, top, Value::ParserPrototype(id), limit_base)?;
                     continue;
@@ -96,12 +120,15 @@ impl Vm {
                     .active
                     .last()
                     .expect("active parser prototype");
+                if table.is_none() && matches!(event, NativeRootEvent::Anchor(_)) {
+                    continue;
+                }
                 let before = self.parser_prototypes[slot_index(id.0)].heap_bytes();
                 let result = (|| -> Result<(), Error> {
                     match event {
                         NativeRootEvent::Close => {
                             self.loads[index].native.as_mut().unwrap().active.pop();
-                            if table.is_some() {
+                            if !binary {
                                 self.loads[index]
                                     .native
                                     .as_mut()
@@ -109,7 +136,7 @@ impl Vm {
                                     .prototypes
                                     .try_push(id)?;
                             }
-                            let count = 1 + usize::from(table.is_some());
+                            let count = 1 + usize::from(!binary);
                             *top = top.checked_sub(count).ok_or_else(|| {
                                 Error::runtime_static("native parser roots removed")
                             })?;
@@ -183,7 +210,7 @@ impl Vm {
                                 .try_push(value)?;
                             self.gc_barrier(Value::ParserPrototype(id), value);
                         }
-                        NativeRootEvent::Open => unreachable!(),
+                        NativeRootEvent::Open | NativeRootEvent::OpenWithoutTable => unreachable!(),
                     }
                     Ok(())
                 })();

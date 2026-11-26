@@ -4,7 +4,7 @@
 //! lists. Checks run at parser continuations, before the next reader request
 //! whenever the reference would already reject the source. No code is emitted.
 use super::{
-    Ast, ConstantOperand, Expr, ExprId,
+    Ast, ConstantOperand, Expr, ExprId, NativeRootEvent,
     bindings::{Bindings, Reference},
     hash,
 };
@@ -229,23 +229,35 @@ impl Resources {
     pub(super) fn constant_count(&self) -> usize {
         self.function.pool.entries.len()
     }
-    pub(super) fn native_constants(
+    pub(super) fn append_native_constants(
         &self,
         start: usize,
         cx: &Context<'_>,
-    ) -> Result<Vec<crate::bytecode::Constant>, Error> {
-        let mut out = fallible::with_capacity(self.function.pool.entries.len() - start)?;
-        for key in &self.function.pool.entries[start..] {
-            let mut constant = key.constant(cx)?;
+        events: &mut Vec<NativeRootEvent>,
+    ) -> Result<(), Error> {
+        let entries = &self.function.pool.entries[start..];
+        if entries.is_empty() {
+            return Ok(());
+        }
+        fallible::reserve(events, entries.len())?;
+        let before = events.len();
+        for key in entries {
+            let mut constant = match key.constant(cx) {
+                Ok(constant) => constant,
+                Err(error) => {
+                    events.truncate(before);
+                    return Err(error);
+                }
+            };
             if let crate::bytecode::Constant::Number(n) = &mut constant
                 && *n == 0.0
                 && self.function.zero_sign == Some(true)
             {
                 *n = -0.0;
             }
-            out.push(constant);
+            events.push(NativeRootEvent::Constant(constant));
         }
-        Ok(out)
+        Ok(())
     }
     pub(super) fn heap_bytes(&self) -> usize {
         self.parents.capacity() * size_of::<Function>()

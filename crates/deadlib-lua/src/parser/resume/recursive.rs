@@ -6,8 +6,6 @@
 //! the resumable parser, which reports the reference diagnostic.
 use super::*;
 
-/// Deeper syntax nesting uses the resumable parser, which needs no native stack.
-const MAX_DEPTH: u16 = 48;
 // Larger chunks can amortize the lookup cost across repeated short bodies.
 const MIN_TEMPLATE_SOURCE: usize = 2048;
 const MAX_TEMPLATE_BODY: usize = 256;
@@ -156,7 +154,7 @@ impl Parser {
         self.bump(input)
     }
     fn renter(&mut self) -> Result<(), Error> {
-        if self.depth >= MAX_DEPTH
+        if self.depth >= MAX_RECURSIVE_DEPTH
             || self.base_depth.wrapping_add(self.depth).wrapping_add(1) > MAX_SYNTAX_DEPTH
         {
             return Err(abandon());

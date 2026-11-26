@@ -332,11 +332,11 @@ impl Scanner {
         Ok(())
     }
 
-    /// Scan one common token of complete input into `out` in a single pass.
-    /// `false` leaves the cursor at the token start for the resumable states.
-    /// Tokens and line counts match the state machine. The parser that restarts
-    /// on errors only needs scanner spans for names too large to borrow.
-    fn fast<const DIAGNOSTICS: bool>(
+    /// Scan one common token before the next possible reader boundary.
+    /// Reader boundaries and uncommon tokens fall through to the resumable
+    /// scanner. The parser that restarts on errors only needs scanner spans
+    /// for names too large to borrow.
+    fn fast<const CLOSED: bool, const DIAGNOSTICS: bool>(
         &mut self,
         input: &[u8],
         out: &mut Token,
@@ -352,6 +352,9 @@ impl Scanner {
         }
         let c = loop {
             let Some(&byte) = input.get(self.pos) else {
+                if !CLOSED {
+                    return Ok(false);
+                }
                 if DIAGNOSTICS {
                     self.buffer = Buffer::Empty;
                 }
@@ -363,14 +366,20 @@ impl Scanner {
                     self.skip_horizontal_space(input);
                 }
                 b'\n' | b'\r' => {
-                    self.newline(input, true)?;
+                    if !self.newline(input, CLOSED)? {
+                        return Ok(false);
+                    }
                 }
-                b'-'
-                    if input[self.pos..].starts_with(b"--")
-                        && input.get(self.pos + 2) != Some(&b'[') =>
+                b'-' if input[self.pos..].starts_with(b"--")
+                    && (CLOSED || self.pos + 2 < input.len())
+                    && input.get(self.pos + 2) != Some(&b'[') =>
                 {
                     self.pos += 2;
                     self.skip_line_comment(input);
+                    if !CLOSED && self.pos == input.len() {
+                        self.state = State::LineComment;
+                        return Ok(false);
+                    }
                 }
                 _ => break byte,
             }
@@ -461,6 +470,10 @@ impl Scanner {
             b',' => (Kind::Comma, start + 1),
             _ => return Ok(false),
         };
+        // Lua fetches the following byte before publishing a token.
+        if !CLOSED && end == input.len() {
+            return Ok(false);
+        }
         self.pos = end;
         if DIAGNOSTICS {
             self.buffer = match kind {
@@ -483,7 +496,7 @@ impl Scanner {
 
     /// Scan complete input for the parser that restarts on a syntax error.
     pub(crate) fn next_closed(&mut self, input: &[u8], out: &mut Token) -> Result<(), Error> {
-        if matches!(self.state, State::Skip) && self.fast::<false>(input, out)? {
+        if matches!(self.state, State::Skip) && self.fast::<true, false>(input, out)? {
             return Ok(());
         }
         *out = self
@@ -493,9 +506,14 @@ impl Scanner {
     }
 
     pub(crate) fn next(&mut self, input: &[u8], closed: bool) -> Result<Option<Token>, Error> {
-        if closed && matches!(self.state, State::Skip) {
+        if matches!(self.state, State::Skip) && (closed || input.len() - self.pos > 3) {
             let mut token = Token::default();
-            if self.fast::<true>(input, &mut token)? {
+            let complete = if closed {
+                self.fast::<true, true>(input, &mut token)?
+            } else {
+                self.fast::<false, true>(input, &mut token)?
+            };
+            if complete {
                 return Ok(Some(token));
             }
         }

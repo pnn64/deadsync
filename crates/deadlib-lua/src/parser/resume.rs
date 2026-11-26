@@ -431,18 +431,14 @@ impl Parser {
             input,
             bindings: &self.bindings,
         };
-        let before = (STREAMING && self.native_events.is_some())
-            .then(|| self.resources.constant_count());
+        let before =
+            (STREAMING && self.native_events.is_some()).then(|| self.resources.constant_count());
         let result = action(&mut self.resources, &cx);
         if let Some(before) = before
             && let Some(events) = &mut self.native_events
         {
-            events.try_extend(
-                self.resources
-                    .native_constants(before, &cx)?
-                    .into_iter()
-                    .map(NativeRootEvent::Constant),
-            )?;
+            self.resources
+                .append_native_constants(before, &cx, events)?;
         }
         result.map_err(|error| {
             let mut error = error.at_line(self.scanner.line());
@@ -643,6 +639,34 @@ impl Parser {
         Ok(())
     }
 
+    /// Try the complete grammar before a reader has published any parser state.
+    /// A rejected attempt leaves the streaming parser at its initial position.
+    pub(crate) fn try_complete_reader(&mut self, input: &[u8]) -> Result<Option<Ast>, Error> {
+        debug_assert!(!self.started);
+        self.presize(input.len())?;
+        self.presized = true;
+        let ast = self.try_recursive(input)?;
+        self.started = ast.is_some();
+        Ok(ast)
+    }
+
+    fn try_recursive(&mut self, input: &[u8]) -> Result<Option<Ast>, Error> {
+        match self.recursive(input) {
+            Ok(ast) => {
+                self.finished = true;
+                if !self.keep {
+                    self.resources = Resources::default();
+                }
+                Ok(Some(ast))
+            }
+            Err(error) if error.kind() == ErrorKind::Memory => Err(error),
+            Err(_) => {
+                self.restart()?;
+                Ok(None)
+            }
+        }
+    }
+
     /// Supply the entire retained prefix and whether the reader has reached EOF.
     /// `None` requests more source; `Some` contains the finished flat AST.
     pub(crate) fn resume(&mut self, input: &[u8], closed: bool) -> Result<Option<Ast>, Error> {
@@ -653,20 +677,15 @@ impl Parser {
             self.presized = true;
             self.presize(input.len())?;
         }
-        if first && closed && unbudgeted && self.native_events.is_none() {
-            // Complete source needs no suspension points. A failed attempt
-            // restarts below, where the resumable grammar reports the error.
-            match self.recursive(input) {
-                Ok(ast) => {
-                    self.finished = true;
-                    if !self.keep {
-                        self.resources = Resources::default();
-                    }
-                    return Ok(Some(ast));
-                }
-                Err(error) if error.kind() == ErrorKind::Memory => return Err(error),
-                Err(_) => self.restart()?,
-            }
+        // A failed complete parse restarts in the resumable grammar, which
+        // reports the reference diagnostic.
+        if first
+            && closed
+            && unbudgeted
+            && self.native_events.is_none()
+            && let Some(ast) = self.try_recursive(input)?
+        {
+            return Ok(Some(ast));
         }
         self.resume_inner(input, closed).map_err(|mut error| {
             if !error.near {

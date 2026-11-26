@@ -2,6 +2,7 @@
 use super::*;
 
 const MAX_CALLS: u16 = 20_000;
+pub(super) const MAX_C_CALL_DEPTH: u16 = 200;
 pub(super) const MAX_CSTACK: usize = 8_000;
 
 fn depth(frames: &[Frame]) -> usize {
@@ -73,7 +74,7 @@ impl Vm {
             let value = self.intern(b"error in error handling");
             return Err(Error::handling(value));
         }
-        if entered == 200 {
+        if entered == MAX_C_CALL_DEPTH {
             return Err(self.call_error("C stack overflow"));
         }
         Ok(())
