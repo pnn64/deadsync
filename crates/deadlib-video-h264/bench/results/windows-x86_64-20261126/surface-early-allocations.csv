@@ -1,0 +1,13 @@
+stream,mode,run,frames,luma_pixels,cycles,allocations,reallocations,requested_bytes
+srpg9,deadlib-surface-early,1,150,311040000,0,912,277,44616965
+srpg9,deadlib-surface-dropped,1,150,311040000,0,1062,277,47820965
+srpg9,ffmpeg-surface,1,150,311040000,0,2684,3,45410751
+srpg9,deadlib-surface-dropped,2,150,311040000,0,1062,277,47820965
+srpg9,ffmpeg-surface,2,150,311040000,0,2684,3,45410751
+srpg9,deadlib-surface-early,2,150,311040000,0,912,277,44616965
+srpg10,deadlib-surface-dropped,1,150,311040000,0,1051,9,32445708
+srpg10,ffmpeg-surface,1,150,311040000,0,2640,4,29000083
+srpg10,deadlib-surface-early,1,150,311040000,0,905,9,29243628
+srpg10,ffmpeg-surface,2,150,311040000,0,2640,4,29000083
+srpg10,deadlib-surface-early,2,150,311040000,0,905,9,29243628
+srpg10,deadlib-surface-dropped,2,150,311040000,0,1051,9,32445708

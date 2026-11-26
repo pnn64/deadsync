@@ -312,3 +312,16 @@ The automatic-release prototype puts the buffers back in the decoder's pool when
 ## Full-pel B-skip motion setup
 
 `c270f4779` resolves motion and published rows once per reference for eligible full-pel 4:2:0 B-skip macroblocks. It applies the same implicit blend to each plane. FFmpeg similarly prepares a motion-compensation direction once and then predicts all three planes. The Rust change saved 0.66% and 1.24% of median paired cycles on the bundled clips. The cropped 720p clip saw a 0.58% increase in the same comparison. [FFmpeg motion compensation](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264_mb.c) · [Paired samples](results/windows-x86_64-20261126/crop-bskip-paired.csv)
+
+The full run including the crop and B-skip changes matched FFmpeg in all five output modes and reproduced the previous allocation totals. The default cycle medians were 0.94% and 1.01% above packed FFmpeg. The five-run spreads were 2.2–4.7% across those modes. A larger paired run is needed to verify the cycle gap at the 1% threshold. [Full run](results/windows-x86_64-20261126/crop-and-bskip)
+
+| Clip | Output mode | Mcycles/frame | Frames/billion cycles | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Deadlib | 36.64 | 27.30 | 11.71 | 3.272 |
+| SRPG9 | FFmpeg native | 33.27 | 30.05 | 17.91 | 0.289 |
+| SRPG9 | FFmpeg packed | 36.29 | 27.55 | 18.91 | 3.255 |
+| SRPG10 | Deadlib | 27.95 | 35.78 | 9.33 | 3.158 |
+| SRPG10 | FFmpeg native | 23.90 | 41.85 | 17.63 | 0.184 |
+| SRPG10 | FFmpeg packed | 27.67 | 36.14 | 18.63 | 3.151 |
+
+The early-delivery surface prototype emits a ready surface before reserving space for the next picture. A consumer can drop the surface during the callback so its buffer is available for the next decode. This reclaimed one coded picture on each clip, and emitted planes still matched FFmpeg. Two allocation runs requested 44.62 MB on SRPG9 and 29.24 MB on SRPG10, 1.75% below and 0.84% above native FFmpeg. [Early-delivery allocation samples](results/windows-x86_64-20261126/surface-early-allocations.csv)
