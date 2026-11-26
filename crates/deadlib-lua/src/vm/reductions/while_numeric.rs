@@ -2,6 +2,8 @@
 use super::{BODY_LIMIT, EXACT_INTEGER, MATH_MAX, MATH_MIN, Series, Value, Vm};
 use crate::bytecode::{COMPARE_BRANCH, Instruction, Op, RK};
 
+mod array;
+
 const MAX_TERMS: usize = 8;
 const MAX_ITERATIONS: usize = 16_384;
 fn progression_sum(first: i128, step: i128, count: i128) -> i128 {
@@ -159,13 +161,14 @@ fn rounded_pair(
 
 #[derive(Clone, Copy)]
 enum Input {
-    Index,
+    // The iteration's index or the number read at that index.
+    Current,
     Number(f64),
 }
 impl Input {
-    fn value(self, index: f64) -> f64 {
+    fn value(self, current: f64) -> f64 {
         match self {
-            Self::Index => index,
+            Self::Current => current,
             Self::Number(value) => value,
         }
     }
@@ -184,41 +187,40 @@ impl Term {
     fn index_extremum(self) -> Option<(bool, f64)> {
         match self {
             Self::Extremum {
-                first: Input::Index,
+                first: Input::Current,
                 second: Input::Number(number),
                 minimum,
             }
             | Self::Extremum {
                 first: Input::Number(number),
-                second: Input::Index,
+                second: Input::Current,
                 minimum,
             } if number.is_finite() && number != 0.0 => Some((minimum, number)),
             _ => None,
         }
     }
 
-    fn value(self, index: f64) -> f64 {
+    fn value(self, current: f64) -> f64 {
         match self {
-            Self::Input(input) => input.value(index),
+            Self::Input(input) => input.value(current),
             Self::Extremum {
                 first,
                 second,
                 minimum,
-            } => {
-                let first = first.value(index);
-                let second = second.value(index);
-                if if minimum {
-                    second < first
-                } else {
-                    second > first
-                } {
-                    second
-                } else {
-                    first
-                }
-            }
+            } => ordered_extremum(first.value(current), second.value(current), minimum),
         }
     }
+}
+
+#[inline(always)]
+fn ordered_extremum(first: f64, second: f64, minimum: bool) -> f64 {
+    // Ties and unordered inputs retain the first argument.
+    let replace = if minimum {
+        second < first
+    } else {
+        second > first
+    };
+    if replace { second } else { first }
 }
 
 #[derive(Clone, Copy)]
@@ -227,6 +229,8 @@ enum Symbol {
     Tracked(Term),
     Fixed(Value),
     Sum(usize),
+    LoopIndex,
+    LoopControl,
 }
 
 struct Registers<'a> {
@@ -287,6 +291,86 @@ struct Plan {
     terms: [Term; MAX_TERMS],
     count: usize,
 }
+
+struct Sum {
+    terms: [Term; MAX_TERMS],
+    count: usize,
+    register: Option<usize>,
+    calls: usize,
+}
+
+impl Sum {
+    fn new() -> Self {
+        Self {
+            terms: [Term::Input(Input::Number(0.0)); MAX_TERMS],
+            count: 0,
+            register: None,
+            calls: 0,
+        }
+    }
+
+    fn step(&mut self, registers: &mut Registers<'_>, i: &Instruction) -> Option<Symbol> {
+        Some(match i.op {
+            Op::Move if i.c == 0 => registers.read(u32::from(i.b)),
+            Op::Load if i.b == 0 => Symbol::Fixed(registers.constants[i.c as usize]),
+            Op::Call if i.b == 2 && i.c == 1 => {
+                let destination = u32::from(i.a);
+                let function = registers.read(destination);
+                let Value::Native(id @ (MATH_MIN | MATH_MAX)) = registers.fixed(function)? else {
+                    return None;
+                };
+                let first = registers.read(destination + 1);
+                let second = registers.read(destination + 2);
+                self.calls += 1;
+                Symbol::Tracked(Term::Extremum {
+                    first: registers.input(first)?,
+                    second: registers.input(second)?,
+                    minimum: id == MATH_MIN,
+                })
+            }
+            Op::Add if self.count < MAX_TERMS => {
+                let left = registers.read(u32::from(i.b));
+                let right = registers.read(i.c);
+                match left {
+                    Symbol::Initial(slot) if self.count == 0 => self.register = Some(slot),
+                    Symbol::Sum(previous) if previous == self.count => {}
+                    _ => return None,
+                }
+                self.terms[self.count] = match right {
+                    Symbol::Tracked(term) => term,
+                    value => Term::Input(registers.input(value)?),
+                };
+                self.count += 1;
+                Symbol::Sum(self.count)
+            }
+            _ => return None,
+        })
+    }
+
+    fn register(&self, registers: &Registers<'_>) -> Option<usize> {
+        let sum = self.register?;
+        if !matches!(registers.symbols[sum], Some(Symbol::Sum(size)) if size == self.count)
+            || self.calls == 0
+            || self.calls
+                != self.terms[..self.count]
+                    .iter()
+                    .filter(|t| matches!(t, Term::Extremum { .. }))
+                    .count()
+            || registers
+                .read_initial
+                .iter()
+                .enumerate()
+                .any(|(slot, &read)| {
+                    read && (slot != sum || registers.invariant[slot])
+                        && registers.symbols[slot].is_some()
+                })
+        {
+            return None;
+        }
+        Some(sum)
+    }
+}
+
 impl Plan {
     fn decode(
         code: &[Instruction],
@@ -346,15 +430,12 @@ impl Plan {
             return None;
         }
         let bound = registers.invariant_number(bound_operand)?;
-        registers.symbols[index] = Some(Symbol::Tracked(Term::Input(Input::Index)));
+        registers.symbols[index] = Some(Symbol::Tracked(Term::Input(Input::Current)));
         // A comparison writes this temporary before each body invocation.
         // It is usable only after being overwritten by a supported operation.
         let comparison_slot = usize::from(compare.a);
         registers.symbols[comparison_slot] = Some(Symbol::Fixed(Value::Boolean(true)));
-        let mut terms = [Term::Input(Input::Number(0.0)); MAX_TERMS];
-        let mut count = 0;
-        let mut sum = None;
-        let mut calls = 0;
+        let mut sum = Sum::new();
         for instruction in body {
             let destination = usize::from(instruction.a);
             if instruction.op == Op::Close || instruction.op == Op::Load && instruction.b == 1 {
@@ -363,70 +444,18 @@ impl Plan {
             if destination == index {
                 return None;
             }
-            let symbol = match instruction.op {
-                Op::Move if instruction.c == 0 => registers.read(u32::from(instruction.b)),
-                Op::Load if instruction.b == 0 => Symbol::Fixed(constants[instruction.c as usize]),
-                Op::Call if instruction.b == 2 && instruction.c == 1 => {
-                    let function = registers.read(destination as u32);
-                    let Value::Native(id @ (MATH_MIN | MATH_MAX)) = registers.fixed(function)?
-                    else {
-                        return None;
-                    };
-                    let first = registers.read((destination + 1) as u32);
-                    let second = registers.read((destination + 2) as u32);
-                    calls += 1;
-                    Symbol::Tracked(Term::Extremum {
-                        first: registers.input(first)?,
-                        second: registers.input(second)?,
-                        minimum: id == MATH_MIN,
-                    })
-                }
-                Op::Add if count < MAX_TERMS => {
-                    let left = registers.read(u32::from(instruction.b));
-                    let right = registers.read(instruction.c);
-                    match left {
-                        Symbol::Initial(slot) if count == 0 && slot != index => sum = Some(slot),
-                        Symbol::Sum(previous) if previous == count => {}
-                        _ => return None,
-                    }
-                    terms[count] = match right {
-                        Symbol::Tracked(term) => term,
-                        value => Term::Input(registers.input(value)?),
-                    };
-                    count += 1;
-                    Symbol::Sum(count)
-                }
-                _ => return None,
-            };
+            let symbol = sum.step(&mut registers, instruction)?;
             registers.symbols[destination] = Some(symbol);
         }
-        let sum = sum?;
-        if !matches!(registers.symbols[sum], Some(Symbol::Sum(size)) if size == count)
-            || calls == 0
-            || calls
-                != terms[..count]
-                    .iter()
-                    .filter(|t| matches!(t, Term::Extremum { .. }))
-                    .count()
-            || registers
-                .read_initial
-                .iter()
-                .enumerate()
-                .any(|(slot, &read)| {
-                    read && (slot != sum || registers.invariant[slot])
-                        && registers.symbols[slot].is_some()
-                })
-        {
-            return None;
-        }
+        let sum_register = sum.register(&registers)?;
         Some(Self {
             index,
-            sum,
+            sum: sum_register,
             comparison,
             bound,
             step: if negate_step { -step } else { step },
-            terms,
-            count,
+            terms: sum.terms,
+            count: sum.count,
         })
     }
 
@@ -625,7 +654,7 @@ mod tests {
             comparison,
             bound,
             step,
-            terms: [Term::Input(Input::Index); MAX_TERMS],
+            terms: [Term::Input(Input::Current); MAX_TERMS],
             count: 0,
         }
     }
@@ -649,7 +678,7 @@ mod tests {
                     for sum in [-0.0, 0.0, -23.0, 49.0] {
                         let terms = [(first_min, first), (second_min, second)].map(
                             |(minimum, threshold)| Term::Extremum {
-                                first: Input::Index,
+                                first: Input::Current,
                                 second: Input::Number(threshold),
                                 minimum,
                             },

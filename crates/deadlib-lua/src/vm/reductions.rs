@@ -454,6 +454,13 @@ impl Vm {
             return None;
         }
         let body = code.get(loop_instruction.c as usize..loop_pc)?;
+        if body.len() <= BODY_LIMIT
+            && body.iter().any(|i| i.op == Op::GetTable)
+            && let Some(skipped) =
+                self.reduce_array_loop(base, control, body, program, prototype_index)
+        {
+            return Some(Reduction::Applied(skipped));
+        }
         let writes = body.iter().any(|i| i.op == Op::SetTable);
         if body.len() > BODY_LIMIT
             || control + 3 >= 256

@@ -76,6 +76,60 @@ fn loop_carried_values_and_index_edits_remain_observable() {
 }
 
 #[test]
+fn array_extrema_preserve_float_order_and_fall_back_for_observable_reads() {
+    let program = compile(
+        br#"
+        local min, max = math.min, math.max
+        local function scan(values, first, last, step, sum, lower, upper)
+            for i = first, last, step do
+                local value = values[i]
+                sum = sum + min(value, upper) + max(lower, value)
+            end
+            return sum
+        end
+        return function()
+            local big = 9007199254740992
+            local dense = {big, -big, 1, -2.25, 3.5, 5, 0}
+            local forward = scan(dense, 1, 7, 1, 1.25, -big, big)
+            local reverse = scan(dense, 7, 1, -1, 1.25, -big, big)
+            local strided = scan(dense, 1, 7, 2, 0, -5, 4)
+            local negative_zero = -1 / math.huge
+            local zeros = {negative_zero, negative_zero, negative_zero}
+            local negative = 1 / scan(zeros, 1, 3, 1, negative_zero, negative_zero, 0)
+            local nan = 0 / 0
+            local unordered = scan({2, nan, 1}, 1, 3, 1, 0, -4, 4)
+            assert(unordered ~= unordered)
+
+            array_reduction_reads = 0
+            local sparse = setmetatable({1, nil, 3}, {__index = function(_, k)
+                array_reduction_reads = array_reduction_reads + 1
+                return k
+            end})
+            local observed = scan(sparse, 1, 3, 1, 0, -4, 4)
+            assert(array_reduction_reads == 1 and observed == 12)
+            local converted = scan({1, '2.5', 3}, 1, 3, 1, 0, -4, 4)
+            local saved = min
+            min = function(value, _) return 10 * value end
+            local replaced = scan({1, 2, 3}, 1, 3, 1, 0, -4, 4)
+            min = saved
+            return forward, reverse, strided, negative, observed, converted, replaced
+        end
+        "#,
+    )
+    .unwrap();
+    let mut vm = Vm::new();
+    let work = vm.execute(&program).unwrap()[0];
+    let work = vm.pin(work).unwrap();
+    let fast = vm.call(vm.rooted(work).unwrap(), &[]).unwrap().to_vec();
+    assert_eq!(fast[3], Value::Number(f64::NEG_INFINITY));
+    assert_eq!(fast[5], Value::Number(13.0));
+    assert_eq!(fast[6], Value::Number(66.0));
+    vm.set_instruction_limit(Some(100_000));
+    let ordinary = vm.call(vm.rooted(work).unwrap(), &[]).unwrap();
+    assert_eq!(fast, ordinary);
+}
+
+#[test]
 fn budgets_match_count_hook_dispatch_without_firing_the_hook() {
     let hook =
         compile(b"debug.sethook(function() error('unexpected hook') end, '', 2147483647)").unwrap();
