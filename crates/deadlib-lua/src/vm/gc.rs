@@ -662,6 +662,31 @@ impl Vm {
     }
     /// Inspect live object counts and estimated VM-owned heap storage.
     pub fn heap_stats(&mut self) -> HeapStats {
+        self.heap_stats_with_thread_payload(None)
+    }
+
+    // Thread records retain parked stacks and host state. The active stack
+    // buffers are accounted for separately in the VM.
+    fn thread_payload_bytes(thread: &threads::Thread) -> usize {
+        thread.registers.capacity() * size_of::<Value>()
+            + thread.frames.capacity() * size_of::<Frame>()
+            + thread.open_upvalues.capacity() * size_of::<u32>()
+            + thread.substitutions.capacity() * size_of::<strings::Substitution>()
+            + jobs_bytes(&thread.substitutions)
+            + thread.sorts.capacity() * size_of::<tables::Sort>()
+            + loads::storage_bytes(&thread.loads)
+            + thread.tracebacks.capacity() * size_of::<traces::Traceback>()
+            + thread.hooks.hidden.capacity() * size_of::<Value>()
+            + thread.hooks.popped.capacity() * size_of::<Value>()
+            + thread.host_states.capacity() * size_of::<host::ThreadData>()
+            + thread
+                .host_states
+                .iter()
+                .map(host::ThreadData::heap_bytes)
+                .sum::<usize>()
+    }
+
+    fn heap_stats_with_thread_payload(&mut self, thread_payload: Option<usize>) -> HeapStats {
         let mut payload = self.strings.payload_bytes + self.strings.buckets.capacity() * 4;
         payload += self.object_payload_bytes;
         payload += self.io.heap_bytes();
@@ -678,23 +703,8 @@ impl Vm {
         control += self.hooks.hidden.capacity() * std::mem::size_of::<Value>();
         control += self.hooks.popped.capacity() * std::mem::size_of::<Value>();
         control += self.builtin_envs.capacity() * size_of::<Option<TableId>>();
-        for (_, t) in self.threads.entries() {
-            control += t.registers.capacity() * std::mem::size_of::<Value>()
-                + t.frames.capacity() * std::mem::size_of::<Frame>()
-                + t.open_upvalues.capacity() * 4
-                + t.substitutions.capacity() * std::mem::size_of::<strings::Substitution>()
-                + jobs_bytes(&t.substitutions)
-                + t.sorts.capacity() * std::mem::size_of::<tables::Sort>();
-            control += loads::storage_bytes(&t.loads);
-            control += t.tracebacks.capacity() * std::mem::size_of::<traces::Traceback>();
-            control += t.hooks.hidden.capacity() * std::mem::size_of::<Value>();
-            control += t.hooks.popped.capacity() * std::mem::size_of::<Value>();
-            control += t.host_states.capacity() * std::mem::size_of::<host::ThreadData>()
-                + t.host_states
-                    .iter()
-                    .map(host::ThreadData::heap_bytes)
-                    .sum::<usize>();
-        }
+        control += thread_payload
+            .unwrap_or_else(|| self.threads.iter().map(Self::thread_payload_bytes).sum());
         control += self.buffers.capacity() * std::mem::size_of::<Buffer<u8>>()
             + self.buffers.iter().map(Buffer::capacity).sum::<usize>()
             + self.output.as_ref().map_or(0, Vec::capacity)
@@ -756,6 +766,10 @@ impl Vm {
         }
     }
     pub(super) fn reset_gc_debt(&mut self) {
+        self.reset_gc_debt_with_thread_payload(None);
+    }
+
+    fn reset_gc_debt_with_thread_payload(&mut self, thread_payload: Option<usize>) {
         self.strings.bytes.allocated = 0;
         self.tables.allocated = 0;
         self.functions.allocated = 0;
@@ -769,7 +783,9 @@ impl Vm {
         self.io.files.allocated = 0;
         self.gc.control_allocated = 0;
         self.gc.pending = false;
-        self.gc.last_live = self.heap_stats().live_bytes;
+        self.gc.last_live = self
+            .heap_stats_with_thread_payload(thread_payload)
+            .live_bytes;
         self.set_gc_threshold();
     }
     fn set_gc_threshold(&mut self) {
@@ -1513,12 +1529,36 @@ impl Vm {
         }
     }
     fn begin_gc_cycle(&mut self) -> Result<(), Error> {
+        self.begin_gc_cycle_with_thread_payload(false).map(|_| ())
+    }
+
+    fn begin_gc_cycle_with_thread_payload(
+        &mut self,
+        measure_for_sweep: bool,
+    ) -> Result<Option<usize>, Error> {
         let roots = self.seed_gc_root_count(self.gc.work.capacity());
         if let Err(error) = self.reserve_gc_work(roots.saturating_sub(self.gc.work.len())) {
             self.defer_gc_until_allocation();
             return Err(error);
         }
-        self.heap_stats();
+        let thread_payload = if measure_for_sweep {
+            let mut has_host_state = false;
+            let bytes = self
+                .threads
+                .iter()
+                .map(|thread| {
+                    has_host_state |= !thread.host_states.is_empty();
+                    Self::thread_payload_bytes(thread)
+                })
+                .sum();
+            self.heap_stats_with_thread_payload(Some(bytes));
+            // Host resources can report a different footprint at the next
+            // observation. Always measure them again after sweeping.
+            (!has_host_state).then_some(bytes)
+        } else {
+            self.heap_stats();
+            None
+        };
         self.gc.phase = Phase::Propagate;
         self.gc.closed.clear();
         self.protect_new_allocations(false);
@@ -1550,7 +1590,7 @@ impl Vm {
         work.clear();
         self.seed_gc_roots(&mut work);
         self.gc.work = work;
-        Ok(())
+        Ok(thread_payload)
     }
     fn seed_gc_roots(&self, work: &mut Work) {
         work.push(Trace::Value(Value::Thread(self.main)));
@@ -1764,7 +1804,15 @@ impl Vm {
             _ => 0,
         }) as u32
     }
-    fn sweep_gc_some(&mut self, mut budget: usize) {
+    fn sweep_gc_some(&mut self, budget: usize) {
+        self.sweep_gc_some_with_thread_payload(budget, None);
+    }
+
+    fn sweep_gc_some_with_thread_payload(
+        &mut self,
+        mut budget: usize,
+        mut thread_payload: Option<&mut usize>,
+    ) {
         while budget != 0 && self.gc.sweep_arena < 10 {
             let mut cursor = self.gc.sweep_cursor as usize;
             let before = cursor;
@@ -1784,7 +1832,16 @@ impl Vm {
                         })
                 }
                 2 => self.upvalues.sweep_some(&mut cursor, budget),
-                3 => self.threads.sweep_some(&mut cursor, budget),
+                3 => {
+                    if let Some(bytes) = thread_payload.as_deref_mut() {
+                        self.threads
+                            .sweep_with(&mut cursor, budget, |threads, index| {
+                                *bytes -= Self::thread_payload_bytes(&threads[index]);
+                            })
+                    } else {
+                        self.threads.sweep_some(&mut cursor, budget)
+                    }
+                }
                 4 => {
                     let bytes = &mut self.object_payload_bytes;
                     self.native_closures
@@ -1855,7 +1912,7 @@ impl Vm {
         self.gc.phase = Phase::Finalize;
         self.gc.collections += 1;
         // Resetting the debt measures the heap, which also records its peak.
-        self.reset_gc_debt();
+        self.reset_gc_debt_with_thread_payload(thread_payload.copied());
     }
     fn advance_gc_some(&mut self, mut budget: usize) -> Result<bool, Error> {
         if self.gc.phase == Phase::Pause {
@@ -1918,9 +1975,11 @@ impl Vm {
     }
     pub(super) fn collect_cycle(&mut self) -> Result<(), Error> {
         self.finish_pending_sweep();
-        self.begin_gc_cycle()?;
+        // No mutator runs between the observations. Marking may clear stack
+        // slots in place, and sweeping accounts for every freed thread.
+        let mut thread_payload = self.begin_gc_cycle_with_thread_payload(true)?;
         self.finish_gc_marking(true)?;
-        self.sweep_gc_some(usize::MAX);
+        self.sweep_gc_some_with_thread_payload(usize::MAX, thread_payload.as_mut());
         Ok(())
     }
     pub(super) fn gc_control(&mut self, operation: GcOperation) -> Result<(i32, bool), Error> {
@@ -2014,6 +2073,32 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn full_collection_accounts_for_freed_coroutine_stacks() {
+        let mut vm = Vm::new();
+        vm.execute(
+            &crate::compile(
+                br#"
+                collectgarbage('stop')
+                retained = {}
+                local function entry() coroutine.yield(19) end
+                for i = 1, 24 do
+                    local thread = coroutine.create(entry)
+                    if i % 2 == 0 then assert(coroutine.resume(thread)) end
+                    if i <= 2 then retained[i] = thread end
+                end
+                "#,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(vm.heap_stats().threads, 25);
+        vm.collect_cycle().unwrap();
+        let after = vm.heap_stats();
+        assert_eq!(after.threads, 3);
+        assert_eq!(vm.gc.last_live, after.live_bytes);
+    }
     #[test]
     fn weak_cleanup_never_allocates_and_preserves_live_entries_across_storage_slices() {
         let mut vm = Vm::new_bare();
