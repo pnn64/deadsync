@@ -54,10 +54,10 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// Guarantee at least 32 buffered (possibly virtual) bits.
+    /// Ensure the hot Huffman lookup has a complete prefix.
     #[inline(always)]
     fn fill(&mut self) {
-        if self.count < 32 {
+        if self.count < FAST {
             self.refill();
         }
     }
@@ -120,6 +120,9 @@ impl<'a> Reader<'a> {
 
     #[inline(always)]
     fn receive(&mut self, size: u32) -> i32 {
+        if self.count < size {
+            self.refill();
+        }
         let value = self.peek(size);
         self.consume(size);
         extend(value, size)
@@ -173,13 +176,16 @@ impl<'a> Reader<'a> {
     }
 }
 
-/// Decode one symbol; the caller guarantees at least 16 buffered bits.
+/// Decode one symbol after the caller buffers a full lookup prefix.
 #[inline(always)]
 fn symbol(table: &Huffman, reader: &mut Reader<'_>) -> Result<u32> {
     let entry = table.lookup[reader.peek(FAST) as usize];
     if entry != 0 {
         reader.consume(u32::from(entry >> 8));
         return Ok(u32::from(entry & 0xff));
+    }
+    if reader.count < 16 {
+        reader.refill();
     }
     let (symbol, length) = long_symbol(table, reader.peek(16) as i32)?;
     reader.consume(length);
@@ -208,8 +214,8 @@ fn long_symbol(table: &Huffman, peek: i32) -> Result<(u32, u32)> {
 
 /// Decode one sequential block. Returns the largest zigzag index written, so
 /// zero identifies a DC-only block. `block` must start zeroed. Magnitude
-/// categories reach precision + 3 bits, so a symbol never exceeds the 32
-/// bits that `fill` guarantees.
+/// categories reach precision + 3 bits. Only codes outside the lookup and
+/// separate magnitude reads require additional lookahead.
 #[inline(always)]
 pub(crate) fn block(
     block: &mut [i16; 64],

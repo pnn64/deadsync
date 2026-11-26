@@ -900,10 +900,20 @@ impl<'a> Row<'a> {
         }
         let last = self.top.len() as i32 - 1;
         if self.method == Upsampling::Nearest {
-            for (k, value) in out.iter_mut().enumerate() {
-                let x = start + k;
-                let source = ((2 * x + 1) * self.h / (2 * self.max_h)).min(last as usize);
-                *value = i16::from(self.top[source]);
+            let divisor = 2 * self.max_h;
+            let mut position = (2 * start + 1) * self.h;
+            let step = 2 * self.h;
+            if divisor.is_power_of_two() {
+                let shift = divisor.trailing_zeros();
+                for value in out {
+                    *value = i16::from(self.top[(position >> shift).min(last as usize)]);
+                    position += step;
+                }
+            } else {
+                for value in out {
+                    *value = i16::from(self.top[(position / divisor).min(last as usize)]);
+                    position += step;
+                }
             }
             return;
         }

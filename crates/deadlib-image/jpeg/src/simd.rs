@@ -93,30 +93,31 @@ fn find_ff_word(bytes: &[u8]) -> usize {
 /// Returns `false` (writing nothing) without AVX2. `out` holds 8 rows of 8
 /// bytes, `stride` apart.
 #[inline(always)]
-pub(crate) fn idct8(
-    block: &[i16; 64],
-    quant: &[f32; 64],
-    constants: [f32; 4],
-    out: &mut [u8],
-    stride: usize,
-) -> bool {
+pub(crate) fn idct8(block: &[i16; 64], quant: &[f32; 64], out: &mut [u8], stride: usize) -> bool {
     #[cfg(all(target_arch = "x86_64", not(deadlib_image_jpeg_portable)))]
     if !portable_forced() && std::is_x86_feature_detected!("avx2") {
-        // SAFETY: AVX2 support was detected just above. All loads read
-        // fixed-size arrays and every store targets a checked 8-byte slice.
+        assert!(
+            stride
+                .checked_mul(7)
+                .and_then(|n| n.checked_add(8))
+                .is_some_and(|span| span <= out.len())
+        );
+        // SAFETY: AVX2 is available, and the check bounds the last and
+        // all earlier 8-byte row stores within the mutable slice.
         #[allow(unsafe_code)]
         unsafe {
-            x86::idct8(block, quant, constants, out, stride)
+            x86::idct8(block, quant, out.as_mut_ptr(), stride)
         };
         return true;
     }
-    let _ = (block, quant, constants, out, stride);
+    let _ = (block, quant, out, stride);
     false
 }
 
 #[cfg(all(target_arch = "x86_64", not(deadlib_image_jpeg_portable)))]
 #[allow(unsafe_code)]
 mod x86 {
+    use crate::transform::{C2, C2_MINUS_C6, C2_PLUS_C6, R2};
     use std::arch::x86_64::*;
 
     #[target_feature(enable = "avx2")]
@@ -271,15 +272,9 @@ mod x86 {
     }
 
     #[target_feature(enable = "avx2")]
-    pub(super) unsafe fn idct8(
-        block: &[i16; 64],
-        quant: &[f32; 64],
-        constants: [f32; 4],
-        out: &mut [u8],
-        stride: usize,
-    ) {
+    pub(super) unsafe fn idct8(block: &[i16; 64], quant: &[f32; 64], out: *mut u8, stride: usize) {
         #[allow(clippy::redundant_closure)] // target-feature fns are not `Fn`
-        let c = constants.map(|v| _mm256_set1_ps(v));
+        let c = [R2, C2, C2_MINUS_C6, C2_PLUS_C6].map(|v| _mm256_set1_ps(v));
         let bias = _mm256_set1_ps(128.5);
         // Columns first (lanes are columns), then rows as transposed lanes.
         let rows = if quarter_support(block) {
@@ -304,13 +299,17 @@ mod x86 {
             _mm256_permutevar8x32_epi32(_mm256_packus_epi16(pairs[0], pairs[1]), order),
             _mm256_permutevar8x32_epi32(_mm256_packus_epi16(pairs[2], pairs[3]), order),
         ];
-        for (half, value) in bytes.into_iter().enumerate() {
-            let mut rows = [0u8; 32];
-            // SAFETY: `rows` is exactly 32 bytes.
-            unsafe { _mm256_storeu_si256(rows.as_mut_ptr().cast(), value) };
-            for (i, row) in rows.as_chunks::<8>().0.iter().enumerate() {
-                let y = half * 4 + i;
-                out[y * stride..y * stride + 8].copy_from_slice(row);
+        for (i, half) in bytes.into_iter().enumerate() {
+            let low = _mm256_castsi256_si128(half);
+            let high = _mm256_extracti128_si256::<1>(half);
+            // SAFETY: every destination is an eight-byte row within the
+            // caller's checked output span. The stores allow unaligned rows.
+            unsafe {
+                let row = out.add(i * 4 * stride);
+                _mm_storel_epi64(row.cast(), low);
+                _mm_storel_epi64(row.add(stride).cast(), _mm_srli_si128::<8>(low));
+                _mm_storel_epi64(row.add(2 * stride).cast(), high);
+                _mm_storel_epi64(row.add(3 * stride).cast(), _mm_srli_si128::<8>(high));
             }
         }
     }

@@ -54,10 +54,10 @@ pub(crate) fn idct(block: &[i16; 64], quant: &[u16; 64], precision: u8) -> [u16;
 // so vectorized and scalar evaluation produce identical samples.
 // libjpeg's decimal literals, rounded through f64 like the C constants.
 #[allow(clippy::approx_constant)]
-const R2: f32 = 1.414213562f64 as f32;
-const C2: f32 = 1.847759065f64 as f32;
-const C2_MINUS_C6: f32 = 1.082392200f64 as f32;
-const C2_PLUS_C6: f32 = 2.613125930f64 as f32;
+pub(crate) const R2: f32 = 1.414213562f64 as f32;
+pub(crate) const C2: f32 = 1.847759065f64 as f32;
+pub(crate) const C2_MINUS_C6: f32 = 1.082392200f64 as f32;
+pub(crate) const C2_PLUS_C6: f32 = 2.613125930f64 as f32;
 
 /// Dequantization multipliers with AAN row/column scales and the 1/8 descale.
 pub(crate) struct FloatQuant(pub(crate) [f32; 64]);
@@ -218,7 +218,7 @@ pub(crate) fn idct8_auto(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], 
         return idct8_dc(block[0], quant, out, stride);
     }
     // With AVX2 the full transform is cheaper than the reduced portable one.
-    if crate::simd::idct8(block, &quant.0, [R2, C2, C2_MINUS_C6, C2_PLUS_C6], out, stride) {
+    if crate::simd::idct8(block, &quant.0, out, stride) {
         return;
     }
     let outside = block[32..].iter().fold(0, |acc, &v| acc | v)
@@ -426,7 +426,11 @@ mod tests {
             let shift = case % 16;
             let block: [i16; 64] = core::array::from_fn(|_| {
                 let v = next();
-                if v % 4 == 0 { (v >> 16) as i16 >> shift } else { 0 }
+                if v % 4 == 0 {
+                    (v >> 16) as i16 >> shift
+                } else {
+                    0
+                }
             });
             let (mut dispatched, mut portable) = ([0u8; 64], [0u8; 64]);
             idct8_auto(&block, &quant, &mut dispatched, 8);

@@ -75,3 +75,33 @@ All 189 release unit and integration tests passed.
 - [Paired cycle summary](pair-summary.json)
 - [Before pair 1](pair-occupancy1.tsv.gz) and [before pair 2](pair-occupancy2.tsv.gz)
 - [Candidate pair 1](pair-quarter1.tsv.gz) and [candidate pair 2](pair-quarter2.tsv.gz)
+
+## Sequential refill, row stores and nearest sampling
+
+The sequential entropy path refills to the Huffman lookup width and requests
+larger lookahead for long codes or separate magnitudes. Turbo likewise keeps
+Huffman lookup and magnitude refill checks separate. The AVX2 inverse transform
+writes eight rows after one span check. Nearest-neighbor sampling advances the
+source coordinate by a constant step and uses a shift for power-of-two widths.
+[Turbo sequential entropy decoder](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/5b2e0e9269f1fff760d867be97b7ba5f79188227/src/jdhuff.c)
+
+| Input set | Paired files | Deadlib / Turbo before | Deadlib / Turbo after |
+| --- | ---: | ---: | ---: |
+| All comparable rasters | 157 | 1.027× | 0.996× |
+| Common images | 53 | 1.054× | 1.038× |
+| Kodak progressive 4:2:0 | 24 | 1.009× | 0.981× |
+| Kodak baseline 4:2:0 | 24 | 1.099× | 1.095× |
+| Shipped game assets | 5 | 1.127× | 1.134× |
+| Kodak 4:1:1 nearest | 1 | 2.164× | 1.317× |
+| Kodak 4:1:0 nearest | 1 | 2.537× | 1.475× |
+
+The two candidate full-corpus runs were 0.986× and 1.006× across the 157
+paired rasters. Deadlib used 3.7% fewer raw cycles across those pairs.
+The common-image measurements varied from 1.026× to 1.050×. All 412
+verification rows agreed across the four runs. All 1,641 exact snapshots
+matched and all 189 release tests passed. An explicit AVX2 RGB conversion trial increased the common-image
+ratio and was reverted.
+
+- [Full-corpus cycle summary](direct-summary.json)
+- [Before run 1](direct-qualify-quarter1.tsv.gz) and [before run 2](direct-qualify-quarter2.tsv.gz)
+- [Candidate run 1](direct-qualify-direct1.tsv.gz) and [candidate run 2](direct-qualify-direct2.tsv.gz)
