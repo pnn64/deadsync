@@ -1,4 +1,33 @@
 use deadlib_lua::{Value, Vm, compile};
+
+#[test]
+fn dormant_threads_keep_their_entry_and_environment_through_full_collections() {
+    let program = compile(
+        br#"
+        local weak = setmetatable({}, {__mode = 'v'})
+        local function make_thread()
+            local payload = {answer = 42}
+            local entry = function() return payload.answer end
+            local environment = {marker = 19}
+            local thread = coroutine.create(entry)
+            debug.setfenv(thread, environment)
+            weak[1], weak[2], weak[3] = entry, environment, payload
+            return thread
+        end
+        local thread = make_thread()
+        for i = 1, 5 do collectgarbage('collect') end
+        assert(type(weak[1]) == 'function')
+        assert(debug.getfenv(thread) == weak[2] and weak[2].marker == 19)
+        assert(weak[3].answer == 42)
+        local ok, answer = coroutine.resume(thread)
+        assert(ok)
+        return answer
+        "#,
+    )
+    .unwrap();
+    assert_eq!(Vm::new().execute(&program).unwrap(), [Value::Number(42.0)]);
+}
+
 #[derive(Debug, PartialEq)]
 enum Scalar {
     Nil,
