@@ -40,3 +40,11 @@ Runs used an Intel Xeon E5-2696 v4, logical CPU 2, Rust 1.100.0, and ITGmania FF
 A separate instrumented run of `05942d190` attributed 66–67% of cycles to macroblock decode and 19–23% to deblocking. Those figures cover the two progressive clips. The five-run cycle spreads in the paired comparison ranged from 1.5% to 8.3%. A 1% equivalence claim requires repeated paired batches and additional stream types.
 
 [Baseline samples](results/windows-x86_64-20261126/baseline) · [SIMD milestone samples](results/windows-x86_64-20261126/x86-deblock) · [Decode stage profile](results/windows-x86_64-20261126/regions.csv)
+
+## Reference storage and slice context
+
+`f2d3dbb51` reuses the planes and motion vectors of a retired reference after it has become exclusively owned. Requested allocation traffic in the SRPG9 and SRPG10 clips fell from 5.86 and 6.07 MiB per frame to 4.53 and 4.55 MiB. Allocation and reallocation calls fell to 36.02 and 25.91 per frame. [Reference-pool samples](results/windows-x86_64-20261126/reference-pool)
+
+`46aadb9cf` keeps one macroblock context across a slice, as FFmpeg does with its slice context. Separate releases of the reference-pool and slice-context revisions ran inside the same benchmark process with rotating order for five rounds per clip. The median of the paired cycle ratios fell 2.4% on SRPG9 and 2.3% on SRPG10. Both clips and the MBAFF, constrained-intra multislice, and resolution-switch samples matched libavcodec. [Slice-context samples](results/windows-x86_64-20261126/slice-context) · [Paired cycle samples](results/windows-x86_64-20261126/slice-context-paired.csv)
+
+An SSE2 4×4 and AVX2 8×8 inverse-transform prototype matched the scalar kernels and FFmpeg, including a High 10 stream. It used 1.7% more cycles on SRPG9 and 0.1% more on SRPG10 in the paired comparison and was discarded.
