@@ -6258,7 +6258,7 @@ impl App {
                             }
                         }
                         ContentRequest::SkipReplayGain => {
-                            deadsync_audio_replaygain::request_skip_blocking_analysis();
+                            self.apply_replaygain.request_cancel();
                         }
                         ContentRequest::ApplyReplayGain => {
                             self.apply_replaygain.start();

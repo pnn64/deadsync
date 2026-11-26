@@ -6,6 +6,8 @@ use deadsync_simfile::scan::SongScanMode;
 use log::info;
 use smallvec::SmallVec;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
 
@@ -78,6 +80,7 @@ impl ProgressGate {
 #[derive(Default)]
 pub(crate) struct Service {
     rx: Option<Receiver<ContentReloadEvent>>,
+    replaygain_cancelled: Arc<AtomicBool>,
 }
 
 #[derive(Default)]
@@ -126,11 +129,11 @@ impl StartupLoad {
         }
     }
 
-    pub(crate) fn request_replaygain_skip(&mut self) {
+    pub(crate) fn request_replaygain_skip(&mut self, service: &Service) {
         if let Self::Loading(progress) = self
             && progress.request_replaygain_skip()
         {
-            deadsync_audio_replaygain::request_skip_blocking_analysis();
+            service.replaygain_cancelled.store(true, Ordering::Relaxed);
         }
     }
 }
@@ -150,11 +153,11 @@ impl Service {
         courses_root: PathBuf,
         audio_available: bool,
     ) {
-        self.start(move |tx| {
+        self.start(move |tx, cancelled| {
             scan_library(&tx, &songs_root, &courses_root, SongScanMode::Startup);
             prewarm_artwork(&tx);
             compile_noteskins(&tx);
-            analyze_replaygain(&tx, None, audio_available);
+            analyze_replaygain(&tx, None, audio_available, &cancelled);
             send_finished(&tx);
         });
     }
@@ -165,9 +168,9 @@ impl Service {
         courses_root: PathBuf,
         audio_available: bool,
     ) {
-        self.start(move |tx| {
+        self.start(move |tx, cancelled| {
             scan_library(&tx, &songs_root, &courses_root, SongScanMode::Reload);
-            analyze_replaygain(&tx, None, audio_available);
+            analyze_replaygain(&tx, None, audio_available, &cancelled);
             send_finished(&tx);
         });
     }
@@ -178,7 +181,7 @@ impl Service {
         pack_dirs: Vec<PathBuf>,
         audio_available: bool,
     ) {
-        self.start(move |tx| {
+        self.start(move |tx, cancelled| {
             let _ = tx.send(ContentReloadEvent::Phase(ContentReloadPhase::Songs));
             let mut gate = ProgressGate::default();
             let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
@@ -205,18 +208,23 @@ impl Service {
                 &mut on_song,
                 config::runtime::group_is_never_cached,
             );
-            analyze_replaygain(&tx, Some(&pack_dirs), audio_available);
+            analyze_replaygain(&tx, Some(&pack_dirs), audio_available, &cancelled);
             send_finished(&tx);
         });
     }
 
-    fn start(&mut self, job: impl FnOnce(SyncSender<ContentReloadEvent>) + Send + 'static) {
+    fn start(
+        &mut self,
+        job: impl FnOnce(SyncSender<ContentReloadEvent>, Arc<AtomicBool>) + Send + 'static,
+    ) {
         if self.rx.is_some() {
             return;
         }
         let (tx, rx) = mpsc::sync_channel(PROGRESS_QUEUE_CAPACITY);
         self.rx = Some(rx);
-        std::thread::spawn(move || job(tx));
+        let cancelled = Arc::new(AtomicBool::new(false));
+        self.replaygain_cancelled = Arc::clone(&cancelled);
+        std::thread::spawn(move || job(tx, cancelled));
     }
 
     pub(crate) fn poll(&mut self) -> SmallVec<[ContentReloadEvent; PROGRESS_EVENTS_PER_FRAME]> {
@@ -379,6 +387,7 @@ fn analyze_replaygain(
     tx: &SyncSender<ContentReloadEvent>,
     restrict_to: Option<&[PathBuf]>,
     audio_available: bool,
+    cancelled: &AtomicBool,
 ) {
     if !config::runtime::get().enable_replaygain || !audio_available {
         return;
@@ -420,7 +429,7 @@ fn analyze_replaygain(
             },
         );
     };
-    deadsync_audio_replaygain::analyze_paths_blocking(paths, &mut on_song);
+    deadsync_audio_replaygain::analyze_paths_blocking(paths, cancelled, &mut on_song);
     info!("Init loading: ReplayGain analysis complete.");
 }
 
@@ -1407,7 +1416,7 @@ mod tests {
             song_packs: Vec::new(),
         })
         .expect("test event should send");
-        let mut service = Service { rx: Some(rx) };
+        let mut service = Service { rx: Some(rx), ..Default::default() };
 
         let events = service.poll();
 
@@ -1430,7 +1439,7 @@ mod tests {
             })
             .unwrap();
         }
-        let mut service = Service { rx: Some(rx) };
+        let mut service = Service { rx: Some(rx), ..Default::default() };
         assert_eq!(service.poll().len(), PROGRESS_EVENTS_PER_FRAME);
         let second = service.poll();
         assert_eq!(second.len(), 10 - PROGRESS_EVENTS_PER_FRAME);

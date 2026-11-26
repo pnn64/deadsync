@@ -2,6 +2,8 @@ use deadsync_assets::progress::ApplyReplayGainEvent;
 use log::info;
 use smallvec::SmallVec;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
 
 use crate::content_reload::{
@@ -11,15 +13,20 @@ use crate::content_reload::{
 /// Shell-owned worker that runs a one-shot bulk `ReplayGain` (EBU R128) analysis
 /// over the whole song library, driven by the Sound options "Apply `ReplayGain`"
 /// action. Unlike the boot-time content reload pass, this is user-triggered and
-/// reports progress to the Options screen. Cancellation reuses the crate-level
-/// cooperative skip (`deadsync_audio_replaygain::request_skip_blocking_analysis`)
-/// that also backs the startup skip, so both paths stop the same blocking pass.
+/// reports progress to the Options screen. Each run owns its cancellation flag.
 #[derive(Default)]
 pub(crate) struct Service {
     rx: Option<Receiver<ApplyReplayGainEvent>>,
+    cancelled: Arc<AtomicBool>,
 }
 
 impl Service {
+    pub(crate) fn request_cancel(&self) {
+        if self.rx.is_some() {
+            self.cancelled.store(true, Ordering::Relaxed);
+        }
+    }
+
     /// Spawn the analysis worker. No-op when a run is already in flight.
     pub(crate) fn start(&mut self) {
         if self.rx.is_some() {
@@ -27,6 +34,8 @@ impl Service {
         }
         let (tx, rx) = mpsc::sync_channel(PROGRESS_QUEUE_CAPACITY);
         self.rx = Some(rx);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        self.cancelled = Arc::clone(&cancelled);
 
         std::thread::spawn(move || {
             let paths = crate::content_reload::replaygain_music_paths(None);
@@ -63,7 +72,7 @@ impl Service {
                         },
                     );
                 };
-                deadsync_audio_replaygain::analyze_paths_blocking(paths, &mut on_song);
+                deadsync_audio_replaygain::analyze_paths_blocking(paths, &cancelled, &mut on_song);
             }
             // `analyze_paths_blocking` only returns before every song is done
             // when a cooperative skip was requested, so a short count means the
@@ -123,7 +132,7 @@ mod tests {
             })
             .unwrap();
         }
-        let mut service = Service { rx: Some(rx) };
+        let mut service = Service { rx: Some(rx), ..Default::default() };
         assert_eq!(service.poll().len(), PROGRESS_EVENTS_PER_FRAME);
         assert_eq!(service.poll().len(), 10 - PROGRESS_EVENTS_PER_FRAME);
 

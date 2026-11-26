@@ -77,7 +77,8 @@ All Player Options layouts consume the same editor and submit
 supplies its viewport and transitions. The game resolves stage scroll speed,
 tournament restrictions, and Golf settings on owned profile copies.
 Content reload and bulk ReplayGain workers publish progress through
-`deadsync-assets::progress`. Simply Love resolves its visual style, screen
+`deadsync-assets::progress`. The shell supplies a separate cancellation flag
+for each ReplayGain run. Simply Love resolves its visual style, screen
 bars, background movie, wheel fallback banners, and density mesh in its theme
 crate.
 

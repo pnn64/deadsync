@@ -535,7 +535,7 @@ impl App {
                 {
                     ThemeEffect::None
                 } else if startup.is_loading() {
-                    startup.request_replaygain_skip();
+                    startup.request_replaygain_skip(&self.content_reload);
                     ThemeEffect::None
                 } else {
                     ThemeEffect::Navigate(CurrentScreen::Menu)

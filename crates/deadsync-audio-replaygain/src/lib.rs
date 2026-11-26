@@ -9,8 +9,8 @@
 //!   on expansion.
 //! - [`analyze_paths_blocking`] - synchronously analyze a batch of song paths,
 //!   blocking with progress until all are cached. Used by the boot loader to
-//!   frontload the whole library before the menu appears. Can be cut short with
-//!   [`request_skip_blocking_analysis`].
+//!   frontload the whole library before the menu appears. The caller supplies
+//!   cancellation for that run.
 //! - [`clear_cache`] - drop all in-memory state and the on-disk cache file.
 //!   Intended for debug / a future "rescan" option.
 //!
@@ -49,21 +49,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
-
-/// Cooperative cancellation flag for [`analyze_paths_blocking`]. Set by
-/// [`request_skip_blocking_analysis`] (e.g. when the user chooses to skip the
-/// startup loudness pass) and observed by the blocking workers, which stop
-/// pulling new jobs once it is raised. Reset at the start of every blocking
-/// run so a prior skip never leaks into a later reload.
-static SKIP_BLOCKING_ANALYSIS: AtomicBool = AtomicBool::new(false);
-
-/// Ask the in-flight [`analyze_paths_blocking`] pass to stop as soon as the
-/// jobs already in flight finish, leaving any not-yet-started songs to be
-/// analyzed lazily later via the preview path. No-op when no blocking pass is
-/// running. Safe to call from any thread.
-pub fn request_skip_blocking_analysis() {
-    SKIP_BLOCKING_ANALYSIS.store(true, Ordering::Relaxed);
-}
 
 /// Sentinel track id used for prewarm jobs that aren't tied to a currently
 /// playing track. `set_music_replaygain_if_matches` will treat this as a
@@ -505,19 +490,19 @@ fn blocking_worker_threads(job_count: usize) -> usize {
 /// through `progress(done, total, path)` as each song finishes, where `path` is
 /// the original (pre-canonicalization) path so callers can map it back to a
 /// song/pack for display.
+/// Setting `cancelled` stops workers from taking more songs. Jobs already in
+/// flight can finish and report progress.
 /// # Panics
 ///
 /// Panics if an internal synchronization lock is poisoned.
-pub fn analyze_paths_blocking<F>(paths: Vec<PathBuf>, mut progress: F)
+pub fn analyze_paths_blocking<F>(paths: Vec<PathBuf>, cancelled: &AtomicBool, mut progress: F)
 where
     F: FnMut(usize, usize, &Path),
 {
     let total = paths.len();
-    if total == 0 {
+    if total == 0 || cancelled.load(Ordering::Relaxed) {
         return;
     }
-
-    SKIP_BLOCKING_ANALYSIS.store(false, Ordering::Relaxed);
 
     let cursor = Mutex::new(paths.into_iter());
     let (tx, rx) = std::sync::mpsc::channel::<PathBuf>();
@@ -529,7 +514,7 @@ where
             let tx = tx.clone();
             scope.spawn(move || {
                 loop {
-                    if SKIP_BLOCKING_ANALYSIS.load(Ordering::Relaxed) {
+                    if cancelled.load(Ordering::Relaxed) {
                         break;
                     }
                     let Some(path) = cursor.lock().unwrap().next() else {
@@ -766,6 +751,15 @@ fn flush_now_with_timeout(timeout: Duration) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blocking_analysis_respects_cancellation_before_start() {
+        let cancelled = AtomicBool::new(true);
+        analyze_paths_blocking(vec!["cancelled.ogg".into()], &cancelled, |_, _, _| {
+            panic!("a cancelled run must not report song progress");
+        });
+        assert!(cancelled.load(Ordering::Relaxed));
+    }
 
     #[test]
     fn blocking_worker_threads_are_bounded_by_jobs() {

@@ -85,8 +85,7 @@ pub enum ContentRequest {
         /// `true` writes `SyncOffset=ITG`, `false` writes `SyncOffset=NULL`.
         itg: bool,
     },
-    /// Ask the shell to cut short the in-progress startup `ReplayGain` analysis
-    /// so the loading screen can advance without waiting for every song.
+    /// Ask the shell to cancel the manual Apply `ReplayGain` run.
     SkipReplayGain,
     /// Analyze EBU R128 loudness for the whole song library and populate the
     /// `ReplayGain` cache. Progress is reported via
