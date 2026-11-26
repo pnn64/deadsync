@@ -237,6 +237,71 @@ fn fragmented_scalar_readers_call_every_chunk_without_publishing_roots() {
 }
 
 #[test]
+fn reader_frame_metadata_needs_no_parser_temporaries() {
+    let program = compile(
+        br#"
+        local source = "local kept = 42; return kept"
+        local offset = 1
+        local fn = assert(load(function()
+            assert(debug.getinfo(2, "f"))
+            assert(debug.getinfo(load, "Su"))
+            if offset > #source then return end
+            local part = source:sub(offset, offset + 7)
+            offset = offset + 8
+            return part
+        end))
+        assert(offset == 1 + 8 * math.ceil(#source / 8))
+        return fn()
+        "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+        assert_eq!(vm.heap_stats().parser_prototypes, 0);
+    }
+}
+
+#[test]
+fn replaced_metadata_helpers_can_observe_parser_temporaries() {
+    let program = compile(
+        br#"
+        local builtin_info, builtin_assert = debug.getinfo, assert
+        local seen = 0
+        local function observe()
+            local _, constants = debug.getlocal(4, 4)
+            if type(constants) == "table" and constants.kept == true then
+                seen = seen + 1
+            end
+        end
+        local function run()
+            local source = "local kept = 42; \n return kept"
+            local offset = 1
+            local fn = builtin_assert(load(function()
+                assert(debug.getinfo(1, "f"))
+                if offset > #source then return end
+                local part = source:sub(offset, offset + 16)
+                offset = offset + 17
+                return part
+            end))
+            return fn()
+        end
+        debug.getinfo = function() observe(); return builtin_info(2, "f") end
+        builtin_assert(run() == 42 and seen > 0)
+        debug.getinfo = builtin_info
+        seen = 0
+        assert = function(value) observe(); return builtin_assert(value) end
+        builtin_assert(run() == 42 and seen > 0)
+        return true
+        "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Boolean(true)]);
+        assert!(vm.heap_stats().parser_prototypes > 0);
+    }
+}
+
+#[test]
 fn sliced_readers_accept_the_actual_source_at_eof() {
     let program = compile(
         br#"

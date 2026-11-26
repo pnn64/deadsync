@@ -4,7 +4,9 @@ use crate::memory::bytes::ByteOutput;
 use crate::memory::compilation::Workspace;
 use crate::memory::fallible::{self, SliceExt, VecExt};
 
+mod constructor_templates;
 mod eof;
+mod literal_tables;
 mod reader;
 mod source_templates;
 
@@ -55,6 +57,8 @@ pub(super) struct Spare {
     parser: crate::parser::Spare,
     compiler: crate::compiler::Spare,
     source_templates: source_templates::Templates,
+    constructors: constructor_templates::Templates,
+    literal_tables: literal_tables::Templates,
     recent_sources: [Option<(SourceKey, u64)>; 8],
     next_source: usize,
     constant_strings: [Option<(ShortConstant, StringId)>; 32],
@@ -115,6 +119,24 @@ impl std::fmt::Debug for Spare {
     }
 }
 impl Spare {
+    fn find_text(
+        &mut self,
+        source: &[u8],
+        name: &[u8],
+        depth: usize,
+        locale: u64,
+        preamble: Option<&source_templates::Preamble>,
+    ) -> Option<Result<Program, Error>> {
+        preamble
+            .and_then(|preamble| {
+                self.source_templates
+                    .find(source, name, depth, locale, preamble)
+            })
+            .map(|variant| variant.publish())
+            .or_else(|| self.literal_tables.find(source, name, depth, locale))
+            .or_else(|| self.constructors.find(source, name, depth, locale))
+    }
+
     fn finish_text(
         &mut self,
         mut ast: crate::parser::Ast,
@@ -136,6 +158,12 @@ impl Spare {
                 &ast,
                 self.compiler.folded_literals(),
             );
+        }
+        if let Ok(program) = &result {
+            self.literal_tables
+                .remember(source, depth, locale, program, &ast);
+            self.constructors
+                .remember(source, depth, locale, program, &ast);
         }
         self.parser.keep_ast(ast);
         result
@@ -266,13 +294,8 @@ pub(super) fn compile(
     }
     let parse_locale = crate::locale::revision();
     let preamble = source_templates::Preamble::scan(source);
-    if let Some(preamble) = &preamble
-        && let Some(variant) =
-            spare
-                .source_templates
-                .find(source, name, depth, parse_locale, preamble)
-    {
-        return variant.publish();
+    if let Some(program) = spare.find_text(source, name, depth, parse_locale, preamble.as_ref()) {
+        return program;
     }
     let mut parser = crate::parser::Parser::try_new_in(&mut spare.parser, depth)?;
     let parsed = parser.resume(source, true);
@@ -487,6 +510,36 @@ impl Loading {
             || (self.native.is_some() && self.source.len() > SPARE_SOURCE_LIMIT)
         {
             return crate::compiler::compile(ast, &self.source, &self.name).map(Some);
+        }
+        if self.closed
+            && self.source.len() <= SPARE_SOURCE_LIMIT
+            && self.parse_locale == crate::locale::revision()
+            && !crate::memory::compilation::active()
+        {
+            // Observable readers still drive the parser through every chunk.
+            // Once it accepts EOF, code can reuse a verified source template.
+            let preamble = source_templates::Preamble::scan(&self.source);
+            if let Some(program) = spare.find_text(
+                &self.source,
+                &self.name,
+                self.native_depth,
+                self.parse_locale,
+                preamble.as_ref(),
+            ) {
+                spare.parser.keep_ast(ast);
+                return program.map(Some);
+            }
+            let candidate = preamble.and_then(|preamble| preamble.check_resources(&self.parser));
+            return spare
+                .finish_text(
+                    ast,
+                    &self.source,
+                    &self.name,
+                    self.native_depth,
+                    self.parse_locale,
+                    candidate,
+                )
+                .map(Some);
         }
         let program = crate::compiler::compile_in(
             &mut ast,
@@ -1370,6 +1423,46 @@ mod allocation_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn streamed_templates_preserve_observed_parser_roots_and_reuse_code_after_eof() {
+        let program = crate::compile(br#"
+            local function read(number)
+                local first = "local function version() return " .. number .. " end; local kept = 5; "
+                local tail = "return version() + kept --" .. string.rep('x', 350)
+                local reads = 0
+                local fn = assert(load(function()
+                    reads = reads + 1
+                    if reads == 1 then return first end
+                    if reads == 2 then
+                        local _, roots = debug.getlocal(2, 4)
+                        assert(type(roots) == 'table' and roots.kept == true)
+                        roots.touched = number
+                        return tail
+                    end
+                    local _, roots = debug.getlocal(2, 4)
+                    assert(roots.touched == number)
+                end, '@observed.lua'))
+                assert(reads == 3 and fn() == number + 5)
+                return fn
+            end
+            local first = read(19)
+            local second = read(372)
+            return first, second
+        "#).unwrap();
+        let mut vm = Vm::new();
+        let [Value::Function(first), Value::Function(second)] = *vm.execute(&program).unwrap()
+        else {
+            panic!("two loaded functions");
+        };
+        let [first, second] = [first, second].map(|id| {
+            let closure = &vm.functions[slot_index(id.0)];
+            let program = &vm.programs[closure.program];
+            assert!(!program.parser_prototypes.is_empty());
+            program.data.prototypes[closure.prototype].code.as_ptr()
+        });
+        assert_eq!(first, second);
+    }
 
     #[test]
     fn constant_binding_reuses_live_ids_and_rejects_recycled_slots() {

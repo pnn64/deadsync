@@ -556,6 +556,18 @@ impl Prototype {
         }
     }
 
+    pub(crate) fn copy_constants(&self) -> Result<Vec<Constant>, Error> {
+        let values = self.constants();
+        let mut constants = crate::memory::fallible::with_capacity(values.len())?;
+        for value in values {
+            constants.push(match value {
+                Constant::String(bytes) => Constant::String(bytes.try_boxed()?),
+                _ => value.clone(),
+            });
+        }
+        Ok(constants)
+    }
+
     pub(crate) fn substitute_leaf_constants(
         &self,
         owner: u32,
@@ -767,53 +779,72 @@ impl Program {
         constant: usize,
         value: f64,
     ) -> Result<Self, Error> {
-        fn copy_constants(values: &[Constant]) -> Result<Vec<Constant>, Error> {
-            let mut constants = crate::memory::fallible::with_capacity(values.len())?;
-            for value in values {
-                constants.push(match value {
-                    Constant::String(bytes) => Constant::String(bytes.try_boxed()?),
-                    _ => value.clone(),
-                });
-            }
-            Ok(constants)
-        }
+        Self::with_numbers(base, prototype, &[(constant, value)])
+    }
 
+    pub(crate) fn with_numbers(
+        base: &Shared<ProgramData>,
+        prototype: usize,
+        replacements: &[(usize, f64)],
+    ) -> Result<Self, Error> {
+        Self::with_constant_pools(base, true, |id, p| {
+            if id == prototype {
+                let mut constants = p.copy_constants()?;
+                for &(constant, value) in replacements {
+                    debug_assert!(matches!(constants[constant], Constant::Number(_)));
+                    constants[constant] = Constant::Number(value);
+                }
+                Ok(Some(constants.try_into_boxed_slice()?))
+            } else {
+                Ok(None)
+            }
+        })
+    }
+
+    /// Retain verified code and debug metadata while substituting whole
+    /// constant pools. Shared leaf aliases can keep the original verifier
+    /// shortcut only if their owner retains the original pool.
+    pub(crate) fn with_constant_pools(
+        base: &Shared<ProgramData>,
+        preserve_shared: bool,
+        mut replacement: impl FnMut(usize, &Prototype) -> Result<Option<Box<[Constant]>>, Error>,
+    ) -> Result<Self, Error> {
         let mut prototypes = crate::memory::fallible::with_capacity(base.prototypes.len())?;
         for (id, p) in base.prototypes.iter().enumerate() {
-            let storage = if id == prototype {
-                let mut constants = copy_constants(p.constants())?;
-                debug_assert!(matches!(constants[constant], Constant::Number(_)));
-                constants[constant] = Constant::Number(value);
-                PrototypeStorage::Substituted {
+            let replacement = replacement(id, p)?;
+            let storage = match &p.storage {
+                PrototypeStorage::Owned(_) => PrototypeStorage::Substituted {
                     body: base.clone().project(|data| &*data.prototypes[id]),
                     owner: id as u32,
-                    constants: Some(constants.try_into_boxed_slice()?),
-                }
-            } else {
-                match &p.storage {
-                    PrototypeStorage::Owned(_) => PrototypeStorage::Substituted {
-                        body: base.clone().project(|data| &*data.prototypes[id]),
-                        owner: id as u32,
-                        constants: None,
-                    },
-                    PrototypeStorage::Shared { body, owner } => PrototypeStorage::Shared {
+                    constants: replacement,
+                },
+                PrototypeStorage::Shared { body, owner }
+                    if preserve_shared && replacement.is_none() =>
+                {
+                    PrototypeStorage::Shared {
                         body: body.clone(),
                         owner: *owner,
-                    },
+                    }
+                }
+                PrototypeStorage::Shared { body, owner } => PrototypeStorage::Substituted {
+                    body: body.clone(),
+                    owner: *owner,
+                    constants: replacement,
+                },
+                PrototypeStorage::Substituted {
+                    body,
+                    owner,
+                    constants,
+                } => {
+                    let constants = if replacement.is_some() || constants.is_none() {
+                        replacement
+                    } else {
+                        Some(p.copy_constants()?.try_into_boxed_slice()?)
+                    };
                     PrototypeStorage::Substituted {
-                        body,
-                        owner,
+                        body: body.clone(),
+                        owner: *owner,
                         constants,
-                    } => {
-                        let constants = constants
-                            .as_deref()
-                            .map(|values| copy_constants(values)?.try_into_boxed_slice())
-                            .transpose()?;
-                        PrototypeStorage::Substituted {
-                            body: body.clone(),
-                            owner: *owner,
-                            constants,
-                        }
                     }
                 }
             };

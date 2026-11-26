@@ -118,6 +118,23 @@ fn number_boundary(byte: u8) -> bool {
     !(byte.is_ascii_digit() | (byte == b'.'))
 }
 
+#[inline]
+fn decimal_token(input: &[u8], start: usize, first: u8) -> Option<(f64, usize)> {
+    let tail = &input[start + 1..];
+    let mut value = u64::from(first - b'0');
+    // Short integers are exact in f64. A non-ASCII byte, suffix, or decimal
+    // point requires the ordinary scanner to decide where the token ends.
+    for (offset, &byte) in tail.iter().take(15).enumerate() {
+        let digit = byte.wrapping_sub(b'0');
+        if digit > 9 {
+            return (byte != 0 && byte.is_ascii() && byte != b'.' && word_boundary(byte))
+                .then_some((value as f64, start + 1 + offset));
+        }
+        value = value * 10 + u64::from(digit);
+    }
+    (tail.len() < 15).then_some((value as f64, input.len()))
+}
+
 fn locale_token_end(
     bytes: &[u8],
     ascii_boundary: impl Fn(u8) -> bool,
@@ -429,23 +446,28 @@ impl Scanner {
                 (kind, end)
             }
             b'0'..=b'9' => {
-                let tail = &input[start + 1..];
-                let mut end = start + 1 + scan_token_boundary(tail, number_boundary);
-                if matches!(input.get(end), Some(b'e' | b'E' | 0)) {
-                    end += 1;
-                    if matches!(input.get(end), Some(b'+' | b'-' | 0)) {
+                if !DIAGNOSTICS && let Some((value, end)) = decimal_token(input, start, c) {
+                    number = value;
+                    (Kind::Number, end)
+                } else {
+                    let tail = &input[start + 1..];
+                    let mut end = start + 1 + scan_token_boundary(tail, number_boundary);
+                    if matches!(input.get(end), Some(b'e' | b'E' | 0)) {
                         end += 1;
+                        if matches!(input.get(end), Some(b'+' | b'-' | 0)) {
+                            end += 1;
+                        }
                     }
+                    end += scan_token_boundary(&input[end..], word_boundary);
+                    if input.get(end).is_some_and(|&b| b >= 128) {
+                        return Ok(false);
+                    }
+                    let Some(value) = parse_number(&input[start..end]) else {
+                        return Ok(false);
+                    };
+                    number = value;
+                    (Kind::Number, end)
                 }
-                end += scan_token_boundary(&input[end..], word_boundary);
-                if input.get(end).is_some_and(|&b| b >= 128) {
-                    return Ok(false);
-                }
-                let Some(value) = parse_number(&input[start..end]) else {
-                    return Ok(false);
-                };
-                number = value;
-                (Kind::Number, end)
             }
             b'\'' | b'"' => {
                 let rest = &input[start + 1..];
@@ -1025,6 +1047,40 @@ mod tests {
             }
         }
         Ok(result)
+    }
+
+    #[test]
+    fn closed_decimal_tokens_match_the_streaming_scanner() {
+        for width in 1..=18 {
+            let integer = &b"123456789012345678"[..width];
+            for suffix in [b",", b"-", b".", b"e", b"x", b"\0", b"\xff"] {
+                let input = [integer, suffix, b"42"].concat();
+                let mut streamed = Scanner::default();
+                let mut closed = Scanner::default();
+                let mut token = Token::default();
+                let expected = streamed.next(&input, true);
+                let result = closed.next_closed(&input, &mut token);
+                match (expected, result) {
+                    (Ok(Some(expected)), Ok(())) => {
+                        assert_eq!(token.kind, expected.kind, "{input:?}");
+                        assert_eq!(
+                            token.number.to_bits(),
+                            expected.number.to_bits(),
+                            "{input:?}"
+                        );
+                        assert_eq!(closed.position(), streamed.position(), "{input:?}");
+                    }
+                    (Err(expected), Err(actual)) => {
+                        assert_eq!(
+                            actual.message_bytes(),
+                            expected.message_bytes(),
+                            "{input:?}"
+                        );
+                    }
+                    _ => panic!("different scanner outcomes for {input:?}"),
+                }
+            }
+        }
     }
 
     #[test]

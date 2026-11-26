@@ -79,18 +79,49 @@ pub(super) fn cannot_inspect_stack(vm: &Vm, reader: Value) -> bool {
     .check(
         0,
         [ReaderValue::Known(Value::Nil); REGISTERS],
+        None,
         &mut remaining,
     )
 }
 
 impl Reader<'_> {
+    fn call_result(
+        values: &[ReaderValue; REGISTERS],
+        a: usize,
+        count: usize,
+    ) -> Option<ReaderValue> {
+        use ReaderValue::{Known, Number, String, Unknown};
+        let args = values.get(a + 1..=a.checked_add(count)?)?;
+        match (values[a], args) {
+            (Known(Value::Native(0)), &[result]) => Some(result),
+            (Known(Value::Native(debug::GET_INFO)), [target, options @ ..])
+                if matches!(
+                    target,
+                    Number | Known(Value::Function(_) | Value::Native(_))
+                ) && (options.is_empty()
+                    || matches!(options, [Known(Value::Nil)])
+                    || matches!(options, [value] if value.is_string())) =>
+            {
+                // getinfo reads frame and prototype metadata, independent of
+                // the parser's temporary stack values. It returns a table or nil.
+                Some(Unknown)
+            }
+            (
+                Known(Value::Native(strings::STR_SUB)),
+                [string, Number] | [string, Number, Number],
+            ) if string.is_string() => Some(String),
+            _ => None,
+        }
+    }
+
     fn check(
         &self,
         mut pc: usize,
         mut values: [ReaderValue; REGISTERS],
+        mut open_top: Option<usize>,
         remaining: &mut usize,
     ) -> bool {
-        use ReaderValue::{Known, Number, String, Unknown};
+        use ReaderValue::{Known, Number, Unknown};
         while *remaining != 0 {
             *remaining -= 1;
             let Some(i) = self.code.get(pc).copied() else {
@@ -176,25 +207,29 @@ impl Reader<'_> {
                         _ => return false,
                     };
                 }
-                Op::Call | Op::TailCall
-                    if matches!(values[a], Known(Value::Native(strings::STR_SUB)))
-                        && matches!(b, 2 | 3)
-                        && values[a + 1].is_string()
-                        && matches!(values[a + 2], Number)
-                        && (b == 2 || matches!(values[a + 3], Number))
-                        && (i.op == Op::TailCall || i.c <= 1) =>
-                {
+                Op::Call | Op::TailCall if i.op == Op::TailCall || i.c <= 1 || i.c == OPEN => {
+                    let count = if i.b == OPEN_ARGS {
+                        open_top.and_then(|top| top.checked_sub(a + 1))
+                    } else {
+                        Some(b)
+                    };
+                    let Some(result) = count.and_then(|count| Self::call_result(&values, a, count))
+                    else {
+                        return false;
+                    };
                     if i.op == Op::TailCall {
                         return true;
                     }
                     values[a..].fill(Unknown);
-                    if i.c == 1 {
-                        values[a] = String;
+                    if i.c != 0 {
+                        values[a] = result;
                     }
+                    // All the allowed calls produce one result on success.
+                    open_top = (i.c == OPEN).then_some(a + 1);
                 }
                 Op::Jump if b == 0 && c >= pc => pc = c,
                 Op::JumpFalse | Op::JumpTrue if c >= pc => {
-                    if !self.check(c, values, remaining) {
+                    if !self.check(c, values, open_top, remaining) {
                         return false;
                     }
                 }

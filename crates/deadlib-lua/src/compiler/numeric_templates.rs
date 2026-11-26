@@ -4,6 +4,7 @@
 use super::*;
 
 const SLOTS: usize = 16;
+const PROBE_SLOTS: usize = 4;
 const MAX_CALLS: usize = 4;
 const MAX_NUMBERS: usize = 8;
 
@@ -66,6 +67,21 @@ impl Arguments {
 }
 
 impl NumericTemplates {
+    fn find_slot(&self, key: &Key) -> (usize, bool) {
+        let home = key.slot();
+        // Keep nearby signatures that hash to the same slot. If the probe
+        // range is full, the home slot remains the replacement candidate.
+        for offset in 0..PROBE_SLOTS {
+            let index = (home + offset) % SLOTS;
+            match self.slots.get(index).and_then(Option::as_ref) {
+                None => return (index, false),
+                Some(cached) if &cached.key == key => return (index, true),
+                _ => {}
+            }
+        }
+        (home, false)
+    }
+
     pub(super) fn begin(&mut self, locale: Option<u64>) {
         debug_assert!(self.pending.is_none());
         if locale != self.locale {
@@ -145,18 +161,13 @@ impl Compiler<'_> {
         let Some((key, args)) = self.numeric_signature(function, stack) else {
             return Ok(None);
         };
-        let slot = key.slot();
-        let Some(cached) = self
-            .numeric_templates
-            .slots
-            .get_mut(slot)
-            .and_then(Option::as_mut)
-            .filter(|cached| cached.key == key)
-        else {
+        let (slot, hit) = self.numeric_templates.find_slot(&key);
+        if !hit {
             debug_assert!(self.numeric_templates.pending.is_none());
             self.numeric_templates.pending = Some((slot, key, args));
             return Ok(None);
-        };
+        }
+        let cached = self.numeric_templates.slots[slot].as_mut().unwrap();
         let constants = cached.prototype.constants();
         let mut values = fallible::with_capacity(constants.len())?;
         values.extend(constants.iter().map(|constant| match constant {
@@ -225,5 +236,31 @@ impl Compiler<'_> {
             number_slots,
         });
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn colliding_numeric_signatures_share_their_own_code() {
+        let source = format!(
+            "return function(item) item:size(10, 20):tilt(0.25) end,\n\
+             function(item) item:wait(0.5):turn(-10) end,\n\
+             function(item) item:size(13, 23):tilt(0.25) end,\n\
+             function(item) item:wait(0.5):turn(-30) end\n--{}",
+            "x".repeat(2200)
+        );
+        let name = b"@colliding-callbacks.lua";
+        let reference = crate::compile_named(source.as_bytes(), name).unwrap();
+        let mut vm = crate::Vm::new();
+        let program = vm.compile_source(source.as_bytes(), name).unwrap();
+        let bytes = |program: &crate::Program| {
+            crate::chunk51::dump(&program.data, program.data.entry as usize).unwrap()
+        };
+        assert_eq!(bytes(&program), bytes(&reference));
+        let children = &program.data.prototypes[..4];
+        assert_eq!(children[0].code.as_ptr(), children[2].code.as_ptr());
+        assert_eq!(children[1].code.as_ptr(), children[3].code.as_ptr());
+        assert_ne!(children[0].code.as_ptr(), children[1].code.as_ptr());
     }
 }
