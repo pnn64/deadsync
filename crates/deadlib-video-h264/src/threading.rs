@@ -58,7 +58,12 @@ type WorkerResult = Result<PictureState, DecodeError>;
 /// Picture currently accumulating slices on the coordinator.
 struct OpenPicture {
     seq: u64,
-    slices: Vec<SlicePlan>,
+    slices: Vec<QueuedSlice>,
+}
+
+struct QueuedSlice {
+    plan: SlicePlan,
+    rbsp: Vec<u8>,
 }
 
 /// H.264 decoder that decodes several pictures concurrently and emits
@@ -200,7 +205,10 @@ impl ThreadedDecoder {
                                 slices: Vec::new(),
                             });
                         }
-                        self.open.as_mut().unwrap().slices.push(plan);
+                        self.open.as_mut().unwrap().slices.push(QueuedSlice {
+                            plan,
+                            rbsp: nal.rbsp.to_vec(),
+                        });
                     }
                     // The serial decoder swallows a failed continuation slice
                     // when it already holds part of the picture.
@@ -256,6 +264,7 @@ impl ThreadedDecoder {
         let (Some(first), Some(last)) = (open.slices.first(), open.slices.last()) else {
             return false;
         };
+        let (first, last) = (&first.plan, &last.plan);
 
         // The DPB picture is created now, empty, and filled by the worker.
         // Geometry comes from the slice that creates the PictureState, the
@@ -420,8 +429,11 @@ fn first_mb_index(plan: &SlicePlan) -> usize {
 
 /// Worker side: decode every slice of one picture, deblocking and publishing
 /// rows as they become final, then complete the shared picture.
-fn run_picture(slices: Vec<SlicePlan>, writer: PictureWriter) -> WorkerResult {
-    let starts: Vec<usize> = slices.iter().map(first_mb_index).collect();
+fn run_picture(slices: Vec<QueuedSlice>, writer: PictureWriter) -> WorkerResult {
+    let starts: Vec<usize> = slices
+        .iter()
+        .map(|slice| first_mb_index(&slice.plan))
+        .collect();
     let mut sync = RowSync {
         writer,
         next_unit: 0,
@@ -431,7 +443,7 @@ fn run_picture(slices: Vec<SlicePlan>, writer: PictureWriter) -> WorkerResult {
     let mut scratch = PictureScratch::default();
     let mut recycled_frame = None;
     let mut first_error: Option<DecodeError> = None;
-    for (k, plan) in slices.iter().enumerate() {
+    for (k, slice) in slices.iter().enumerate() {
         // Rows a later slice may still write must not be deblocked or
         // published yet.
         sync.limit_mb = starts[k + 1..].iter().copied().min().unwrap_or(usize::MAX);
@@ -440,7 +452,8 @@ fn run_picture(slices: Vec<SlicePlan>, writer: PictureWriter) -> WorkerResult {
         let backup = pending.clone();
         let saved_unit = sync.next_unit;
         match run_slice(
-            plan,
+            &slice.plan,
+            &slice.rbsp,
             pending.take(),
             &mut scratch,
             &mut recycled_frame,

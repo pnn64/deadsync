@@ -464,6 +464,7 @@ impl Decoder {
         }
         let ps = run_slice(
             &plan,
+            &nal.rbsp,
             pending,
             &mut self.scratch,
             &mut self.recycled_frame,
@@ -536,7 +537,7 @@ pub(crate) fn store_parameter_set(
 
 /// Everything about one slice that can be decided from its header and the
 /// DPB state alone: the parsed header, parameter sets, reference lists and
-/// weights, picture geometry, and the slice data to decode. Building a plan
+/// weights and picture geometry. Building a plan
 /// is cheap and mutates only the DPB's POC state; running it does the
 /// macroblock decode. The split lets the threaded decoder plan slices in
 /// coded order on one thread and run them on others.
@@ -546,8 +547,7 @@ pub(crate) struct SlicePlan {
     pub(crate) header: SliceHeader,
     pub(crate) nal_unit_type: NalUnitType,
     pub(crate) nal_ref_idc: u8,
-    /// Slice RBSP (header + data); the MB loop resumes at `header_end`.
-    pub(crate) rbsp: Vec<u8>,
+    /// The byte and bit position where slice data starts in the RBSP.
     pub(crate) header_end: (usize, u8),
     pub(crate) current_poc: i32,
     pub(crate) ref_pic_list: Vec<Arc<DecodedPicture>>,
@@ -881,7 +881,6 @@ pub(crate) fn prepare_slice(
         header,
         nal_unit_type: nal.nal_unit_type,
         nal_ref_idc: nal.nal_ref_idc,
-        rbsp: nal.rbsp.to_vec(),
         current_poc,
         ref_pic_list,
         ref_pic_list_l0: _ref_pic_list_l0,
@@ -913,6 +912,7 @@ pub(crate) fn prepare_slice(
 /// picture is finalized.
 pub(crate) fn run_slice(
     plan: &SlicePlan,
+    rbsp: &[u8],
     pending: Option<PictureState>,
     scratch: &mut PictureScratch,
     recycled_frame: &mut Option<Frame>,
@@ -920,15 +920,16 @@ pub(crate) fn run_slice(
 ) -> Result<PictureState, DecodeError> {
     // The slice decoder is compiled once per sample type
     if plan.sps.bit_depth_luma_minus8 == 2 {
-        run_slice_px::<u16>(plan, pending, scratch, recycled_frame, sync)
+        run_slice_px::<u16>(plan, rbsp, pending, scratch, recycled_frame, sync)
     } else {
-        run_slice_px::<u8>(plan, pending, scratch, recycled_frame, sync)
+        run_slice_px::<u8>(plan, rbsp, pending, scratch, recycled_frame, sync)
     }
 }
 
 /// [`run_slice`] for samples of type `P`.
 fn run_slice_px<P: Pixel>(
     plan: &SlicePlan,
+    rbsp: &[u8],
     mut pending: Option<PictureState>,
     spare: &mut PictureScratch,
     recycled_frame: &mut Option<Frame>,
@@ -939,7 +940,6 @@ fn run_slice_px<P: Pixel>(
     let header = &plan.header;
     let sps: &Sps = &plan.sps;
     let pps: &Pps = &plan.pps;
-    let rbsp: &[u8] = &plan.rbsp;
     let mut reader = BitstreamReader::new(rbsp);
     reader.set_position(plan.header_end);
     let is_field_pic = header.field_pic_flag;
