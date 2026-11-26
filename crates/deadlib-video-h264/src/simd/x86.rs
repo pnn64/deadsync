@@ -36,10 +36,13 @@ use super::scalar::{self, hv_sample, v_sample};
 
 #[path = "x86_deblock.rs"]
 mod deblock;
-pub use super::scalar::{weighted_bi, weighted_bi_implicit, weighted_uni};
+#[path = "x86_weight.rs"]
+mod weight;
+pub use super::scalar::weighted_bi;
 pub use deblock::{
     deblock_chroma_lines, deblock_luma_lines, load_edge_lines_v, store_edge_lines_v,
 };
+pub use weight::{weighted_bi_implicit, weighted_uni};
 
 /// Detected CPU capability level, in ascending order. `Scalar` is only
 /// produced by the test-only force-scalar switch.
