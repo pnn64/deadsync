@@ -1,0 +1,7 @@
+stream,mode,run,frames,luma_pixels,cycles,allocations,reallocations,requested_bytes
+mbaff-motion,deadlib,1,60,4608000,0,5041,54,34889140
+mbaff-motion,ffmpeg-surface,1,60,4608000,0,1186,5,2031879
+mbaff-motion,ffmpeg-packed,1,60,4608000,0,1246,5,8943879
+mbaff-motion,ffmpeg-surface,2,60,4608000,0,1186,5,2031879
+mbaff-motion,ffmpeg-packed,2,60,4608000,0,1246,5,8943879
+mbaff-motion,deadlib,2,60,4608000,0,5041,54,34889140
