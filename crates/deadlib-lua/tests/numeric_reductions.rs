@@ -157,6 +157,42 @@ fn dense_sequences_keep_independent_tables_when_mutated() {
 }
 
 #[test]
+fn dense_sequence_overwrites_recheck_mutated_owned_arrays() {
+    let program = compile(
+        br#"
+        local function write(t, first, last)
+            for i = first, last do t[i] = i end
+        end
+        local t = {}
+        for i = 1, 64 do t[i] = false end
+        write(t, 1, 64)
+        write(t, 1, 64)
+
+        rawset(t, 17, false)
+        write(t, 8, 20)
+        assert(t[17] == 17)
+
+        write(t, 1, 64)
+        t[2] = -2
+        write(t, 8, 20)
+        assert(t[17] == 17 and t[2] == -2)
+
+        write(t, 1, 64)
+        assert(t[2] == 2)
+        table.sort(t, function(a, b) return a > b end)
+        assert(t[1] == 64 and t[64] == 1)
+        write(t, 1, 64)
+        for i = 1, 64 do assert(t[i] == i) end
+        return #t
+        "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(64.0)]);
+    }
+}
+
+#[test]
 fn dense_writes_preserve_metatable_and_hash_stores() {
     assert_eq!(
         numbers(

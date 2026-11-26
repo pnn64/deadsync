@@ -136,7 +136,7 @@ impl Table {
             let mut values = Buffer::new_in(memory);
             values.try_reserve_exact(array)?;
             values.resize(array, Value::Nil);
-            ArrayStorage::Heap(values)
+            ArrayStorage::heap(values)
         };
         Ok(Self {
             array,

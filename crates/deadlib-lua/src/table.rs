@@ -204,7 +204,11 @@ pub(crate) enum ArrayChange {
 pub(crate) struct InvalidNextKey;
 
 enum ArrayStorage {
-    Heap(Buffer<Value>),
+    Heap {
+        values: Buffer<Value>,
+        // Every slot equals its one-based index. Any writable view clears it.
+        is_sequence: bool,
+    },
     // A dense native triplet needs no separate allocation for its values.
     Triplet {
         memory: Memory,
@@ -236,28 +240,40 @@ impl std::fmt::Debug for ArrayStorage {
 
 impl Default for ArrayStorage {
     fn default() -> Self {
-        Self::Heap(Buffer::default())
+        Self::heap(Buffer::default())
     }
 }
 
 impl ArrayStorage {
+    fn heap(values: Buffer<Value>) -> Self {
+        Self::Heap {
+            values,
+            is_sequence: false,
+        }
+    }
+
     fn memory(&self) -> &Memory {
         match self {
-            Self::Heap(values) => values.memory(),
+            Self::Heap { values, .. } => values.memory(),
             Self::Triplet { memory, .. } | Self::SharedSequence { memory, .. } => memory,
         }
     }
 
     fn heap_mut(&mut self) -> &mut Buffer<Value> {
-        let Self::Heap(values) = self else {
+        let Self::Heap {
+            values,
+            is_sequence,
+        } = self
+        else {
             unreachable!("array must have writable heap storage");
         };
+        *is_sequence = false;
         values
     }
 
     fn allocated_capacity(&self) -> usize {
         match self {
-            Self::Heap(values) => values.capacity(),
+            Self::Heap { values, .. } => values.capacity(),
             Self::Triplet { .. } | Self::SharedSequence { .. } => 0,
         }
     }
@@ -278,7 +294,7 @@ impl ArrayStorage {
         let mut copy = Buffer::new_in(memory.clone());
         copy.try_reserve_exact(values.len().max(capacity))?;
         copy.extend_from_slice(values);
-        *self = Self::Heap(copy);
+        *self = Self::heap(copy);
         Ok(())
     }
 }
@@ -288,7 +304,7 @@ impl std::ops::Deref for ArrayStorage {
 
     fn deref(&self) -> &[Value] {
         match self {
-            Self::Heap(values) => values,
+            Self::Heap { values, .. } => values,
             Self::Triplet { values, .. } => values,
             Self::SharedSequence { values, .. } => values,
         }
@@ -298,7 +314,13 @@ impl std::ops::Deref for ArrayStorage {
 impl std::ops::DerefMut for ArrayStorage {
     fn deref_mut(&mut self) -> &mut [Value] {
         match self {
-            Self::Heap(values) => values,
+            Self::Heap {
+                values,
+                is_sequence,
+            } => {
+                *is_sequence = false;
+                values
+            }
             Self::Triplet { values, .. } => values,
             Self::SharedSequence { .. } => unreachable!("array must be made writable first"),
         }
@@ -354,7 +376,7 @@ pub(crate) enum TableTrace {
 impl Table {
     pub(crate) fn new_in(memory: Memory) -> Self {
         Self {
-            array: ArrayStorage::Heap(Buffer::new_in(memory)),
+            array: ArrayStorage::heap(Buffer::new_in(memory)),
             hash: None,
             native51: false,
             metatable: 0,
@@ -956,7 +978,7 @@ impl Table {
             // the array makes the next power-of-two extent over half full.
             // The ordinary rehash would keep every key in the array.
             if self.hash.is_some()
-                || !matches!(self.array, ArrayStorage::Heap(_))
+                || !matches!(self.array, ArrayStorage::Heap { .. })
                 || self.array[..start].contains(&Value::Nil)
             {
                 return None;
@@ -1019,10 +1041,18 @@ impl Table {
         end: usize,
         capacity: usize,
     ) -> Result<(), Error> {
-        if let Some(values) = ARRAY_SEQUENCE.get(start..end)
-            && let Some(slots) = self.array.get_mut(start..end)
+        if let ArrayStorage::Heap {
+            values,
+            is_sequence,
+        } = &mut self.array
+            && let Some(template) = ARRAY_SEQUENCE.get(start..end)
+            && let Some(slots) = values.get_mut(start..end)
         {
-            slots.copy_from_slice(values);
+            if *is_sequence {
+                return Ok(());
+            }
+            slots.copy_from_slice(template);
+            *is_sequence = start == 0 && end == values.len();
             self.touch_array();
             return Ok(());
         }
