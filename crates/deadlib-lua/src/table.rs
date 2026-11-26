@@ -1013,6 +1013,24 @@ impl Table {
         self.touch_array();
         Ok(())
     }
+    pub(crate) fn write_dense_indices(
+        &mut self,
+        start: usize,
+        end: usize,
+        capacity: usize,
+    ) -> Result<(), Error> {
+        if let Some(values) = ARRAY_SEQUENCE.get(start..end)
+            && let Some(slots) = self.array.get_mut(start..end)
+        {
+            slots.copy_from_slice(values);
+            self.touch_array();
+            return Ok(());
+        }
+        self.write_dense_span(start, end, capacity, |slot| {
+            Value::Number((slot as i64 + 1) as f64)
+        })
+    }
+
     pub(crate) fn dense_write_growth(&self, capacity: usize) -> usize {
         capacity.saturating_sub(self.array.allocated_capacity()) * size_of::<Value>()
     }

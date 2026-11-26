@@ -85,10 +85,7 @@ impl Vm {
             if let Some(value) = repeated {
                 table.write_dense_span(start, stop, capacity, |_| value)
             } else {
-                table.write_dense_span(start, stop, capacity, |slot| {
-                    // The span is bounded by an exact u32 array index.
-                    Value::Number((slot as i64 + 1) as f64)
-                })
+                table.write_dense_indices(start, stop, capacity)
             }
             .ok()?;
             let after = table.heap_bytes();

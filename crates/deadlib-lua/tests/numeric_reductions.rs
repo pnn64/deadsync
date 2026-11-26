@@ -90,6 +90,8 @@ fn dense_writes_match_dispatch_across_growth_and_gc_checkpoints() {
             local t = {1}
             local last = 311 + round
             build(t, 2, last)
+            fill(t, 3, last - 1, false)
+            build(t, 3, last - 1)
             assert(#t == last)
             for i = 1, last do assert(t[i] == i) end
             fill(t, 3, last + 2, false)
