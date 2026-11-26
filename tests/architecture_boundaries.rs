@@ -7116,6 +7116,10 @@ fn evaluation_submission_runtime_is_shell_owned() {
     let online = read_source(root.join("crates/deadsync-online/Cargo.toml"))
         .expect("online manifest");
     assert!(!online.split("[dev-dependencies]").next().unwrap().contains("deadsync-profile-gameplay"));
+    let arrowcloud = production_source(&root.join("crates/deadsync-online/src/arrowcloud.rs"));
+    assert!(arrowcloud.contains("publish_result_dialog_request(&job, success.result_dialog_urls)"));
+    assert!(!arrowcloud.contains("show_arrowcloud_result_dialogs"));
+    assert!(!arrowcloud.contains("spawn_result_dialog_download"));
     let evaluation = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
     )
@@ -7156,6 +7160,12 @@ fn evaluation_submission_runtime_is_shell_owned() {
 
     let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
+    let result_dialog_worker =
+        production_source(&root.join("crates/deadsync-shell/src/app/arrowcloud_result_dialog.rs"));
+    assert!(result_dialog_worker.contains("request.download_images()"));
+    assert!(shell.contains("take_result_dialog_requests()"));
+    assert!(contains_rust(&shell, "if is_current(request.side, &request.chart_hash, request.token) {"));
+    assert!(contains_rust(&shell, "if is_current(ready.side, &ready.chart_hash, ready.token) {"));
     let evaluation_views = production_source(
         &root.join("crates/deadsync-shell/src/app/evaluation_views.rs"),
     );

@@ -3595,43 +3595,42 @@ impl App {
     fn sync_arrowcloud_result_dialogs(&mut self) {
         let evaluation_active = self.state.screens.current_screen == CurrentScreen::Evaluation;
         let enabled = self.frame_config.show_arrowcloud_result_dialogs;
-        for download in deadsync_online::arrowcloud::take_result_dialog_downloads() {
-            if !evaluation_active || !enabled {
-                continue;
-            }
-            self.arrowcloud_result_dialog
-                .get_or_insert_with(arrowcloud_result_dialog::Service::new)
-                .submit(download);
-        }
-
+        let requests = deadsync_online::arrowcloud::take_result_dialog_requests();
         self.arrowcloud_result_ready_scratch.clear();
         if let Some(service) = self.arrowcloud_result_dialog.as_ref() {
             service.drain_ready(&mut self.arrowcloud_result_ready_scratch);
-        }
-        if self.arrowcloud_result_ready_scratch.is_empty() {
-            return;
         }
         if !evaluation_active || !enabled {
             self.arrowcloud_result_ready_scratch.clear();
             return;
         }
+        if requests.is_empty() && self.arrowcloud_result_ready_scratch.is_empty() {
+            return;
+        }
 
         let queries = evaluation_views::chart_queries(self.state.screens.evaluation_stage.as_ref());
+        let is_current = |side, chart_hash: &str, token| {
+            queries.iter().flatten().any(|(current_side, current_hash)| {
+                *current_side == side && current_hash.eq_ignore_ascii_case(chart_hash)
+            }) && deadsync_score::arrowcloud_submit_ui_token_matches(
+                profile_data::player_side_index(side),
+                chart_hash,
+                token,
+            )
+        };
+        for request in requests {
+            if is_current(request.side, &request.chart_hash, request.token) {
+                self.arrowcloud_result_dialog
+                    .get_or_insert_with(arrowcloud_result_dialog::Service::new)
+                    .submit(request);
+            }
+        }
         let state = &mut self.state.screens.evaluation_state;
         for ready in self.arrowcloud_result_ready_scratch.drain(..) {
-            let current_chart_matches = queries.iter().flatten().any(|(side, chart_hash)| {
-                *side == ready.side && chart_hash.eq_ignore_ascii_case(ready.chart_hash.as_ref())
-            });
-            if !current_chart_matches
-                || !deadsync_score::arrowcloud_submit_ui_token_matches(
-                    profile_data::player_side_index(ready.side),
-                    ready.chart_hash.as_ref(),
-                    ready.token,
-                )
-            {
-                continue;
+            if is_current(ready.side, &ready.chart_hash, ready.token) {
+                let side = ready.side;
+                ActiveTheme::sync_evaluation_result_dialog(state, side, ready.register_textures());
             }
-            ActiveTheme::sync_evaluation_result_dialog(state, ready.side, ready.texture_keys);
         }
     }
 

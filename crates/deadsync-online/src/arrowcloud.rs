@@ -55,8 +55,7 @@ const ARROWCLOUD_SUBMIT_RETRY_TRACKED_PER_SIDE: usize = 128;
 /// The submit response is small JSON; cap it so a malformed endpoint cannot
 /// grow the submission worker without bound.
 const ARROWCLOUD_SUBMIT_RESPONSE_MAX_BYTES: usize = 64 * 1024;
-/// A result set is UI paging, not an image gallery. Fixed limits keep the
-/// download and GPU handoff bounded for both players.
+/// Bound the result-image URLs and downloads carried by a submit response.
 const ARROWCLOUD_RESULT_DIALOG_MAX_IMAGES: usize = 4;
 const ARROWCLOUD_RESULT_DIALOG_MAX_URL_BYTES: usize = 2 * 1024;
 const ARROWCLOUD_RESULT_DIALOG_MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
@@ -242,11 +241,11 @@ pub struct ArrowCloudSubmitRequestSuccess {
 }
 
 #[derive(Debug)]
-pub struct ArrowCloudResultDialogDownload {
+pub struct ArrowCloudResultDialogRequest {
     pub side: profile_data::PlayerSide,
     pub chart_hash: Box<str>,
     pub token: u64,
-    pub images: Box<[Box<[u8]>]>,
+    urls: Box<[Box<str>]>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -255,9 +254,9 @@ struct ArrowCloudSubmitResponse {
     result_images: Vec<String>,
 }
 
-static ARROWCLOUD_RESULT_DIALOG_DOWNLOADS: LazyLock<Mutex<Vec<ArrowCloudResultDialogDownload>>> =
+static ARROWCLOUD_RESULT_DIALOG_REQUESTS: LazyLock<Mutex<Vec<ArrowCloudResultDialogRequest>>> =
     LazyLock::new(|| Mutex::new(Vec::with_capacity(MAX_PLAYERS)));
-static ARROWCLOUD_RESULT_DIALOG_DOWNLOADS_PENDING: AtomicBool = AtomicBool::new(false);
+static ARROWCLOUD_RESULT_DIALOG_REQUESTS_PENDING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrowCloudSubmitRequestError {
@@ -627,7 +626,9 @@ pub fn arrowcloud_submit_error_from_request(
     ArrowCloudSubmitError { status, message }
 }
 
-pub fn submit_job_request(job: &ArrowCloudSubmitJob) -> Result<(), ArrowCloudSubmitError> {
+pub fn submit_job_request(
+    job: &ArrowCloudSubmitJob,
+) -> Result<ArrowCloudSubmitRequestSuccess, ArrowCloudSubmitError> {
     match submit_score_request(job.api_key.as_str(), &job.payload) {
         Ok(success) => {
             if success.body_snippet.is_empty() {
@@ -646,8 +647,7 @@ pub fn submit_job_request(job: &ArrowCloudSubmitJob) -> Result<(), ArrowCloudSub
                     success.body_snippet.as_str()
                 );
             }
-            spawn_result_dialog_download_if_enabled(job, success.result_dialog_urls);
-            Ok(())
+            Ok(success)
         }
         Err(error) => Err(arrowcloud_submit_error_from_request(error)),
     }
@@ -673,91 +673,74 @@ fn result_dialog_urls_from_body(body: &str) -> Box<[Box<str>]> {
         .into_boxed_slice()
 }
 
-fn download_result_dialog_images(urls: &[Box<str>]) -> Box<[Box<[u8]>]> {
-    let agent = network::get_agent();
-    let mut images = Vec::with_capacity(urls.len());
-    for (index, url) in urls.iter().enumerate() {
-        let result = agent
-            .get(url.as_ref())
-            .call()
-            .map_err(network::error_from_ureq)
-            .and_then(|response| {
-                let status = response.status().as_u16();
-                if !(200..300).contains(&status) {
-                    return Err(NetworkError::HttpStatus(status));
-                }
-                network::read_bytes_body_bounded(response, ARROWCLOUD_RESULT_DIALOG_MAX_IMAGE_BYTES)
-            });
-        match result {
-            Ok(bytes) if !bytes.is_empty() => images.push(bytes),
-            Ok(_) => log::warn!(
-                "ArrowCloud result dialog image {} returned an empty body.",
-                index + 1
-            ),
-            Err(error) => log::warn!(
-                "ArrowCloud result dialog image {} could not be downloaded: {error}.",
-                index + 1
-            ),
+impl ArrowCloudResultDialogRequest {
+    #[must_use]
+    pub fn download_images(&self) -> Box<[Box<[u8]>]> {
+        let agent = network::get_agent();
+        let mut images = Vec::with_capacity(self.urls.len());
+        for (index, url) in self.urls.iter().enumerate() {
+            let result = agent
+                .get(url.as_ref())
+                .call()
+                .map_err(network::error_from_ureq)
+                .and_then(|response| {
+                    let status = response.status().as_u16();
+                    if !(200..300).contains(&status) {
+                        return Err(NetworkError::HttpStatus(status));
+                    }
+                    network::read_bytes_body_bounded(
+                        response,
+                        ARROWCLOUD_RESULT_DIALOG_MAX_IMAGE_BYTES,
+                    )
+                });
+            match result {
+                Ok(bytes) if !bytes.is_empty() => images.push(bytes),
+                Ok(_) => log::warn!(
+                    "ArrowCloud result dialog image {} returned an empty body.",
+                    index + 1
+                ),
+                Err(error) => log::warn!(
+                    "ArrowCloud result dialog image {} could not be downloaded: {error}.",
+                    index + 1
+                ),
+            }
         }
+        images.into_boxed_slice()
     }
-    images.into_boxed_slice()
 }
 
-fn publish_result_dialog_download(download: ArrowCloudResultDialogDownload) {
-    let side = download.side;
-    let mut pending = ARROWCLOUD_RESULT_DIALOG_DOWNLOADS.lock().unwrap();
-    if let Some(slot) = pending.iter_mut().find(|entry| entry.side == side) {
-        *slot = download;
+fn publish_result_dialog_request(job: &ArrowCloudSubmitJob, urls: Box<[Box<str>]>) {
+    if urls.is_empty() {
+        return;
+    }
+    let mut pending = ARROWCLOUD_RESULT_DIALOG_REQUESTS.lock().unwrap();
+    let request = ArrowCloudResultDialogRequest {
+        side: job.side,
+        chart_hash: Box::from(job.payload.hash.as_str()),
+        token: job.token,
+        urls,
+    };
+    if let Some(slot) = pending.iter_mut().find(|entry| entry.side == job.side) {
+        if slot.token > request.token {
+            return;
+        }
+        *slot = request;
     } else if pending.len() < MAX_PLAYERS {
-        pending.push(download);
+        pending.push(request);
     } else {
         return;
     }
-    drop(pending);
-    ARROWCLOUD_RESULT_DIALOG_DOWNLOADS_PENDING.store(true, Ordering::Release);
+    ARROWCLOUD_RESULT_DIALOG_REQUESTS_PENDING.store(true, Ordering::Release);
 }
 
-fn spawn_result_dialog_download_if_enabled(job: &ArrowCloudSubmitJob, urls: Box<[Box<str>]>) {
-    if urls.is_empty() || !deadsync_config::runtime::get().show_arrowcloud_result_dialogs {
-        return;
-    }
-    let side = job.side;
-    let chart_hash = Box::<str>::from(job.payload.hash.as_str());
-    let token = job.token;
-    let spawn = thread::Builder::new()
-        .name(format!("arrowcloud-result-{:?}", side))
-        .spawn(move || {
-            let images = download_result_dialog_images(&urls);
-            if images.is_empty()
-                || !deadsync_config::runtime::get().show_arrowcloud_result_dialogs
-                || !deadsync_score::arrowcloud_submit_ui_token_matches(
-                    profile_data::player_side_index(side),
-                    chart_hash.as_ref(),
-                    token,
-                )
-            {
-                return;
-            }
-            publish_result_dialog_download(ArrowCloudResultDialogDownload {
-                side,
-                chart_hash,
-                token,
-                images,
-            });
-        });
-    if let Err(error) = spawn {
-        log::warn!("Could not start the ArrowCloud result dialog worker: {error}.");
-    }
-}
-
-/// Takes completed compressed result-dialog downloads. The atomic gate keeps
+/// Takes result-image URLs from accepted score submissions. The atomic gate keeps
 /// stable frames from acquiring the queue lock.
 #[must_use]
-pub fn take_result_dialog_downloads() -> Vec<ArrowCloudResultDialogDownload> {
-    if !ARROWCLOUD_RESULT_DIALOG_DOWNLOADS_PENDING.swap(false, Ordering::AcqRel) {
+pub fn take_result_dialog_requests() -> Vec<ArrowCloudResultDialogRequest> {
+    if !ARROWCLOUD_RESULT_DIALOG_REQUESTS_PENDING.swap(false, Ordering::AcqRel) {
         return Vec::new();
     }
-    let mut pending = ARROWCLOUD_RESULT_DIALOG_DOWNLOADS.lock().unwrap();
+    let mut pending = ARROWCLOUD_RESULT_DIALOG_REQUESTS.lock().unwrap();
     std::mem::replace(&mut *pending, Vec::with_capacity(MAX_PLAYERS))
 }
 
@@ -1059,16 +1042,17 @@ pub fn run_submit_jobs_with<S, C, A>(
     mut after_submit: A,
 ) -> ArrowCloudSubmitRunSummary
 where
-    S: FnMut(&ArrowCloudSubmitJob) -> Result<(), ArrowCloudSubmitError>,
+    S: FnMut(&ArrowCloudSubmitJob) -> Result<ArrowCloudSubmitRequestSuccess, ArrowCloudSubmitError>,
     C: FnMut(&ArrowCloudSubmitJob),
     A: FnMut(&ArrowCloudSubmitJob),
 {
     let mut summary = ArrowCloudSubmitRunSummary::default();
     for job in jobs {
         match submit_job(&job) {
-            Ok(()) => {
+            Ok(success) => {
                 summary.succeeded += 1;
                 if complete_submit_job_success(&job) {
+                    publish_result_dialog_request(&job, success.result_dialog_urls);
                     cache_success(&job);
                 }
             }
@@ -4445,33 +4429,58 @@ mod tests {
     }
 
     #[test]
-    fn run_submit_jobs_with_caches_success_and_runs_after_hook() {
+    fn run_submit_jobs_with_publishes_only_current_success_and_runs_after_hook() {
         let side = profile_data::PlayerSide::P1;
+        let stale_side = profile_data::PlayerSide::P2;
         let hash = "ac-run-submit-success";
         let job = sample_submit_draft(hash, side).submit_job(51);
+        let stale_job = sample_submit_draft(hash, stale_side).submit_job(50);
         reset_submit_ui_status(side, hash);
         reset_submit_retry(side, hash);
         set_submit_ui_status(side, hash, job.token, ArrowCloudSubmitUiStatus::Submitting);
+        set_submit_ui_status(stale_side, hash, 52, ArrowCloudSubmitUiStatus::Submitting);
 
         let mut cached = 0;
         let mut after = 0;
-        let summary = run_submit_jobs_with(vec![job], |_| Ok(()), |_| cached += 1, |_| after += 1);
+        let summary = run_submit_jobs_with(
+            vec![job, stale_job],
+            |_| {
+                Ok(ArrowCloudSubmitRequestSuccess {
+                    status: 200,
+                    body_snippet: String::new(),
+                    result_dialog_urls: Box::new([Box::from("https://cdn.example/result.png")]),
+                })
+            },
+            |_| cached += 1,
+            |_| after += 1,
+        );
 
         assert_eq!(
             summary,
             ArrowCloudSubmitRunSummary {
-                succeeded: 1,
+                succeeded: 2,
                 failed: 0
             }
         );
         assert_eq!(cached, 1);
-        assert_eq!(after, 1);
+        assert_eq!(after, 2);
         assert_eq!(
             submit_ui_status_for_side(hash, side),
             Some(ArrowCloudSubmitUiStatus::Submitted)
         );
+        assert_eq!(
+            submit_ui_status_for_side(hash, stale_side),
+            Some(ArrowCloudSubmitUiStatus::Submitting)
+        );
+        let requests = take_result_dialog_requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].side, side);
+        assert_eq!(requests[0].chart_hash.as_ref(), hash);
+        assert_eq!(requests[0].token, 51);
+        assert_eq!(requests[0].urls[0].as_ref(), "https://cdn.example/result.png");
 
         reset_submit_ui_status(side, hash);
+        reset_submit_ui_status(stale_side, hash);
         reset_submit_retry(side, hash);
     }
 

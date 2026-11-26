@@ -74,6 +74,9 @@ which cues the fallback panes may play during the visit.
 The shell supplies the custom-sounds setting at gameplay and Evaluation
 entry. Simply Love chooses its Evaluation cues from that setting and the
 active visual style.
+ArrowCloud submissions publish validated result-image URLs. The shell checks
+the Evaluation page, dialog preference, and submission token before queuing
+downloads, then checks them again before registering textures for the theme.
 
 All Player Options layouts consume the same editor and submit
 `deadsync-profile-gameplay::stage_options::StageOptions`. The mounted layout

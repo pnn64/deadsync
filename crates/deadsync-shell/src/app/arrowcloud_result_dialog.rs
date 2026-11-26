@@ -1,7 +1,7 @@
 use deadlib_render_core::SamplerDesc;
-use deadsync_online::arrowcloud::ArrowCloudResultDialogDownload;
+use deadsync_online::arrowcloud::ArrowCloudResultDialogRequest;
 use deadsync_profile as profile_data;
-use image::{DynamicImage, ImageReader, Limits};
+use image::{DynamicImage, ImageReader, Limits, RgbaImage};
 use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -35,12 +35,24 @@ pub(super) struct ReadyResultDialog {
     pub side: profile_data::PlayerSide,
     pub chart_hash: Box<str>,
     pub token: u64,
-    pub texture_keys: Box<[Arc<str>]>,
+    textures: Vec<(&'static str, RgbaImage)>,
+}
+
+impl ReadyResultDialog {
+    pub(super) fn register_textures(self) -> Box<[Arc<str>]> {
+        self.textures
+            .into_iter()
+            .map(|(key, image)| {
+                deadlib_assets::register_generated_texture(key, image, SamplerDesc::default());
+                Arc::from(key)
+            })
+            .collect()
+    }
 }
 
 #[derive(Debug)]
 pub(super) struct Service {
-    request_tx: SyncSender<ArrowCloudResultDialogDownload>,
+    request_tx: SyncSender<ArrowCloudResultDialogRequest>,
     ready_rx: Receiver<ReadyResultDialog>,
     ready_pending: Arc<AtomicBool>,
 }
@@ -52,10 +64,10 @@ impl Service {
         let ready_pending = Arc::new(AtomicBool::new(false));
         let worker_pending = Arc::clone(&ready_pending);
         let spawn = thread::Builder::new()
-            .name("arrowcloud-result-decode".to_string())
+            .name("arrowcloud-result-media".to_string())
             .spawn(move || {
-                while let Ok(download) = request_rx.recv() {
-                    if let Some(ready) = decode_download(download) {
+                while let Ok(request) = request_rx.recv() {
+                    if let Some(ready) = download_and_decode(request) {
                         match ready_tx.try_send(ready) {
                             Ok(()) => worker_pending.store(true, Ordering::Release),
                             Err(TrySendError::Full(_)) => {
@@ -67,7 +79,7 @@ impl Service {
                 }
             });
         if let Err(error) = spawn {
-            log::warn!("Could not start the ArrowCloud result decoder: {error}.");
+            log::warn!("Could not start the ArrowCloud result media worker: {error}.");
         }
         Self {
             request_tx,
@@ -76,17 +88,17 @@ impl Service {
         }
     }
 
-    pub(super) fn submit(&self, download: ArrowCloudResultDialogDownload) {
-        match self.request_tx.try_send(download) {
+    pub(super) fn submit(&self, request: ArrowCloudResultDialogRequest) {
+        match self.request_tx.try_send(request) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => {
                 log::warn!(
-                    "Dropped an ArrowCloud result dialog because the decoder queue is full."
+                    "Dropped an ArrowCloud result dialog because the media queue is full."
                 );
             }
             Err(TrySendError::Disconnected(_)) => {
                 log::warn!(
-                    "Could not decode an ArrowCloud result dialog because its worker stopped."
+                    "Could not prepare an ArrowCloud result dialog because its worker stopped."
                 );
             }
         }
@@ -104,39 +116,35 @@ impl Service {
     }
 }
 
-fn decode_download(download: ArrowCloudResultDialogDownload) -> Option<ReadyResultDialog> {
-    let side_index = profile_data::player_side_index(download.side);
-    let mut texture_keys = Vec::with_capacity(download.images.len());
-    for (image_index, bytes) in download.images.into_vec().into_iter().enumerate() {
-        let Some(key) = RESULT_DIALOG_TEXTURE_KEYS
-            .get(side_index)
-            .and_then(|keys| keys.get(image_index))
-        else {
-            break;
-        };
+fn download_and_decode(request: ArrowCloudResultDialogRequest) -> Option<ReadyResultDialog> {
+    let side_index = profile_data::player_side_index(request.side);
+    if !deadsync_score::arrowcloud_submit_ui_token_matches(
+        side_index,
+        &request.chart_hash,
+        request.token,
+    ) {
+        return None;
+    }
+    let keys = RESULT_DIALOG_TEXTURE_KEYS.get(side_index)?;
+    let images = request.download_images();
+    let mut textures = Vec::with_capacity(images.len());
+    for (image_index, (&key, bytes)) in keys.iter().zip(images.into_vec()).enumerate() {
         match decode_image(bytes.as_ref()) {
-            Ok(image) => {
-                deadlib_assets::register_generated_texture(
-                    key,
-                    image.into_rgba8(),
-                    SamplerDesc::default(),
-                );
-                texture_keys.push(Arc::from(*key));
-            }
+            Ok(image) => textures.push((key, image.into_rgba8())),
             Err(error) => log::warn!(
                 "ArrowCloud result dialog image {} could not be decoded: {error}.",
                 image_index + 1
             ),
         }
     }
-    if texture_keys.is_empty() {
+    if textures.is_empty() {
         return None;
     }
     Some(ReadyResultDialog {
-        side: download.side,
-        chart_hash: download.chart_hash,
-        token: download.token,
-        texture_keys: texture_keys.into_boxed_slice(),
+        side: request.side,
+        chart_hash: request.chart_hash,
+        token: request.token,
+        textures,
     })
 }
 
