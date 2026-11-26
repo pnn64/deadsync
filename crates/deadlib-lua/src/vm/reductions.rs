@@ -12,6 +12,7 @@ use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN_ARGS, Op, Prototype, RK}
 
 mod dense_array;
 pub(super) use dense_array::dense_loop_store;
+mod fresh_array;
 mod periodic;
 mod substring;
 pub(super) mod while_numeric;

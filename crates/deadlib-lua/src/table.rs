@@ -187,6 +187,7 @@ const TAGGED_SLOTS: usize = 1 << INDEX_BITS;
 
 pub(crate) const ARRAY_WATCH_BLOCK: usize = 32;
 pub(crate) const ARRAY_WATCH_LIMIT: usize = (u8::MAX as usize - 1) * ARRAY_WATCH_BLOCK;
+pub(crate) const LUA51_MAX_ARRAY: usize = 1 << 26;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ArrayChange {
@@ -939,7 +940,7 @@ impl Table {
             let mut extent = self.array.len();
             while extent < end {
                 let next = (extent + 1).next_power_of_two();
-                if next > max_capacity.min(native51::MAX_ARRAY) {
+                if next > max_capacity.min(LUA51_MAX_ARRAY) {
                     break;
                 }
                 extent = next;

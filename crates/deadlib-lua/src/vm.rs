@@ -2211,16 +2211,22 @@ impl Vm {
                         }
                     }
                     Op::NewTable => {
-                        if i.c == 0
-                            && i.b >= table_literals::MIN_ARRAY_HINT
-                            && let Some(end) = self.copy_table_literal(
+                        let reduced = if i.b == 0 && i.c == 0 {
+                            self.elide_fresh_dense_fill(
+                                base, pc, prototype, program_index, proto_index,
+                            )
+                        } else if i.c == 0 && i.b >= table_literals::MIN_ARRAY_HINT {
+                            self.copy_table_literal(
                                 &mut table_literal_cache,
                                 function,
                                 prototype,
                                 base,
                                 pc,
                             )?
-                        {
+                        } else {
+                            None
+                        };
+                        if let Some(end) = reduced {
                             pc = end;
                             self.frames[frame_index].pc = pc as u32;
                         } else {

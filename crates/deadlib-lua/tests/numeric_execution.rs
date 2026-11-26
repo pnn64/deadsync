@@ -49,6 +49,47 @@ fn dense_growth_preserves_native_rehash_shape_and_scalar_values() {
 }
 
 #[test]
+fn temporary_dense_fills_preserve_reads_and_escaping_tables() {
+    let program = compile(
+        br#"
+        local function summarize(n, value)
+            local score, last
+            do
+                local array = {}
+                for i = 1, n do array[i] = value end
+                score, last = #array + array[3], array[n]
+            end
+            return score, last
+        end
+        local function retain(n, value)
+            local array = {}
+            for i = 1, n do array[i] = value end
+            return #array + array[3], array
+        end
+        local score, last = summarize(103, 7.25)
+        assert(score == 110.25 and last == 7.25)
+        score, last = summarize(97, -1/math.huge)
+        assert(score == 97 and 1/last == -math.huge)
+        local _, first = retain(103, 7.25)
+        local _, second = retain(103, 7.25)
+        first[103] = 59
+        assert(#first == 103 and first[103] == 59 and second[103] == 7.25)
+
+        local array = {}
+        local alias = array
+        for i = 1, 103 do array[i] = 42 end
+        return #array == 103 and #alias == 103 and alias[103] == 42
+        "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
+        vm.set_instruction_limit(Some(100_000));
+        assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
+    }
+}
+
+#[test]
 fn inline_array_dispatch_rechecks_identities_and_preserves_lua_equality() {
     let program = compile(
         br#"
