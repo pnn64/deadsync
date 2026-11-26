@@ -38,7 +38,7 @@ mod threads;
 mod traces;
 mod userdata;
 use crate::arena::{Arena, index as slot_index};
-use crate::memory::{Buffer, Memory};
+use crate::memory::{Buffer, Memory, Shared};
 pub use gc::{GcOperation, HeapStats, Root};
 pub use host::{
     HostCall, HostFunction, HostThreadState, IndexResolver, IndexView, NativeBuiltinBody,
@@ -63,9 +63,16 @@ fn lua_integer(number: f64) -> i64 {
 /// Stable Lua string storage, including the C API's trailing zero byte.
 #[derive(Debug)]
 struct ByteString {
-    storage: Buffer<u8>,
+    storage: StringStorage,
     hash: usize,
 }
+
+#[derive(Debug)]
+enum StringStorage {
+    Owned(Buffer<u8>),
+    Packed(Shared<[u8]>),
+}
+
 impl ByteString {
     fn try_new(bytes: &[u8], hash: usize, memory: Memory) -> Result<Self, Error> {
         let size = bytes.len().checked_add(1).ok_or_else(Error::memory)?;
@@ -77,19 +84,29 @@ impl ByteString {
         storage.push(0);
         // Keep the vector: shrinking an overallocated buffer to a boxed slice
         // must not introduce an infallible reallocation on this failure path.
-        Ok(Self { storage, hash })
+        Ok(Self {
+            storage: StringStorage::Owned(storage),
+            hash,
+        })
     }
     fn c_bytes(&self) -> &[u8] {
-        &self.storage
+        match &self.storage {
+            StringStorage::Owned(storage) => storage,
+            StringStorage::Packed(storage) => storage,
+        }
     }
     fn storage_bytes(&self) -> usize {
-        self.storage.capacity()
+        match &self.storage {
+            StringStorage::Owned(storage) => storage.capacity(),
+            StringStorage::Packed(_) => 0,
+        }
     }
 }
 impl std::ops::Deref for ByteString {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
-        &self.storage[..self.storage.len() - 1]
+        let bytes = self.c_bytes();
+        &bytes[..bytes.len() - 1]
     }
 }
 impl AsRef<[u8]> for ByteString {
@@ -103,6 +120,10 @@ struct Strings {
     bytes: Arena<ByteString>,
     buckets: Buffer<u32>,
     payload_bytes: usize,
+    // The owner list charges shared payloads once and releases empty blocks
+    // during sweep. Each interned string retains its own terminated view.
+    packed: Buffer<Shared<Buffer<u8>>>,
+    packed_bytes: usize,
 }
 
 impl Strings {
@@ -113,8 +134,10 @@ impl Strings {
     fn new_in(memory: Memory) -> Self {
         Self {
             bytes: Arena::new_in(memory.clone()),
-            buckets: Buffer::new_in(memory),
+            buckets: Buffer::new_in(memory.clone()),
             payload_bytes: 0,
+            packed: Buffer::new_in(memory),
+            packed_bytes: 0,
         }
     }
     fn hash(bytes: &[u8]) -> usize {
@@ -251,6 +274,83 @@ impl Strings {
                 self.try_add(owned, vacant)
             }
         }
+    }
+
+    fn pack_substrings(
+        &mut self,
+        source: StringId,
+        first: i64,
+        step: i64,
+        width: usize,
+        count: usize,
+        growth: usize,
+    ) -> Option<Shared<Buffer<u8>>> {
+        let bytes = &self.bytes[slot_index(source.0)];
+        let size = (width + 1) * count;
+        // Prefer ordinary lookups when this span is already interned or is
+        // near a collection boundary. Account for the exact charge below.
+        if size + size_of::<ByteString>() * count + 256 > growth
+            || self
+                .find(&bytes[first as usize..first as usize + width])
+                .is_some()
+        {
+            return None;
+        }
+        let before = self.packed.capacity();
+        self.packed.try_reserve(1).ok()?;
+        self.bytes
+            .note_alloc((self.packed.capacity() - before) * size_of::<Shared<Buffer<u8>>>());
+        let mut data = Buffer::new_in(self.bytes.memory().clone());
+        data.try_reserve_exact(size).ok()?;
+        let bytes = &self.bytes[slot_index(source.0)];
+        let mut at = first;
+        for _ in 0..count {
+            data.extend_from_slice(&bytes[at as usize..at as usize + width]);
+            data.push(0);
+            at += step;
+        }
+        let block = Shared::try_new_in(data, self.bytes.memory().clone()).ok()?;
+        let bytes = block.capacity() + block.heap_bytes();
+        self.packed_bytes += bytes;
+        self.bytes.note_alloc(bytes);
+        self.packed.push(block.clone());
+        Some(block)
+    }
+
+    fn intern_packed(
+        &mut self,
+        block: &Shared<Buffer<u8>>,
+        start: usize,
+        width: usize,
+    ) -> Result<StringId, Error> {
+        let end = start + width;
+        let bytes = &block[start..end];
+        let hash = Self::hash(bytes);
+        match self.probe(bytes, hash) {
+            Ok(id) => {
+                self.bytes.preserve_new_reference(id.0);
+                Ok(id)
+            }
+            Err(vacant) => self.try_add(
+                ByteString {
+                    storage: StringStorage::Packed(block.clone().project(|data| &data[start..=end])),
+                    hash,
+                },
+                vacant,
+            ),
+        }
+    }
+
+    fn sweep_packed(&mut self) {
+        let retained = &mut self.packed_bytes;
+        self.packed.retain(|block| {
+            if block.is_sole_owner() {
+                *retained -= block.capacity() + block.heap_bytes();
+                false
+            } else {
+                true
+            }
+        });
     }
 }
 

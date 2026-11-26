@@ -115,10 +115,33 @@ impl Vm {
             let before = target.heap_bytes();
             let growth = growth - target.dense_write_growth(capacity);
             let initial_debt = self.strings.bytes.allocated;
+            let width = (span.last - span.first + 1) as usize;
+            let block = if (16..=64).contains(&width)
+                && span.first_step == span.last_step
+                && span.first_step.unsigned_abs() >= width as u64
+                && stop - written >= 16
+            {
+                self.strings.pack_substrings(
+                    span.source,
+                    span.first - 1,
+                    span.first_step,
+                    width,
+                    stop - written,
+                    growth,
+                )
+            } else {
+                None
+            };
             let mut count = 0;
             for value in &mut values[..stop - written] {
-                let range = (span.first - 1) as usize..span.last as usize;
-                let Ok(id) = self.strings.substring(span.source, range) else {
+                let result = if let Some(block) = &block {
+                    self.strings
+                        .intern_packed(block, count * (width + 1), width)
+                } else {
+                    let range = (span.first - 1) as usize..span.last as usize;
+                    self.strings.substring(span.source, range)
+                };
+                let Ok(id) = result else {
                     break;
                 };
                 if self.strings.bytes.allocated - initial_debt > growth {

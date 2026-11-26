@@ -101,6 +101,14 @@ impl<T: ?Sized + Send + Sync + 'static> Shared<T> {
         // SAFETY: this owning reference retains the immutable header layout.
         unsafe { self.header.as_ref().layout.size() }
     }
+
+    pub(crate) fn is_sole_owner(&self) -> bool {
+        // SAFETY: self retains the header through the atomic load.
+        unsafe { self.header.as_ref() }
+            .references
+            .load(Ordering::Acquire)
+            == 1
+    }
 }
 
 impl<T: ?Sized + Send + Sync + 'static> Clone for Shared<T> {

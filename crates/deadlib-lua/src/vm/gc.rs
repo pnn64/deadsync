@@ -335,6 +335,7 @@ impl Strings {
         })
     }
     fn rebuild(&mut self) {
+        self.sweep_packed();
         if self.buckets.is_empty() {
             return;
         }
@@ -719,7 +720,10 @@ impl Vm {
     }
 
     fn heap_stats_with_thread_payload(&mut self, thread_payload: Option<usize>) -> HeapStats {
-        let mut payload = self.strings.payload_bytes + self.strings.buckets.capacity() * 4;
+        let mut payload = self.strings.payload_bytes
+            + self.strings.buckets.capacity() * 4
+            + self.strings.packed_bytes
+            + self.strings.packed.capacity() * size_of::<Shared<Buffer<u8>>>();
         payload += self.object_payload_bytes;
         payload += self.io.heap_bytes();
         let mut control = self.registers.capacity() * std::mem::size_of::<Value>()
@@ -3114,6 +3118,41 @@ mod tests {
         pool.sweep_some(&mut cursor, usize::MAX, false);
         assert_eq!(pool.find(b"new-after-sweep"), None);
         assert_eq!(pool.bytes.live_len(), 0);
+    }
+
+    #[test]
+    fn packed_substrings_retain_their_terminated_storage_until_the_last_sweep() {
+        let mut pool = Strings::default();
+        let mut source = [0u8; 32 * 24];
+        for (i, chunk) in source.chunks_exact_mut(24).enumerate() {
+            chunk.fill(i as u8 + 1);
+            chunk[11] = 0;
+        }
+        let parent = pool.intern(&source);
+        let block = pool.pack_substrings(parent, 0, 24, 24, 32, usize::MAX).unwrap();
+        let ids: Vec<_> = (0..32)
+            .map(|i| pool.intern_packed(&block, 25 * i, 24).unwrap())
+            .collect();
+        drop(block);
+        let kept = ids[17];
+        let expected = &source[17 * 24..18 * 24];
+        let address = pool.bytes[slot_index(kept.0)].c_bytes().as_ptr();
+        assert_eq!(pool.intern(expected), kept);
+        pool.bytes.mark(kept.0);
+        let mut cursor = pool.bytes.len();
+        assert_eq!(pool.sweep_some(&mut cursor, usize::MAX, true), 32);
+        pool.rebuild();
+        assert!(pool.packed_bytes > 0);
+        let bytes = pool.bytes[slot_index(kept.0)].c_bytes();
+        assert_eq!(bytes.as_ptr(), address);
+        assert_eq!(bytes.split_last(), Some((&0, expected)));
+
+        pool.bytes.clear_marks();
+        let mut cursor = pool.bytes.len();
+        assert_eq!(pool.sweep_some(&mut cursor, usize::MAX, true), 1);
+        pool.rebuild();
+        assert_eq!(pool.packed_bytes, 0);
+        assert!(pool.packed.is_empty());
     }
 
     #[test]
