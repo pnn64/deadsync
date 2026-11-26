@@ -246,3 +246,16 @@ The full run of `2ae41f6d4` reproduced the borrowed reader's allocation totals i
 | Chroma geometry fast path | +0.43% | +0.31% |
 
 The chroma filter build used 5.22% and 4.96% more cycles than packed FFmpeg in the same batch. Its decoded frames matched FFmpeg on the bundled clips, temporal-direct progressive and MBAFF multislice, constrained-intra CAVLC and the resolution change. The other candidates remained prototypes. [Paired samples](results/windows-x86_64-20261126/chroma-edge-paired.csv)
+
+The full benchmark reproduced the preceding allocation totals. The default cycle medians were 4.2% and 6.0% above packed FFmpeg, with sample spreads of 2.1–4.8% across those modes. All five benchmark output modes matched FFmpeg. Separate checks also matched on the High 10 and High 4:2:2 fixtures and with three frame workers on the two bundled clips, temporal-direct multislice progressive and MBAFF, and the resolution change. [Full run](results/windows-x86_64-20261126/chroma-edge)
+
+| Clip | Output mode | Mcycles/frame | Frames/billion cycles | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Deadlib | 37.40 | 26.74 | 11.71 | 3.272 |
+| SRPG9 | Deadlib recycled, SPS depth | 35.72 | 27.99 | 8.95 | 0.364 |
+| SRPG9 | FFmpeg native | 32.60 | 30.68 | 17.91 | 0.289 |
+| SRPG9 | FFmpeg packed | 35.88 | 27.87 | 18.91 | 3.255 |
+| SRPG10 | Deadlib | 29.56 | 33.83 | 9.33 | 3.158 |
+| SRPG10 | Deadlib recycled, SPS depth | 27.45 | 36.43 | 6.99 | 0.329 |
+| SRPG10 | FFmpeg native | 24.61 | 40.63 | 17.63 | 0.184 |
+| SRPG10 | FFmpeg packed | 27.90 | 35.84 | 18.63 | 3.151 |
