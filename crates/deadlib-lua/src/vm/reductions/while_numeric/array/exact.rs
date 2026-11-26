@@ -4,6 +4,7 @@ use super::calls::CachedCall;
 use super::{Plan, TableId, Term, Value, array_extremum};
 use crate::memory::{Buffer, Memory};
 use crate::table::{ARRAY_WATCH_BLOCK, ARRAY_WATCH_LIMIT, ArrayChange, Table};
+use std::ops::Range;
 
 pub(super) const MIN_LENGTH: i64 = 64;
 
@@ -83,6 +84,15 @@ impl ArrayReduction {
         self.entry = Some(Cached::Call(call));
     }
 
+    pub(super) fn call_blocks(&mut self) -> Option<(&mut CachedCall, &mut Buffer<Exact>)> {
+        match &mut self.entry {
+            Some(Cached::Call(call)) if self.blocks.memory().uses_global_allocator() => {
+                Some((call, &mut self.blocks))
+            }
+            _ => None,
+        }
+    }
+
     pub(super) fn cached_branch(&self) -> Option<&CachedBranch> {
         match &self.entry {
             Some(Cached::Branch(branch)) => Some(branch),
@@ -147,7 +157,14 @@ impl ArrayReduction {
                     let exact = table.array_slice(bounds.0, bounds.1).and_then(|values| {
                         let prefix = Exact::prefix(values, ascending)?;
                         let start = bounds.0 as usize - usize::from(ascending);
-                        repair(&mut self.blocks, prefix, start, block, terms)
+                        repair_blocks(
+                            &mut self.blocks,
+                            start,
+                            prefix.len(),
+                            &[block],
+                            terms.len(),
+                            |range| Exact::terms(&prefix[range], terms),
+                        )
                     });
                     if exact.is_none() {
                         self.blocks.clear();
@@ -171,37 +188,49 @@ impl ArrayReduction {
     }
 }
 
-fn repair(
+pub(super) fn repair_blocks(
     blocks: &mut Buffer<Exact>,
-    values: &[Value],
     start: usize,
-    dirty: usize,
-    terms: &[Term],
+    len: usize,
+    dirty: &[usize],
+    terms: usize,
+    mut summarize: impl FnMut(Range<usize>) -> Option<Exact>,
 ) -> Option<Exact> {
-    let first = start / ARRAY_WATCH_BLOCK;
-    let block_values = |block: usize| {
+    // Writes beyond the last encodable block invalidate the watch. A single
+    // summary can cover the tail because it is rebuilt after any such write.
+    let tail = ARRAY_WATCH_LIMIT / ARRAY_WATCH_BLOCK;
+    let first = (start / ARRAY_WATCH_BLOCK).min(tail);
+    let range = |block: usize| {
         let lo = (block * ARRAY_WATCH_BLOCK).saturating_sub(start);
-        let hi = ((block + 1) * ARRAY_WATCH_BLOCK - start).min(values.len());
-        &values[lo..hi]
+        let hi = if block == tail {
+            len
+        } else {
+            ((block + 1) * ARRAY_WATCH_BLOCK - start).min(len)
+        };
+        lo..hi
     };
     if blocks.is_empty() {
-        let end = (start + values.len()).div_ceil(ARRAY_WATCH_BLOCK);
+        let end = (start + len).div_ceil(ARRAY_WATCH_BLOCK).min(tail + 1);
         blocks.try_reserve_exact(end - first).ok()?;
         for block in first..end {
-            blocks.push(Exact::terms(block_values(block), terms)?);
+            blocks.push(summarize(range(block))?);
         }
-    } else if let Some(block) = dirty
-        .checked_sub(first)
-        .and_then(|index| blocks.get_mut(index))
-    {
-        *block = Exact::terms(block_values(dirty), terms)?;
+    } else {
+        for &block in dirty {
+            if let Some(summary) = block
+                .checked_sub(first)
+                .and_then(|index| blocks.get_mut(index))
+            {
+                *summary = summarize(range(block))?;
+            }
+        }
     }
     let mut exact = Exact::ZERO;
     for block in blocks.iter() {
         exact.delta += block.delta;
         exact.precision = exact.precision.join(block.precision);
     }
-    exact.check_count(values.len(), terms.len())
+    exact.check_count(len, terms)
 }
 
 #[derive(Clone, Copy, Debug)]

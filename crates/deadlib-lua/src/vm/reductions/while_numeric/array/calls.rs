@@ -1,9 +1,10 @@
 //! Guarded numeric calls through dense arrays inside exact-index loops.
 
 use super::super::super::{Reduction, integer};
-use super::exact::{Exact, MIN_LENGTH};
+use super::exact::{Exact, MIN_LENGTH, repair_blocks};
+use crate::arena::Arena;
 use crate::bytecode::{Instruction, Op, RK};
-use crate::table::ArrayChange;
+use crate::table::{ArrayChange, Table};
 use crate::vm::{
     Cell, FrameKind, FunctionId, TableId, Value, Vm,
     numeric_leaf::{Expression, Input},
@@ -293,6 +294,18 @@ impl Plan {
         })
     }
 
+    fn arrays<'a>(
+        &self,
+        tables: &'a Arena<Table>,
+        bounds: (i64, i64),
+    ) -> Option<[&'a [Value]; MAX_ARRAYS]> {
+        let mut arrays = [&[][..]; MAX_ARRAYS];
+        for (slice, id) in arrays.iter_mut().zip(&self.tables[..self.table_count]) {
+            *slice = tables[slot_index(id.0)].array_slice(bounds.0, bounds.1)?;
+        }
+        Some(arrays)
+    }
+
     fn scan<const RESULTS: usize>(
         &self,
         vm: &Vm,
@@ -301,10 +314,7 @@ impl Plan {
         sum: f64,
         measure_exactness: bool,
     ) -> Option<Scan> {
-        let mut arrays = [&[][..]; MAX_ARRAYS];
-        for (slice, id) in arrays.iter_mut().zip(&self.tables[..self.table_count]) {
-            *slice = vm.tables[slot_index(id.0)].array_slice(bounds.0, bounds.1)?;
-        }
+        let arrays = self.arrays(&vm.tables, bounds)?;
         let len = arrays[0].len();
         let fixed = match self.call.target {
             Target::Fixed(function) => Some(Recipe::decode(
@@ -386,20 +396,32 @@ impl Plan {
     }
 }
 
+fn additive_prefix(
+    mut pair: [(&[Value], f64); 2],
+    ascending: bool,
+) -> Option<[(&[Value], f64); 2]> {
+    for (array, _) in &mut pair {
+        let (last, prefix) = if ascending {
+            array.split_last()?
+        } else {
+            array.split_first()?
+        };
+        if !matches!(last, Value::Number(_)) {
+            return None;
+        }
+        *array = prefix;
+    }
+    Some(pair)
+}
+
 fn scan_additive_pair(
-    [(first, first_offset), (second, second_offset)]: [(&[Value], f64); 2],
+    pair: [(&[Value], f64); 2],
     ascending: bool,
     mut accumulator: Accumulator,
     registers: usize,
 ) -> Option<Scan> {
     // Validate the last iteration's inputs as well, then leave it to dispatch.
-    let last = if ascending { first.len() - 1 } else { 0 };
-    if !matches!(
-        (first[last], second[last]),
-        (Value::Number(_), Value::Number(_))
-    ) {
-        return None;
-    }
+    let [(first, first_offset), (second, second_offset)] = additive_prefix(pair, ascending)?;
     let mut add = |(&first, &second)| {
         let (Value::Number(first), Value::Number(second)) = (first, second) else {
             return None;
@@ -408,19 +430,13 @@ fn scan_additive_pair(
         accumulator.add(second + second_offset);
         Some(())
     };
+    let mut rows = first.iter().zip(second);
     if ascending {
-        first[..last]
-            .iter()
-            .zip(&second[..last])
-            .try_for_each(&mut add)?;
+        rows.try_for_each(&mut add)?;
     } else {
-        first[1..]
-            .iter()
-            .zip(&second[1..])
-            .rev()
-            .try_for_each(add)?;
+        rows.rev().try_for_each(add)?;
     }
-    Some(accumulator.finish(first.len() - 1, 2, registers))
+    Some(accumulator.finish(first.len(), 2, registers))
 }
 
 impl Call {
@@ -587,6 +603,55 @@ impl Targets {
 }
 
 impl Vm {
+    fn repair_array_call(&mut self, key: &Key) -> Option<()> {
+        let plan = &key.plan;
+        let watched = &plan.tables[..plan.table_count];
+        let mut dirty = [0; MAX_ARRAYS];
+        let mut count = 0;
+        for id in watched {
+            match self.tables[slot_index(id.0)].array_change() {
+                ArrayChange::Clean => {}
+                ArrayChange::Block(block) => {
+                    if !dirty[..count].contains(&block) {
+                        dirty[count] = block;
+                        count += 1;
+                    }
+                }
+                ArrayChange::Unwatched => return None,
+            }
+        }
+        let Target::Fixed(function) = plan.call.target else {
+            return None;
+        };
+        let recipe = Recipe::decode(self, function, plan.call.arity, plan.call.results)?;
+        let arrays = plan.arrays(&self.tables, key.bounds)?;
+        let pair = plan.additive_pair(&recipe, &arrays)?;
+        let [(first, first_offset), (second, second_offset)] =
+            additive_prefix(pair, key.ascending)?;
+        let start = key.bounds.0 as usize - usize::from(key.ascending);
+        let (cached, blocks) = self.array_reduction.call_blocks()?;
+        let exact = repair_blocks(blocks, start, first.len(), &dirty[..count], 2, |range| {
+            let mut exact = Exact::ZERO;
+            for (&first, &second) in first[range.clone()].iter().zip(&second[range]) {
+                let (Value::Number(first), Value::Number(second)) = (first, second) else {
+                    return None;
+                };
+                exact.push(first + first_offset)?;
+                exact.push(second + second_offset)?;
+            }
+            Some(exact)
+        });
+        let Some(exact) = exact else {
+            blocks.clear();
+            return None;
+        };
+        cached.exact = Some(exact);
+        for id in watched {
+            self.tables[slot_index(id.0)].watch_array();
+        }
+        Some(())
+    }
+
     pub(in crate::vm) fn reduce_array_calls(
         &mut self,
         base: usize,
@@ -648,12 +713,29 @@ impl Vm {
         };
         let watched = &plan.tables[..plan.table_count];
         let cacheable = bounds.1 - bounds.0 + 1 >= MIN_LENGTH;
-        let cached = self.array_reduction.cached_call().filter(|cached| {
-            cached.key == key
-                && watched
-                    .iter()
-                    .all(|id| self.tables[slot_index(id.0)].array_change() == ArrayChange::Clean)
-        });
+        let matching = self
+            .array_reduction
+            .cached_call()
+            .filter(|cached| cached.key == key);
+        let mut current = matching.is_some()
+            && watched
+                .iter()
+                .all(|id| self.tables[slot_index(id.0)].array_change() == ArrayChange::Clean);
+        if !current && plan.call.results == 2 && matching.is_some_and(|entry| entry.exact.is_some())
+        {
+            let before = self.array_reduction.storage_bytes();
+            current = self.repair_array_call(&key).is_some();
+            let growth = self.array_reduction.storage_bytes() - before;
+            if growth != 0 {
+                self.gc_note_control(growth);
+                if !self.numeric_sort_gc_ready() {
+                    return Some(Reduction::Retry);
+                }
+            }
+        }
+        let cached = current
+            .then(|| self.array_reduction.cached_call())
+            .flatten();
         let hit = cached
             .and_then(|cached| Some((cached.exact.as_ref()?.apply(initial)?, cached.registers)));
         let (sum, registers) = if let Some(hit) = hit {

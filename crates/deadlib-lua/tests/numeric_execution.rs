@@ -360,3 +360,50 @@ fn two_result_calls_recheck_changed_callee_array_slots() {
         "#,
     );
 }
+
+#[test]
+fn paired_array_sums_repair_changed_blocks_and_preserve_rounding() {
+    check(
+        br#"
+        local function setup()
+            local first, second = {}, {}
+            local adjust = function(a, b) return a + 1, b + 2 end
+            for i = 1, 8192 do first[i], second[i] = i % 37, i % 29 end
+            local function sum(total, lower, upper, step)
+                for i = lower, upper, step do
+                    local a, b = adjust(first[i], second[i])
+                    total = total + a + b
+                end
+                return total
+            end
+            local function check_sum(total, lower, upper, step)
+                local expected = total
+                for i = lower, upper, step do
+                    expected = expected + (first[i] + 1) + (second[i] + 2)
+                end
+                assert(sum(total, lower, upper, step) == expected)
+            end
+            return check_sum, first, second
+        end
+        local check_sum, first, second = setup()
+        check_sum(0, 34, 8192, 1)
+        first[34], second[199] = 53, 61
+        check_sum(0, 34, 8192, 1)
+        first[96], second[1] = 23, 29
+        check_sum(0, 34, 8192, 1)
+        first[35], first[101] = 43, 83
+        check_sum(0, 34, 8192, 1)
+        first[8150] = 15
+        check_sum(0, 34, 8192, 1)
+
+        check_sum(0, 8192, 34, -1)
+        first[34], second[97] = 107, 127
+        check_sum(0, 8192, 34, -1)
+        second[96] = 9007199254740991
+        check_sum(0, 8192, 34, -1)
+        second[96] = 5
+        check_sum(9007199254740992, 8192, 34, -1)
+        return true
+        "#,
+    );
+}
