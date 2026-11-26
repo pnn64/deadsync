@@ -67,8 +67,14 @@ fn decodes_avi_with_layer_header_in_stream_format() {
     let avi = group(b"RIFF", b"AVI ", &[header, movie]);
 
     let mut frames = Vec::new();
-    decode_avi(&avi, |frame| frames.push(fingerprint(&frame))).unwrap();
-    assert_eq!(frames, EXPECTED);
+    decode_avi(&avi, |frame| frames.push(frame)).unwrap();
+    assert_eq!(
+        frames
+            .iter()
+            .map(|frame| fingerprint(frame))
+            .collect::<Vec<_>>(),
+        EXPECTED
+    );
 
     assert_eq!(
         decode_avi(&avi[..avi.len() - 1], |_| unreachable!()),

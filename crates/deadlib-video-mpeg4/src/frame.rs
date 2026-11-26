@@ -108,6 +108,15 @@ impl Frame {
         }
     }
 
+    pub(crate) fn reuse(mut self, width: usize, height: usize, kind: PictureKind) -> Self {
+        if (self.width(), self.height()) != (width, height) {
+            return Self::new(width, height, kind);
+        }
+        // Reconstruction writes every macroblock, including skipped ones.
+        self.kind = kind;
+        self
+    }
+
     pub fn width(&self) -> usize {
         self.planes[0].width
     }

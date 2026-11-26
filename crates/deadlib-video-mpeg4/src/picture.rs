@@ -1,4 +1,4 @@
-use alloc::{vec, vec::Vec};
+use alloc::vec::Vec;
 
 use crate::{
     bitstream::Bits,
@@ -9,6 +9,7 @@ use crate::{
 
 type Vector = [i32; 2];
 
+#[derive(Default)]
 struct Grid<T> {
     width: usize,
     height: usize,
@@ -18,16 +19,13 @@ struct Grid<T> {
 }
 
 impl<T: Copy + Default> Grid<T> {
-    fn new(columns: usize, rows: usize, shift: u8) -> Self {
-        let width = columns << shift;
-        let height = rows << shift;
-        Self {
-            width,
-            height,
-            cells: vec![T::default(); width * height],
-            shift,
-            packet: (0, 0),
-        }
+    fn reset(&mut self, columns: usize, rows: usize, shift: u8) {
+        self.width = columns << shift;
+        self.height = rows << shift;
+        self.shift = shift;
+        self.packet = (0, 0);
+        self.cells.clear();
+        self.cells.resize(self.width * self.height, T::default());
     }
 
     fn get(&self, x: i32, y: i32) -> T {
@@ -42,6 +40,12 @@ impl<T: Copy + Default> Grid<T> {
     fn set(&mut self, x: usize, y: usize, value: T) {
         self.cells[y * self.width + x] = value;
     }
+}
+
+#[derive(Default)]
+pub(crate) struct Workspace {
+    motion: Grid<Vector>,
+    predictors: [Grid<block::Predictor>; 3],
 }
 
 struct Macroblock {
@@ -104,19 +108,23 @@ pub(crate) fn decode(
     layer: Layer,
     mut picture: Picture,
     reference: Option<&Frame>,
+    spare: Option<Frame>,
+    workspace: &mut Workspace,
 ) -> Result<Frame> {
     if picture.kind == PictureKind::P && reference.is_none() {
         return Err(Error::MissingReference);
     }
     let columns = layer.width.div_ceil(16);
     let rows = layer.height.div_ceil(16);
-    let mut frame = Frame::new(layer.width, layer.height, picture.kind);
-    let mut motion = Grid::<Vector>::new(columns, rows, 1);
-    let mut predictors = [
-        Grid::<block::Predictor>::new(columns, rows, 1),
-        Grid::new(columns, rows, 0),
-        Grid::new(columns, rows, 0),
-    ];
+    let mut frame = match spare {
+        Some(frame) => frame.reuse(layer.width, layer.height, picture.kind),
+        None => Frame::new(layer.width, layer.height, picture.kind),
+    };
+    let Workspace { motion, predictors } = workspace;
+    motion.reset(columns, rows, 1);
+    for (grid, shift) in predictors.iter_mut().zip([1, 0, 0]) {
+        grid.reset(columns, rows, shift);
+    }
 
     for y in 0..rows {
         for x in 0..columns {
@@ -126,15 +134,14 @@ pub(crate) fn decode(
                 && picture.packet(bits, layer, address, columns * rows)?
             {
                 motion.packet = (y, x);
-                for grid in &mut predictors {
+                for grid in predictors.iter_mut() {
                     grid.packet = (y, x);
                 }
             }
             let mb = Macroblock::parse(bits, &mut picture)?;
             if !mb.intra {
                 let reference = reference.ok_or(Error::MissingReference)?;
-                let vectors =
-                    motion_vectors(bits, &mut motion, [2 * x, 2 * y], &mb, picture.f_code)?;
+                let vectors = motion_vectors(bits, motion, [2 * x, 2 * y], &mb, picture.f_code)?;
                 predict(
                     &mut frame,
                     reference,

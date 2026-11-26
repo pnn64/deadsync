@@ -66,6 +66,8 @@ pub enum PictureKind {
 pub struct Decoder {
     layer: Option<Layer>,
     reference: Option<Arc<Frame>>,
+    spare: Option<Frame>,
+    workspace: picture::Workspace,
 }
 
 impl Decoder {
@@ -98,8 +100,11 @@ impl Decoder {
                     layer,
                     header,
                     self.reference.as_deref(),
+                    self.spare.take(),
+                    &mut self.workspace,
                 )?);
-                self.reference = Some(Arc::clone(&frame));
+                let retired = self.reference.replace(Arc::clone(&frame));
+                self.spare = retired.and_then(|frame| Arc::try_unwrap(frame).ok());
                 return Ok(Some(frame));
             }
             0xb1 => *self = Self::new(),
