@@ -573,14 +573,15 @@ pub(super) fn render_spin(
     call: &mut HostCall<'_>,
     actor: TableId,
 ) -> Result<Option<[f32; 3]>, Error> {
-    let fallback = {
-        let guard = call.store();
-        guard
+    let value = call.raw_table_get_static(actor, Field::STATE_SPIN.name().as_bytes())?;
+    let Some(pose) = optional_table(call, value)? else {
+        let store = call.store_ref();
+        return Ok(store
             .actors
             .get(&actor)
             .filter(|a| a.effects.spin_baked)
             .map(|a| {
-                if song_pose::mode(&guard, actor)
+                if song_pose::mode(store, actor)
                     && let Some(rotation) = capture::spin_rotation(a)
                 {
                     return rotation;
@@ -590,11 +591,7 @@ pub(super) fn render_spin(
                     a.current.rot_y_deg,
                     a.current.rot_z_deg,
                 ]
-            })
-    };
-    let value = fields::get(call, actor, fields::Field::STATE_SPIN)?;
-    let Some(pose) = optional_table(call, value)? else {
-        return Ok(fallback);
+            }));
     };
     call.with_roots(&[value], |call| {
         let value = sprites::field(call, pose, "baked")?;
@@ -618,22 +615,13 @@ fn effect_time(
     actor: TableId,
     clock: [f32; 2],
 ) -> Result<Option<[f32; 2]>, Error> {
-    let fallback = {
-        let guard = call.store();
-        guard.actors.get(&actor).map(|a| {
-            let state = &a.state.render;
-            (
-                state.rainbow,
-                state.effect_mode,
-                effects::render_effect_time(a, clock, state),
-            )
-        })
-    };
-    let [value, mode] = fields::get_all(
-        call,
-        actor,
-        [Field::STATE_RAINBOW, Field::STATE_EFFECT_MODE],
-    )?;
+    let value = call.raw_table_get_static(actor, Field::STATE_RAINBOW.name().as_bytes())?;
+    let mode = call.raw_table_get_static(actor, Field::STATE_EFFECT_MODE.name().as_bytes())?;
+    let fallback = call
+        .store_ref()
+        .actors
+        .get(&actor)
+        .map(|actor| (actor.state.render.rainbow, actor.state.render.effect_mode));
     let rainbow = boolean(call, value)?.unwrap_or_else(|| fallback.is_some_and(|s| s.0));
     if !rainbow {
         let value = mode;
@@ -646,9 +634,9 @@ fn effect_time(
                 )
             })
         } else {
-            initial_state::value_text(call, value)?.is_some_and(|s| {
+            initial_state::string_slice(call, value)?.is_some_and(|s| {
                 matches!(
-                    s.as_str(),
+                    s,
                     "bob"
                         | "bounce"
                         | "wag"
@@ -666,14 +654,19 @@ fn effect_time(
             return Ok(None);
         }
     }
-    let value = fields::get(call, actor, Field::STATE_MOTION_CLOCK)?;
+    let value = call.raw_table_get_static(actor, Field::STATE_MOTION_CLOCK.name().as_bytes())?;
     let Some(motion) = optional_table(call, value)? else {
-        return Ok(fallback.and_then(|s| s.2));
+        return Ok(call
+            .store_ref()
+            .actors
+            .get(&actor)
+            .and_then(|a| effects::render_effect_time(a, clock, &a.state.render)));
     };
     call.with_roots(&[value], |call| {
-        let value = fields::get(call, actor, Field::STATE_EFFECT_CLOCK)?;
-        let beat = initial_state::value_text(call, value)?
-            .is_some_and(|s| matches!(s.as_str(), "beat" | "beatnooffset"));
+        let value =
+            call.raw_table_get_static(actor, Field::STATE_EFFECT_CLOCK.name().as_bytes())?;
+        let beat = initial_state::string_slice(call, value)?
+            .is_some_and(|s| matches!(s, "beat" | "beatnooffset"));
         let value = sprites::field(call, motion, "units")?;
         let units = if value == Value::Nil {
             0.

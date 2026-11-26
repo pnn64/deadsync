@@ -9,9 +9,13 @@ pub(super) fn supported(target: Target) -> bool {
         || song_media::TARGETS.contains(&target)
 }
 pub(super) fn mode(store: &Store, id: TableId) -> bool {
-    !store.ease_probe_active
-        && song_immediate::context(store, id).is_some()
-        && store.replay_clock.as_ref().is_some_and(|c| c.fallback(id))
+    fallback_context(store, id).is_some()
+}
+fn fallback_context(store: &Store, id: TableId) -> Option<(u64, usize)> {
+    if store.ease_probe_active || !store.replay_clock.as_ref()?.fallback(id) {
+        return None;
+    }
+    song_immediate::context(store, id)
 }
 pub(super) fn prior_position(store: &Store, id: TableId) -> Option<[f32; 3]> {
     if !store.replay_clock.as_ref()?.later(id) {
@@ -85,13 +89,13 @@ pub(super) fn record(
     true
 }
 
-pub(super) fn advance_position(call: &mut HostCall<'_>, id: TableId) -> Result<(), Error> {
+/// Advance the fallback pose, returning whether it owns this actor's queue.
+pub(super) fn advance_position(call: &mut HostCall<'_>, id: TableId) -> Result<bool, Error> {
     let position = {
         let guard = call.store();
-        if !mode(&guard, id) {
-            return Ok(());
-        }
-        let (owner, index) = song_immediate::context(&guard, id).unwrap();
+        let Some((owner, index)) = fallback_context(guard, id) else {
+            return Ok(false);
+        };
         let actor = &guard.actors[&id];
         let current = actor.current;
         let mut position =
@@ -106,10 +110,9 @@ pub(super) fn advance_position(call: &mut HostCall<'_>, id: TableId) -> Result<(
             .as_ref()
             .unwrap()
             .immediate
-            .frames
-            .get(&index)
+            .frame(index)
         else {
-            return Ok(());
+            return Ok(true);
         };
         let mut destinations = [None; 3];
         for update in &frame.scheduled {
@@ -158,34 +161,34 @@ pub(super) fn advance_position(call: &mut HostCall<'_>, id: TableId) -> Result<(
     {
         song_replay::raw_set(call, id, key, Value::Number(f64::from(value)))?;
     }
-    Ok(())
+    Ok(true)
 }
 
 fn scalar_key(target: Target) -> Option<&'static str> {
-    Some(match target {
-        Target::Aux => "aux",
-        Target::X => "x",
-        Target::Y => "y",
-        Target::Z => "z",
-        Target::Zoom => "zoom",
-        Target::ZoomX => "zoom_x",
-        Target::ZoomY => "zoom_y",
-        Target::ZoomZ => "zoom_z",
-        Target::RotationX => "rot_x_deg",
-        Target::RotationY => "rot_y_deg",
-        Target::RotationZ => "rot_z_deg",
-        Target::SkewX => "skew_x",
-        Target::SkewY => "skew_y",
-        Target::CropLeft => "cropleft",
-        Target::CropRight => "cropright",
-        Target::CropTop => "croptop",
-        Target::CropBottom => "cropbottom",
-        Target::FadeLeft => "fadeleft",
-        Target::FadeRight => "faderight",
-        Target::FadeTop => "fadetop",
-        Target::FadeBottom => "fadebottom",
-        _ => return None,
-    })
+    match target {
+        Target::Aux
+        | Target::X
+        | Target::Y
+        | Target::Z
+        | Target::Zoom
+        | Target::ZoomX
+        | Target::ZoomY
+        | Target::ZoomZ
+        | Target::RotationX
+        | Target::RotationY
+        | Target::RotationZ
+        | Target::SkewX
+        | Target::SkewY
+        | Target::CropLeft
+        | Target::CropRight
+        | Target::CropTop
+        | Target::CropBottom
+        | Target::FadeLeft
+        | Target::FadeRight
+        | Target::FadeTop
+        | Target::FadeBottom => Some(crate::frame_capture::overlay_getter_scalar_keys(target).1),
+        _ => None,
+    }
 }
 
 pub(super) fn set_getter(
@@ -226,14 +229,7 @@ pub(super) fn set_getter(
     update_getter_state(call.store(), id, target, value);
     match value {
         Update::F32(value) => {
-            let key = match target {
-                Target::X => "__songlua_current_x".to_owned(),
-                Target::Y => "__songlua_current_y".to_owned(),
-                Target::Z => "__songlua_current_z".to_owned(),
-                Target::Aux => "__songlua_aux".to_owned(),
-                _ => format!("__songlua_state_{}", scalar.unwrap()),
-            };
-            song_replay::raw_set_named(call, id, &key, Value::Number(f64::from(*value)))?;
+            song_replay::raw_set(call, id, scalar.unwrap(), Value::Number(f64::from(*value)))?;
         }
         Update::Vec4(value) => {
             let value = sprites::vector_value(call, value)?;

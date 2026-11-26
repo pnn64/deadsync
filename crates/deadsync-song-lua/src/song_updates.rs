@@ -83,6 +83,7 @@ impl<'a> Replay<'a> {
             if event.beat > beat + f32::EPSILON {
                 break;
             }
+            let event_seconds = song_elapsed_seconds_at(event.beat, context);
             for (i, row) in rows.actors.iter_mut().enumerate() {
                 let target = SongMessageTarget {
                     actor: values[i],
@@ -92,10 +93,9 @@ impl<'a> Replay<'a> {
                 super::song_perframes::apply_message_with_pose(
                     runtime,
                     &self.access,
-                    context,
                     &target,
                     &mut self.active[i],
-                    event.beat,
+                    event_seconds,
                     true,
                 )?;
                 if was {
@@ -109,12 +109,12 @@ impl<'a> Replay<'a> {
                     .iter()
                     .position(|c| c.message == event.message)
                 {
-                    self.active[i] = Some(super::song_perframes::Active {
+                    self.active[i] = Some(super::song_perframes::Active::new(
                         command,
-                        start: event.beat,
-                        elapsed: None,
-                        base: states[i],
-                    });
+                        &target.commands[command],
+                        event_seconds,
+                        states[i],
+                    ));
                     if !self.seen[i] {
                         self.seen[i] = true;
                         self.started.push(i);
@@ -122,10 +122,9 @@ impl<'a> Replay<'a> {
                     super::song_perframes::apply_message_with_pose(
                         runtime,
                         &self.access,
-                        context,
                         &target,
                         &mut self.active[i],
-                        event.beat,
+                        event_seconds,
                         true,
                     )?;
                     states[i] = self
@@ -136,6 +135,7 @@ impl<'a> Replay<'a> {
             }
             self.next += 1;
         }
+        let seconds = song_elapsed_seconds_at(beat, context);
         for (i, row) in rows.actors.iter_mut().enumerate().take(self.active.len()) {
             let was = self.active[i].is_some();
             let target = SongMessageTarget {
@@ -145,10 +145,9 @@ impl<'a> Replay<'a> {
             super::song_perframes::apply_message_with_pose(
                 runtime,
                 &self.access,
-                context,
                 &target,
                 &mut self.active[i],
-                beat,
+                seconds,
                 true,
             )?;
             if was {

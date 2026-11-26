@@ -50,7 +50,9 @@ impl Saved {
     fn restore_inner(self, store: &mut Store, retain_capture: bool) {
         // Native deletion is structural: restoring a pose cannot resurrect a
         // destroyed wrapper or make its retained Lua handle usable again.
-        let wrappers = self.wrappers.into_iter()
+        let wrappers = self
+            .wrappers
+            .into_iter()
             .filter(|wrapper| store.actors.contains_key(wrapper))
             .collect();
         let Some(a) = store.actors.get_mut(&self.actor) else {
@@ -219,6 +221,19 @@ pub(super) struct BakedFrameReset {
     blocks_key: Value,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ResetLayout {
+    Unchecked,
+    Complete,
+    MissingSlots,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct ResetVersion {
+    fields: u32,
+    layout: ResetLayout,
+}
+
 impl BakedFrameReset {
     pub(super) fn new() -> Self {
         Self {
@@ -228,18 +243,82 @@ impl BakedFrameReset {
     }
 
     pub(super) fn reset(&mut self, vm: &mut Vm, actor: TableId) -> Result<(), Error> {
-        reset_native_frame(vm.store(), actor);
-        for ((name, value), key) in RESET_FIELDS.into_iter().zip(&mut self.keys) {
-            if *key == Value::Nil {
-                *key = vm.intern_static(name.as_bytes())?;
+        let owned = vm.store().actors.get_mut(&actor).map(|entry| {
+            if let Some(capture) = &mut entry.capture {
+                capture.reset_blocks();
             }
-            vm.raw_table_set(actor, *key, value)?;
+            entry.baked_capture_reset.take()
+        });
+        let unchanged = match owned.flatten() {
+            Some(prior) if prior.fields == vm.raw_fields_version(actor)? => Some(prior.layout),
+            _ => None,
+        };
+        let mut layout = unchanged.unwrap_or(ResetLayout::Unchecked);
+        if layout != ResetLayout::Complete {
+            if self.keys[0] == Value::Nil {
+                for ((name, _), key) in RESET_FIELDS.into_iter().zip(&mut self.keys) {
+                    *key = vm.intern_static(name.as_bytes())?;
+                }
+            }
+            for ((_, value), key) in RESET_FIELDS.into_iter().zip(self.keys) {
+                vm.raw_table_set(actor, key, value)?;
+            }
         }
         if self.blocks_key == Value::Nil {
             self.blocks_key = vm.intern_static(BLOCKS_KEY.as_bytes())?;
         }
         let blocks = vm.try_new_table()?;
-        vm.raw_table_set(actor, self.blocks_key, Value::Table(blocks))
+        vm.raw_table_set(actor, self.blocks_key, Value::Table(blocks))?;
+        if owned.is_some() {
+            if unchanged == Some(ResetLayout::Unchecked) {
+                // Inspect the final layout. The first insertion of the
+                // blocks key might have replaced a nil slot from that reset.
+                layout = if self.has_reset_slots(vm, actor)? {
+                    ResetLayout::Complete
+                } else {
+                    ResetLayout::MissingSlots
+                };
+            }
+            let fields = vm.raw_fields_version(actor)?;
+            vm.store()
+                .actors
+                .get_mut(&actor)
+                .unwrap()
+                .baked_capture_reset = Some(ResetVersion { fields, layout });
+        }
+        Ok(())
+    }
+
+    fn has_reset_slots(&self, vm: &mut Vm, actor: TableId) -> Result<bool, Error> {
+        // Raw nil can mean a missing key. In native Lua order a write to a
+        // missing key can change traversal, so require valid next cursors.
+        // Keyed writes invalidate the proof. Replacing the existing blocks
+        // value leaves these slots in place, and still publishes a fresh table.
+        vm.with_native_stack(|stack| {
+            if !stack.check_stack(3) {
+                return Ok(false);
+            }
+            let top = stack.top();
+            stack.push(Value::Table(actor))?;
+            let index = stack.top_offset();
+            let mut complete = true;
+            for ((_, value), key) in RESET_FIELDS.into_iter().zip(self.keys) {
+                if value != Value::Nil {
+                    continue;
+                }
+                stack.push(key)?;
+                match stack.next_table(index) {
+                    Ok(_) => stack.set_top(top + 1)?,
+                    Err(error) if error.message() == "invalid key to 'next'" => {
+                        complete = false;
+                        break;
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            stack.set_top(top)?;
+            Ok(complete)
+        })
     }
 }
 
@@ -265,6 +344,79 @@ const RESET_FIELDS: [(&str, Value); 9] = [
     ("__songlua_capture_immediate_block", Value::Nil),
 ];
 const BLOCKS_KEY: &str = "__songlua_capture_blocks";
+
+#[cfg(test)]
+mod reset_tests {
+    use super::*;
+
+    fn raw_keys(vm: &mut Vm, actor: TableId) -> Vec<Value> {
+        vm.with_native_stack(|stack| {
+            let base = stack.top();
+            stack.push(Value::Table(actor))?;
+            let index = stack.top_offset();
+            stack.push(Value::Nil)?;
+            let mut keys = Vec::new();
+            while stack.next_table(index)? {
+                keys.push(stack.value(-2).unwrap());
+                stack.set_top(stack.top() - 1)?;
+            }
+            stack.set_top(base)?;
+            Ok(keys)
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn repeated_baked_reset_checks_slot_layout_and_keeps_a_fresh_blocks_table() {
+        let mut runtime =
+            crate::SongRuntime::new(&crate::SongLuaCompileContext::new(".", "reset")).unwrap();
+        let vm = &mut runtime.vm;
+        let actor = vm
+            .with_native_stack(|stack| {
+                let base = stack.top();
+                // The block and blocks keys have the same main slot at this
+                // capacity. That nil slot is lost on the first blocks write.
+                stack.create_table(0, 64)?;
+                let Some(Value::Table(actor)) = stack.value(-1) else {
+                    unreachable!()
+                };
+                stack.set_top(base)?;
+                Ok(actor)
+            })
+            .unwrap();
+        let root = vm.pin(Value::Table(actor)).unwrap();
+        vm.store()
+            .actors
+            .insert(actor, Actor::new(0, "Actor", None, None));
+        let mut reset = BakedFrameReset::new();
+        let blocks = vm.intern_static(BLOCKS_KEY.as_bytes()).unwrap();
+        let duration = vm.intern_static(b"__songlua_capture_duration").unwrap();
+
+        reset.reset(vm, actor).unwrap();
+        assert!(!reset.has_reset_slots(vm, actor).unwrap());
+        reset.reset(vm, actor).unwrap();
+        let first = vm.raw_table_get(actor, blocks).unwrap();
+        let keys = raw_keys(vm, actor);
+        let version = vm.raw_fields_version(actor).unwrap();
+        reset.reset(vm, actor).unwrap();
+        assert_eq!(
+            vm.raw_fields_version(actor).unwrap(),
+            version.wrapping_add(1)
+        );
+        assert_eq!(keys, raw_keys(vm, actor));
+        assert_ne!(first, vm.raw_table_get(actor, blocks).unwrap());
+
+        vm.raw_table_set(actor, duration, Value::Number(7.))
+            .unwrap();
+        reset.reset(vm, actor).unwrap();
+        assert_eq!(
+            vm.raw_table_get(actor, duration).unwrap(),
+            Value::Number(0.)
+        );
+        assert_eq!(keys, raw_keys(vm, actor));
+        vm.unpin(root).unwrap();
+    }
+}
 
 fn reset_fields(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     for (key, value) in RESET_FIELDS {

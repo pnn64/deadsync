@@ -12,12 +12,106 @@ struct Entry {
     end: f32,
     function: usize,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) struct Active {
-    pub command: usize,
-    pub start: f32,
-    pub elapsed: Option<f32>,
-    pub base: State,
+    command: usize,
+    start_seconds: f32,
+    elapsed: Option<f32>,
+    duration: f32,
+    base: State,
+    includes_queued: bool,
+    can_restart_motion: bool,
+    preserved_writes: smallvec::SmallVec<[(usize, u128); 4]>,
+}
+impl Active {
+    pub(super) fn new(
+        index: usize,
+        command: &crate::SongLuaOverlayMessageCommand,
+        start_seconds: f32,
+        base: State,
+    ) -> Self {
+        let includes_queued = command.message.starts_with("__songlua_");
+        let mut duration = 0.0_f32;
+        let mut can_restart_motion = false;
+        let mut preserved_writes = smallvec::SmallVec::new();
+        for (index, block) in command.blocks.iter().enumerate() {
+            // Motion replay has always examined queued blocks too.
+            can_restart_motion |= matches!(
+                block.delta.effect_mode,
+                Some(crate::EffectMode::Bob | crate::EffectMode::Wag | crate::EffectMode::Bounce)
+            );
+            if block.queued && !includes_queued {
+                continue;
+            }
+            duration = duration.max(crate::overlay_block_end(block));
+            let writes = preserved_writes_mask(&block.delta);
+            if writes != 0 {
+                preserved_writes.push((index, writes));
+            }
+        }
+        Self {
+            command: index,
+            start_seconds,
+            elapsed: None,
+            duration,
+            base,
+            includes_queued,
+            can_restart_motion,
+            preserved_writes,
+        }
+    }
+}
+
+// Use the same field list to detect newly started writes and to copy fields
+// directly. Effect time has no delta field and is always kept.
+macro_rules! preserved_fields {
+    ($visit:ident) => {
+        $visit! {
+            Hibernating => hibernating,
+            HAlign => halign,
+            VAlign => valign,
+            TextAlign => text_align,
+            Size => size,
+            BaseZoom => basezoom,
+            BaseZoomX => basezoom_x,
+            BaseZoomY => basezoom_y,
+            BaseZoomZ => basezoom_z,
+            BaseAlpha => base_alpha,
+            Vibrate => vibrate,
+            EffectMagnitude => effect_magnitude,
+            EffectClock => effect_clock,
+            EffectTimer => effect_timer,
+            EffectNoOffset => effect_no_offset,
+            EffectMode => effect_mode,
+            EffectColor1 => effect_color1,
+            EffectColor2 => effect_color2,
+            EffectPeriod => effect_period,
+            EffectOffset => effect_offset,
+            EffectTiming => effect_timing,
+            Rainbow => rainbow,
+        }
+    };
+}
+
+fn preserved_writes_mask(delta: &crate::SongLuaOverlayStateDelta) -> u128 {
+    macro_rules! mask {
+        ($($target:ident => $field:ident,)*) => {
+            0 $(| if delta.$field.is_some() { 1 << Target::$target as u8 } else { 0 })*
+        };
+    }
+    preserved_fields!(mask)
+}
+
+fn preserve_unwritten(state: &mut State, current: &State, writes: u128) {
+    macro_rules! copy {
+        ($($target:ident => $field:ident,)*) => {
+            $(if writes & (1 << Target::$target as u8) == 0 {
+                state.$field = current.$field;
+            })*
+        };
+    }
+    preserved_fields!(copy);
+    state.effect_time = current.effect_time;
 }
 #[derive(Default)]
 struct Snapshot {
@@ -179,26 +273,19 @@ impl SongRuntime {
                         0.25 + 0.20 * (sample.eval_beat - first) / (last - first),
                     );
                 }
-                let delta = span(
-                    context,
-                    sample.eval_beat - sample.delta_beats,
-                    sample.eval_beat,
-                );
+                let sample_seconds = crate::song_elapsed_seconds_at(sample.eval_beat, context);
+                let prior_seconds =
+                    crate::song_elapsed_seconds_at(sample.eval_beat - sample.delta_beats, context);
+                let delta = (sample_seconds - prior_seconds).max(0.);
                 while let Some(&index) = order.get(next_message) {
                     let event = &messages[index];
                     if event.beat > sample.eval_beat + f32::EPSILON {
                         break;
                     }
+                    let event_seconds = crate::song_elapsed_seconds_at(event.beat, context);
                     for (i, row) in overlays.iter().enumerate() {
                         let was_active = active_messages[i].is_some();
-                        apply_message(
-                            self,
-                            &access,
-                            context,
-                            row,
-                            &mut active_messages[i],
-                            event.beat,
-                        )?;
+                        apply_message(self, &access, row, &mut active_messages[i], event_seconds)?;
                         if was_active {
                             message_states[i] = access
                                 .state(&mut self.vm, row.actor)
@@ -207,19 +294,18 @@ impl SongRuntime {
                         if let Some(command) =
                             row.commands.iter().position(|c| c.message == event.message)
                         {
-                            active_messages[i] = Some(Active {
+                            active_messages[i] = Some(Active::new(
                                 command,
-                                start: event.beat,
-                                elapsed: None,
-                                base: message_states[i],
-                            });
+                                &row.commands[command],
+                                event_seconds,
+                                message_states[i],
+                            ));
                             apply_message(
                                 self,
                                 &access,
-                                context,
                                 row,
                                 &mut active_messages[i],
-                                event.beat,
+                                event_seconds,
                             )?;
                             message_states[i] = access
                                 .state(&mut self.vm, row.actor)
@@ -230,14 +316,7 @@ impl SongRuntime {
                 }
                 for (i, row) in overlays.iter().enumerate() {
                     let was_active = active_messages[i].is_some();
-                    apply_message(
-                        self,
-                        &access,
-                        context,
-                        row,
-                        &mut active_messages[i],
-                        sample.eval_beat,
-                    )?;
+                    apply_message(self, &access, row, &mut active_messages[i], sample_seconds)?;
                     if was_active {
                         message_states[i] = access
                             .state(&mut self.vm, row.actor)
@@ -351,111 +430,69 @@ impl SongRuntime {
         Ok(value as i64)
     }
 }
-fn span(context: &SongLuaCompileContext, start: f32, end: f32) -> f32 {
-    (crate::song_elapsed_seconds_at(end, context) - crate::song_elapsed_seconds_at(start, context))
-        .max(0.)
-}
 fn apply_message(
     runtime: &mut SongRuntime,
     access: &actors::perframes::Access,
-    context: &SongLuaCompileContext,
     row: &SongMessageTarget<'_>,
     active: &mut Option<Active>,
-    beat: f32,
+    seconds: f32,
 ) -> Result<(), String> {
-    apply_message_with_pose(runtime, access, context, row, active, beat, false)
+    apply_message_with_pose(runtime, access, row, active, seconds, false)
 }
 pub(super) fn apply_message_with_pose(
     runtime: &mut SongRuntime,
     access: &actors::perframes::Access,
-    context: &SongLuaCompileContext,
     row: &SongMessageTarget<'_>,
     active: &mut Option<Active>,
-    beat: f32,
+    seconds: f32,
     chronological: bool,
 ) -> Result<(), String> {
-    let Some(message) = *active else {
+    let Some(message) = active.as_mut() else {
         return Ok(());
     };
     let Some(command) = row.commands.get(message.command) else {
         *active = None;
         return Ok(());
     };
-    let elapsed = span(context, message.start, beat);
-    let keep = |block: &&crate::SongLuaOverlayCommandBlock| {
-        !block.queued || command.message.starts_with("__songlua_")
-    };
+    let elapsed = (seconds - message.start_seconds).max(0.);
     let mut state = crate::overlay_state_after_blocks(
         message.base,
-        command.blocks.iter().filter(keep),
+        command
+            .blocks
+            .iter()
+            .filter(|block| !block.queued || message.includes_queued),
         elapsed,
     );
     let current = access
         .state(&mut runtime.vm, row.actor)
         .map_err(|e| e.to_string())?;
-    const PRESERVED_TARGETS: [Target; 23] = [
-        Target::Hibernating,
-        Target::HAlign,
-        Target::VAlign,
-        Target::TextAlign,
-        Target::Size,
-        Target::BaseZoom,
-        Target::BaseZoomX,
-        Target::BaseZoomY,
-        Target::BaseZoomZ,
-        Target::BaseAlpha,
-        Target::Vibrate,
-        Target::EffectMagnitude,
-        Target::EffectClock,
-        Target::EffectTimer,
-        Target::EffectNoOffset,
-        Target::EffectMode,
-        Target::EffectColor1,
-        Target::EffectColor2,
-        Target::EffectPeriod,
-        Target::EffectOffset,
-        Target::EffectTime,
-        Target::EffectTiming,
-        Target::Rainbow,
-    ];
-    let mut written = 0_u32;
-    for block in command.blocks.iter().filter(keep) {
+    let mut written = 0;
+    for &(index, fields) in &message.preserved_writes {
+        let block = &command.blocks[index];
         if message
             .elapsed
             .is_none_or(|prior| crate::overlay_block_factor(block, prior).is_none())
             && crate::overlay_block_factor(block, elapsed).is_some()
         {
-            for (index, target) in PRESERVED_TARGETS.into_iter().enumerate() {
-                if block.delta.has_update_target(target) {
-                    written |= 1 << index;
-                }
-            }
+            written |= fields;
         }
     }
-    for (index, target) in PRESERVED_TARGETS.into_iter().enumerate() {
-        if written & (1 << index) == 0 {
-            let value = crate::perframe::overlay_state_update_value(&current, target);
-            crate::perframe::set_overlay_state_update_value(&mut state, target, &value);
-        }
-    }
+    preserve_unwritten(&mut state, &current, written);
     if chronological && command.message == "__songlua_actor_startup" {
         runtime
             .actors
             .apply_song_replay_pose(&runtime.vm, row.actor, &mut state);
     }
-    active.as_mut().unwrap().elapsed = Some(elapsed);
-    if let Some(epoch) = crate::motion_restart_epoch(
-        message.base,
-        &command.blocks,
-        elapsed,
-        crate::song_elapsed_seconds_at(message.start, context),
-    ) {
-        access.motion(
-            &mut runtime.vm,
-            row.actor,
-            epoch,
-            crate::song_elapsed_seconds_at(beat, context),
-        );
+    message.elapsed = Some(elapsed);
+    if message.can_restart_motion
+        && let Some(epoch) = crate::motion_restart_epoch(
+            message.base,
+            &command.blocks,
+            elapsed,
+            message.start_seconds,
+        )
+    {
+        access.motion(&mut runtime.vm, row.actor, epoch, seconds);
     }
     if chronological {
         access.write_frame(&mut runtime.vm, row.actor, state)
@@ -463,13 +500,7 @@ pub(super) fn apply_message_with_pose(
         access.write(&mut runtime.vm, row.actor, state)
     }
     .map_err(|e| e.to_string())?;
-    let duration = command
-        .blocks
-        .iter()
-        .filter(keep)
-        .map(crate::overlay_block_end)
-        .fold(0.0_f32, f32::max);
-    if elapsed >= duration {
+    if elapsed >= message.duration {
         *active = None;
     }
     Ok(())

@@ -53,7 +53,8 @@ fn invoke(
         // This scheduler invokes the actor's own named command. ActorFrame's
         // recursive PlayCommand dispatch is a separate queue path.
         run_named(call, actor, command, None)?;
-        song_pose::advance_position(call, actor)
+        song_pose::advance_position(call, actor)?;
+        Ok(())
     })();
     let guard = call.store();
     guard.replay_dispatch = prior;
@@ -77,7 +78,28 @@ fn invoke(
     }
 }
 
-pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Result<(), Error> {
+pub(super) fn advance_frame(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    delta: f32,
+) -> Result<(), Error> {
+    advance(call, actor, delta, true)
+}
+
+pub(super) fn advance_after_dispatch(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    remainder: f32,
+) -> Result<(), Error> {
+    advance(call, actor, remainder, false)
+}
+
+fn advance(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    delta: f32,
+    check_consumed: bool,
+) -> Result<(), Error> {
     let (command, mut interval, mut left) = {
         let guard = call.store();
         if guard.replay_frame.is_none()
@@ -85,17 +107,24 @@ pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Re
         {
             return Ok(());
         }
-        let actor = &guard.actors[&actor];
-        if !actor.registered {
+        let Some(entry) = guard.actors.get(&actor).filter(|entry| entry.registered) else {
             return Ok(());
-        }
-        let Some(capture) = &actor.capture else {
+        };
+        let Some(capture) = &entry.capture else {
             return Ok(());
         };
         let recurring = &capture.recurring;
         let Some(command) = &recurring.command else {
             return Ok(());
         };
+        if check_consumed
+            && guard
+                .replay_clock
+                .as_ref()
+                .is_some_and(|clock| clock.consumed_recurring(actor))
+        {
+            return Ok(());
+        }
         (
             command.clone(),
             recurring.interval,

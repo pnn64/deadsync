@@ -586,7 +586,10 @@ fn flag(
 pub(super) fn value_text(call: &mut HostCall<'_>, value: Value) -> Result<Option<String>, Error> {
     string_slice(call, value).map(|text| text.map(str::to_owned))
 }
-fn string_slice<'a>(call: &'a mut HostCall<'_>, value: Value) -> Result<Option<&'a str>, Error> {
+pub(super) fn string_slice<'a>(
+    call: &'a mut HostCall<'_>,
+    value: Value,
+) -> Result<Option<&'a str>, Error> {
     if value == Value::Nil {
         return Ok(None);
     }

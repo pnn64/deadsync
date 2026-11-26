@@ -47,8 +47,9 @@ pub(super) struct Dispatch {
 
 #[derive(Default)]
 pub(super) struct Capture {
-    touched: Vec<usize>,
-    pub(super) frames: HashMap<usize, SongReplayImmediateUpdates>,
+    // Overlay indices are dense. Rows themselves stay in first-touch order.
+    row_by_index: Vec<usize>,
+    frames: Vec<SongReplayImmediateUpdates>,
     // The compiler returns rows after a successful drain. Keep their buffers
     // for subsequent frames while publishing in the usual touched order.
     recycled: Vec<SongReplayImmediateUpdates>,
@@ -58,6 +59,8 @@ pub(super) struct Capture {
     pending: HashMap<usize, Vec<(Target, UpdateValue)>>,
     pub(super) prior_positions: HashMap<usize, [f32; 3]>,
 }
+
+const UNTOUCHED: usize = usize::MAX;
 
 fn replace(values: &mut Vec<(Target, UpdateValue)>, target: Target, value: UpdateValue) {
     if let Some((_, old)) = values.iter_mut().find(|(key, _)| *key == target) {
@@ -75,6 +78,9 @@ impl Capture {
         pose: crate::tween_pose::TweenPose,
     ) {
         let frame = self.touch(index);
+        if targets == 0 {
+            return;
+        }
         for target in crate::tween_pose::TARGETS {
             if targets & (1_u128 << target as usize) != 0 {
                 let value = pose.get(target);
@@ -84,12 +90,21 @@ impl Capture {
         }
     }
     pub(super) fn touch(&mut self, index: usize) -> &mut SongReplayImmediateUpdates {
-        self.frames.entry(index).or_insert_with(|| {
-            self.touched.push(index);
+        if index >= self.row_by_index.len() {
+            self.row_by_index.resize(index + 1, UNTOUCHED);
+        }
+        let slot = &mut self.row_by_index[index];
+        if *slot == UNTOUCHED {
             let mut row = self.recycled.pop().unwrap_or_default();
             row.overlay_index = index;
-            row
-        })
+            *slot = self.frames.len();
+            self.frames.push(row);
+        }
+        &mut self.frames[*slot]
+    }
+
+    pub(super) fn frame(&self, index: usize) -> Option<&SongReplayImmediateUpdates> {
+        self.frames.get(*self.row_by_index.get(index)?)
     }
 
     pub(super) fn record(
@@ -133,27 +148,32 @@ impl Capture {
 
     fn drain(&mut self, include_empty: bool) -> Vec<SongReplayImmediateUpdates> {
         self.step_targets.clear();
-        self.touched
-            .drain(..)
-            .map(|index| self.frames.remove(&index).unwrap())
-            .filter(|frame| {
-                include_empty
-                    || frame.tween_reset
+        for frame in &self.frames {
+            self.row_by_index[frame.overlay_index] = UNTOUCHED;
+        }
+        let mut frames = std::mem::take(&mut self.frames);
+        if !include_empty {
+            frames.retain(|frame| {
+                frame.tween_reset
                     || !frame.values.is_empty()
                     || !frame.scheduled.is_empty()
                     || !frame.final_values.is_empty()
-            })
-            .collect()
+            });
+        }
+        frames
     }
 
-    fn recycle(&mut self, frames: Vec<SongReplayImmediateUpdates>) {
-        self.recycled.extend(frames.into_iter().map(|mut frame| {
+    fn recycle(&mut self, mut frames: Vec<SongReplayImmediateUpdates>) {
+        self.recycled.extend(frames.drain(..).map(|mut frame| {
             frame.values.clear();
             frame.scheduled.clear();
             frame.final_values.clear();
             frame.tween_reset = false;
             frame
         }));
+        if self.frames.is_empty() && frames.capacity() > self.frames.capacity() {
+            self.frames = frames;
+        }
     }
 }
 
@@ -359,10 +379,10 @@ impl Actors {
             .as_mut()
             .unwrap()
             .immediate;
-        debug_assert!(capture.touched.is_empty() && capture.frames.is_empty());
+        debug_assert!(capture.frames.is_empty());
         for frame in frames {
-            capture.touched.push(frame.overlay_index);
-            capture.frames.insert(frame.overlay_index, frame);
+            let index = frame.overlay_index;
+            *capture.touch(index) = frame;
         }
     }
 }

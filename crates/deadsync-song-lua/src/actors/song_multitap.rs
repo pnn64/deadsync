@@ -28,6 +28,34 @@ pub(super) struct Plan {
     actor_count: usize,
     scratch: Mutex<Vec<Deltas>>,
     live: bool,
+    controls: FrameControls,
+}
+
+struct FrameControls {
+    inactive: Value,
+    delta: Value,
+    hibernating: Value,
+    hibernate_seconds: Value,
+    update_rate: Value,
+    update_pending: Value,
+    update_previous: Value,
+    update_function: Value,
+}
+
+impl FrameControls {
+    fn new(call: &mut HostCall<'_>) -> Result<Self, Error> {
+        let mut key = |field: Field| call.intern_static(field.name().as_bytes());
+        Ok(Self {
+            inactive: key(Field::LIVE_INACTIVE)?,
+            delta: key(Field::LIVE_DELTA)?,
+            hibernating: key(Field::THEME_HIBERNATING)?,
+            hibernate_seconds: key(Field::HIBERNATE_SECONDS)?,
+            update_rate: key(Field::UPDATE_RATE)?,
+            update_pending: key(Field::UPDATE_PENDING)?,
+            update_previous: key(Field::UPDATE_PREVIOUS)?,
+            update_function: key(Field::UPDATE_FUNCTION)?,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -228,17 +256,12 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                             DeltaSource::Columns => deltas[p].input,
                         },
                     );
-                    // Nothing writes to the actor between these reads.
-                    let [inactive, own, hibernating, left] = fields::get_all(
-                        call,
-                        actor,
-                        [
-                            Field::LIVE_INACTIVE,
-                            Field::LIVE_DELTA,
-                            Field::THEME_HIBERNATING,
-                            Field::HIBERNATE_SECONDS,
-                        ],
-                    )?;
+                    // The keys persist with the plan. The values can change
+                    // at any authored callback, so read them on every visit.
+                    let inactive = call.raw_table_get(actor, plan.controls.inactive)?;
+                    let own = call.raw_table_get(actor, plan.controls.delta)?;
+                    let hibernating = call.raw_table_get(actor, plan.controls.hibernating)?;
+                    let left = call.raw_table_get(actor, plan.controls.hibernate_seconds)?;
                     if truthy(inactive) {
                         incoming = None;
                         span = None;
@@ -292,7 +315,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                     }
                 }
                 Job::Advance(_, order, recurring) => {
-                    let rate = fields::get(call, actor, Field::UPDATE_RATE)?;
+                    let rate = call.raw_table_get(actor, plan.controls.update_rate)?;
                     let rate = if rate == Value::Nil {
                         call.store()
                             .actors
@@ -317,7 +340,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                             )?;
                             capture::advance_ready(call, actor)?;
                             if !recurring {
-                                recurring_update(call, actor, d as f32)?;
+                                recurring::advance_frame(call, actor, d as f32)?;
                             }
                         }
                     }
@@ -325,13 +348,13 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                 Job::Recurring(_, order) => {
                     if let Some(d) = deltas[slot].children.0 {
                         phase(call.store(), actor, order, d as f32);
-                        recurring_update(call, actor, d as f32)?;
+                        recurring::advance_frame(call, actor, d as f32)?;
                     }
                 }
                 Job::Callback(_, order) => {
                     if let Some(d) = deltas[slot].children.0 {
                         phase(call.store(), actor, order, d as f32);
-                        callback(call, actor, d)?;
+                        callback(call, actor, d, &plan.controls)?;
                         #[cfg(feature = "test-support")]
                         live_observation::observe(call, actor)?;
                     }
@@ -390,28 +413,19 @@ fn hibernate(
     }
     Ok((left <= 0.).then(|| f64::from(-left)))
 }
-fn recurring_update(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Result<(), Error> {
-    let consumed = call
-        .store()
-        .replay_clock
-        .as_ref()
-        .is_some_and(|c| c.consumed_recurring(actor));
-    if !consumed {
-        recurring::advance(call, actor, delta)?;
-    }
-    Ok(())
-}
-fn callback(call: &mut HostCall<'_>, actor: TableId, delta: f64) -> Result<(), Error> {
-    let [pending, previous, current] = fields::get_all(
-        call,
-        actor,
-        [
-            Field::UPDATE_PENDING,
-            Field::UPDATE_PREVIOUS,
-            Field::UPDATE_FUNCTION,
-        ],
-    )?;
-    let function = if truthy(pending) { previous } else { current };
+fn callback(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    delta: f64,
+    controls: &FrameControls,
+) -> Result<(), Error> {
+    let pending = call.raw_table_get(actor, controls.update_pending)?;
+    let key = if truthy(pending) {
+        controls.update_previous
+    } else {
+        controls.update_function
+    };
+    let function = call.raw_table_get(actor, key)?;
     if function == Value::Nil {
         return Ok(());
     }
@@ -670,6 +684,7 @@ fn build(call: &mut HostCall<'_>, root: TableId, live: bool) -> Result<Arc<Plan>
             actor_count: 0,
             scratch: Mutex::new(Vec::new()),
             live,
+            controls: FrameControls::new(call)?,
         };
         let globals = table(call, helper(call, 5)?)?;
         let top = raw(call, globals, "__songlua_top_screen")?;

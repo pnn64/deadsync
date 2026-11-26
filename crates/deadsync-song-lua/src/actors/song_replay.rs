@@ -387,22 +387,22 @@ pub(super) fn raw_set(
         call.raw_table_set(actor, key, value)
     })
 }
-// `raw_set` for a field name built at run time.
-pub(super) fn raw_set_named(
-    call: &mut HostCall<'_>,
-    actor: TableId,
-    key: &str,
-    value: Value,
-) -> Result<(), Error> {
-    call.with_roots(&[value], |call| {
-        let key = call.try_intern(key.as_bytes())?;
-        call.raw_table_set(actor, key, value)
-    })
-}
-
 /// Preparation exports the sampled current pose and queued destination to
 /// Lua. No store borrow survives allocation or a host API operation.
 pub(super) fn sync_getters(call: &mut HostCall<'_>, id: TableId) -> Result<(), Error> {
+    sync_getters_inner(call, id, false)
+}
+
+/// The chronological writer owns this callback and has yet to open its stack.
+pub(super) fn sync_frame_getters(call: &mut HostCall<'_>, id: TableId) -> Result<(), Error> {
+    sync_getters_inner(call, id, true)
+}
+
+fn sync_getters_inner(
+    call: &mut HostCall<'_>,
+    id: TableId,
+    presize_arrays: bool,
+) -> Result<(), Error> {
     let poses = {
         let store = call.store();
         let fallback = song_pose::mode(&store, id);
@@ -450,14 +450,38 @@ pub(super) fn sync_getters(call: &mut HostCall<'_>, id: TableId) -> Result<(), E
     ] {
         raw_set(call, id, key, Value::Number(f64::from(value)))?;
     }
-    for (key, values) in [
+    let vectors = [
         ("__songlua_diffuse", dest.diffuse),
         ("__songlua_state_diffuse", dest.diffuse),
         ("__songlua_state_glow", dest.glow),
         ("__songlua_state_quaternion", dest.quaternion),
-    ] {
-        let value = sprites::vector_value(call, &values)?;
-        raw_set(call, id, key, value)?;
+    ];
+    if presize_arrays {
+        // These are final raw publications. All authored assignments have
+        // returned, and each temporary table is popped after publication.
+        let mut stack = call.native_stack()?;
+        let top = stack.top();
+        stack.push(Value::Table(id))?;
+        let actor = stack.top_offset();
+        for (key, values) in vectors {
+            stack.create_table(values.len(), 0)?;
+            let array = stack.top_offset();
+            for (index, value) in (1..).zip(values) {
+                stack.push(Value::Number(f64::from(value)))?;
+                stack.raw_set_integer(array, index)?;
+            }
+            let value = stack.value(-1).unwrap();
+            stack.raw_set_static(actor, key.as_bytes(), value)?;
+            stack.set_top(top + 1)?;
+        }
+        stack.set_top(top)?;
+        stack.finish(0)?;
+    } else {
+        for (key, values) in vectors {
+            let key = call.intern_static(key.as_bytes())?;
+            let value = sprites::vector_value(call, &values)?;
+            call.raw_table_set(id, key, value)?;
+        }
     }
     let colors = if let Some(colors) = dest.vertex_colors {
         let table = call.try_new_table()?;
@@ -638,20 +662,19 @@ impl Actors {
         if owner != screen.id {
             return false;
         }
-        let Some(scene) = store.scenes.get(&screen.id) else {
+        let Some(scene) = store.scenes.get_mut(&screen.id) else {
             return false;
         };
-        if !scene
+        let Some(capture) = scene
             .song_session
-            .as_ref()
-            .is_some_and(|s| s.messages.is_some())
-        {
+            .as_mut()
+            .and_then(|session| session.messages.as_mut())
+        else {
             return false;
-        }
-        let ids = scene.actors.clone();
+        };
         // Getter-only fallback state also uses State, but has no native queue.
         // Sample the complete native replay set, including callback-only actors.
-        for id in ids {
+        for &id in &scene.actors {
             let actor = store.actors.get_mut(&id).unwrap();
             if actor.capture.is_none() {
                 lifecycle::sample_replay(actor, second as f32);
@@ -668,16 +691,6 @@ impl Actors {
                 continue;
             };
             let (targets, pose) = (replay.targets, actor.current);
-            let capture = store
-                .scenes
-                .get_mut(&screen.id)
-                .unwrap()
-                .song_session
-                .as_mut()
-                .unwrap()
-                .messages
-                .as_mut()
-                .unwrap();
             if let Some(&index) = capture.indices.get(&id) {
                 capture.immediate.publish_pose(index, targets, pose);
             }

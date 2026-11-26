@@ -903,7 +903,13 @@ pub(super) fn queue(call: &mut HostCall<'_>, actor: TableId, name: Vec<u8>) -> R
 pub(super) fn advance_ready(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let ready = {
         let guard = call.store();
-        guard.actors.get(&actor).is_some_and(|actor| actor.registered)
+        guard.actors.get(&actor).is_some_and(|actor| {
+            actor.registered
+                && actor
+                    .capture
+                    .as_ref()
+                    .is_some_and(|capture| !capture.pending.is_empty())
+        })
             && guard
                 .replay_clock
                 .as_ref()
@@ -1096,7 +1102,7 @@ pub(super) fn drain_commands(call: &mut HostCall<'_>, actor: TableId) -> Result<
             && recurring
             && let Some(remainder) = remainder
         {
-            recurring::advance(call, actor, remainder)?;
+            recurring::advance_after_dispatch(call, actor, remainder)?;
             if let Some(clock) = &mut call.store().replay_clock {
                 clock.mark_recurring(actor);
             }

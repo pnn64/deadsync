@@ -14,6 +14,11 @@ pub(super) struct StateRead {
     result: Option<State>,
 }
 
+pub(super) struct StateWrite {
+    callback: Root,
+    pending: Option<(Value, State)>,
+}
+
 fn read_state(call: &mut HostCall<'_>) -> Result<(), Error> {
     let actor = table(call, arg(call, 0))?;
     let state = initial_state::read(call, actor)?;
@@ -154,10 +159,14 @@ impl Access {
         }
         Ok(())
     }
-    pub fn is_player(&self, vm: &mut Vm, actor: Value) -> Result<bool, Error> {
+    pub fn is_player(
+        &self,
+        vm: &mut Vm,
+        actor: Value,
+        player_index_key: Value,
+    ) -> Result<bool, Error> {
         if let Value::Table(id) = actor {
-            let key = vm.intern_static(b"__songlua_player_index")?;
-            if vm.raw_table_get(id, key)? == Value::Nil {
+            if vm.raw_table_get(id, player_index_key)? == Value::Nil {
                 return Ok(false);
             }
         }
@@ -200,18 +209,6 @@ impl Access {
         vm.call(callback, &[]).map(|_| ())
     }
     pub fn write(&self, vm: &mut Vm, actor: Value, state: State) -> Result<(), Error> {
-        self.write_state(vm, actor, state, false)
-    }
-    pub fn write_frame(&self, vm: &mut Vm, actor: Value, state: State) -> Result<(), Error> {
-        self.write_state(vm, actor, state, true)
-    }
-    fn write_state(
-        &self,
-        vm: &mut Vm,
-        actor: Value,
-        state: State,
-        frame: bool,
-    ) -> Result<(), Error> {
         let callback = vm.new_host_function_with_data(
             write,
             &[
@@ -219,10 +216,32 @@ impl Access {
                 Value::Table(self.helpers),
                 actor,
             ],
-            (state, frame),
+            state,
         )?;
-        vm.call(callback, &[])?;
-        Ok(())
+        vm.call(callback, &[]).map(|_| ())
+    }
+    pub fn write_frame(&self, vm: &mut Vm, actor: Value, state: State) -> Result<(), Error> {
+        let callback = match &vm.store_ref().perframe_state_writer {
+            Some(writer) => writer.callback,
+            None => {
+                let function = vm.new_host_function(
+                    write_frame,
+                    &[Value::Table(self.registry), Value::Table(self.helpers)],
+                )?;
+                let callback = vm.pin(function)?;
+                vm.store().perframe_state_writer = Some(StateWrite {
+                    callback,
+                    pending: None,
+                });
+                callback
+            }
+        };
+        let function = vm.rooted(callback)?;
+        vm.store().perframe_state_writer.as_mut().unwrap().pending = Some((actor, state));
+        let result = vm.call(function, &[actor]).map(|_| ());
+        // A VM failure can occur before the callback consumes the state.
+        vm.store().perframe_state_writer.as_mut().unwrap().pending = None;
+        result
     }
     pub fn motion(&self, vm: &mut Vm, actor: Value, epoch: f32, seconds: f32) {
         if let Value::Table(id) = actor
@@ -345,8 +364,40 @@ fn assign(
     Ok(())
 }
 fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (s, frame) = *call.function_data::<(State, bool)>().unwrap();
+    let state = *call.function_data::<State>().unwrap();
     let actor = table(call, call.captures()[2])?;
+    write_state(call, actor, state, false)
+}
+
+fn write_frame(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let value = arg(call, 0);
+    let actor = table(call, value)?;
+    let state = call
+        .store()
+        .perframe_state_writer
+        .as_mut()
+        .and_then(|writer| {
+            if writer
+                .pending
+                .as_ref()
+                .is_some_and(|(actor, _)| *actor == value)
+            {
+                writer.pending.take().map(|(_, state)| state)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| call.error(b"actor frame writer has no pending state"))?;
+    // The actor remains rooted in the arguments while setters can reenter Lua.
+    write_state(call, actor, state, true)
+}
+
+fn write_state(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    s: State,
+    frame: bool,
+) -> Result<(), Error> {
     macro_rules! set {
         ($key:literal, $value:expr) => {
             assign(call, actor, $key, $value, &s, frame)?
@@ -393,9 +444,9 @@ fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
     set!("__songlua_state_base_rotation", value);
     scalar!("__songlua_state_halign", s.halign);
     scalar!("__songlua_state_valign", s.valign);
-    let value = call.try_intern(crate::effect_mode_label(s.effect_mode).as_bytes())?;
+    let value = call.intern_static(crate::effect_mode_label(s.effect_mode).as_bytes())?;
     set!("__songlua_state_effect_mode", value);
-    let value = call.try_intern(crate::effect_clock_label(s.effect_clock).as_bytes())?;
+    let value = call.intern_static(crate::effect_clock_label(s.effect_clock).as_bytes())?;
     set!("__songlua_state_effect_clock", value);
     set!(
         "__songlua_state_effect_timer",
@@ -424,7 +475,9 @@ fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
         set!("__songlua_state_stretch_rect", value);
     }
     let known = call.store().actors.contains_key(&actor);
-    if known {
+    if frame && known {
+        song_replay::sync_frame_getters(call, actor)?;
+    } else if known {
         song_replay::sync_getters(call, actor)?;
     }
     Ok(())

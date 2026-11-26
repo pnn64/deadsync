@@ -1,5 +1,5 @@
 //! Native actor effect selection, phase and spin, before tween advancement.
-use super::{Actor, Host, arg, float_scalar, helper, render, table};
+use super::{Actor, Host, Store, arg, float_scalar, helper, render, table};
 use crate::{Clock, SongLuaOverlayState, SongLuaOverlayUpdateTarget as Target};
 use deadlib_lua::{Error, HostCall, TableId, Value};
 use deadlib_present::anim::{EffectClock, EffectMode};
@@ -409,77 +409,86 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
 }
 
 pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Result<(), Error> {
-    let (previous, render) = {
-        let actor = call.store().actors.get_mut(&actor).unwrap();
-        let previous = actor
-            .effects
-            .motion
-            .get_or_insert_with(Motion::default)
-            .units
-            .unwrap_or(0.0);
-        (previous, actor.state.render)
-    };
-    let (units, elapsed) = if render.effect_timer {
-        let mut units = previous + delta;
-        // Native Actor subtracts once, with strict >, rather than modulo.
-        if units > render.effect_period {
-            units -= render.effect_period;
-        }
-        (units, delta)
-    } else {
-        // Only an effect that follows the song's clocks needs them.
-        let clock = call.store().clock.clone();
-        let units = if render.effect_clock == EffectClock::Beat {
-            if render.effect_no_offset {
-                let seconds = music(call, &clock)?;
-                // The production fallback evaluates the runtime beat even if
-                // timing data supplies the selected no-offset position.
-                let fallback = values(call, false)?[0];
-                clock.no_offset.as_ref().map_or(fallback, |timing| {
-                    timing.get_song_position_no_offset(seconds).beat
-                })
-            } else {
-                values(call, false)?[0]
+    let (previous, clock, no_offset, visible) = {
+        let entry = call.store().actors.get_mut(&actor).unwrap();
+        let motion = entry.effects.motion.get_or_insert_with(Motion::default);
+        let previous = motion.units.unwrap_or(0.0);
+        let render = &entry.state.render;
+        let visible = delta != 0. || render.rainbow || render.effect_mode != EffectMode::None;
+        if render.effect_timer {
+            let mut units = previous + delta;
+            // Native Actor subtracts once, with strict >, rather than modulo.
+            if units > render.effect_period {
+                units -= render.effect_period;
             }
-        } else {
-            music(call, &clock)?
-        };
-        (units, units - previous)
+            *motion = Motion {
+                units: Some(units),
+                delta,
+            };
+            entry.effects.clock_visible |= visible;
+            if entry.effects.spin_seen {
+                advance_spin(call.store(), actor, delta, delta);
+            }
+            return Ok(());
+        }
+        (
+            previous,
+            render.effect_clock,
+            render.effect_no_offset,
+            visible,
+        )
     };
+    // Song clock reads can reenter Lua. Hold only the scalar inputs across them.
+    let units = if clock == EffectClock::Beat {
+        if no_offset {
+            let clock = call.store().clock.clone();
+            let seconds = music(call, &clock)?;
+            // The production fallback evaluates the runtime beat even if
+            // timing data supplies the selected no-offset position.
+            let fallback = values(call, false)?[0];
+            clock.no_offset.as_ref().map_or(fallback, |timing| {
+                timing.get_song_position_no_offset(seconds).beat
+            })
+        } else {
+            values(call, false)?[0]
+        }
+    } else {
+        let clock = call.store().clock.clone();
+        music(call, &clock)?
+    };
+    let elapsed = units - previous;
     let store = call.store();
     let entry = store.actors.get_mut(&actor).unwrap();
     entry.effects.motion = Some(Motion {
         units: Some(units),
         delta: elapsed,
     });
-    if delta != 0.
-        || render.rainbow
-        || render.effect_mode != EffectMode::None
-        || (!render.effect_timer && render.effect_clock == EffectClock::Time)
-    {
-        entry.effects.clock_visible = true;
-    }
+    entry.effects.clock_visible |= visible || clock == EffectClock::Time;
     if entry.effects.spin_seen {
-        let fallback = super::song_pose::mode(store, actor);
-        let actor = store.actors.get_mut(&actor).unwrap();
-        if fallback {
-            super::capture::advance_spin(actor, elapsed, delta);
-        } else if actor.state.render.effect_mode == EffectMode::Spin {
-            let magnitude = actor.state.render.effect_magnitude;
-            for (angle, speed) in [
-                &mut actor.current.rot_x_deg,
-                &mut actor.current.rot_y_deg,
-                &mut actor.current.rot_z_deg,
-            ]
-            .into_iter()
-            .zip(magnitude)
-            {
-                *angle = (*angle + elapsed * speed).rem_euclid(360.0);
-            }
-        }
-        actor.effects.spin_baked = true;
+        advance_spin(store, actor, elapsed, delta);
     }
     Ok(())
+}
+
+fn advance_spin(store: &mut Store, actor: TableId, elapsed: f32, delta: f32) {
+    let fallback = super::song_pose::mode(store, actor);
+    let actor = store.actors.get_mut(&actor).unwrap();
+    if fallback {
+        super::capture::advance_spin(actor, elapsed, delta);
+    } else if actor.state.render.effect_mode == EffectMode::Spin {
+        let magnitude = actor.state.render.effect_magnitude;
+        for (angle, speed) in [
+            &mut actor.current.rot_x_deg,
+            &mut actor.current.rot_y_deg,
+            &mut actor.current.rot_z_deg,
+        ]
+        .into_iter()
+        .zip(magnitude)
+        {
+            *angle = (*angle + elapsed * speed).rem_euclid(360.0);
+        }
+    }
+    actor.effects.spin_baked = true;
 }
 
 pub(super) fn render_time(actor: &Actor, frame_clock: [f32; 2], render: &mut SongLuaOverlayState) {

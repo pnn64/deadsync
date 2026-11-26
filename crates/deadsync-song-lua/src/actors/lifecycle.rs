@@ -533,8 +533,8 @@ pub(super) fn advance_queue(
     if !call.store_ref().actors.get(&actor).is_some_and(|actor| actor.registered) {
         return Ok(());
     }
-    if song_pose::mode(&call.store(), actor) {
-        return song_pose::advance_position(call, actor);
+    if song_pose::advance_position(call, actor)? {
+        return Ok(());
     }
     let mut dispatched = 0;
     // Commands can replace the queue. Release metadata before entering Lua and
@@ -857,14 +857,7 @@ fn advance_node(
             return Ok(());
         }
         enter_phase(call.store(), actor, node.order, delta);
-        let consumed = call
-            .store()
-            .replay_clock
-            .as_ref()
-            .is_some_and(|clock| clock.consumed_recurring(actor));
-        if !consumed {
-            recurring::advance(call, actor, delta)?;
-        }
+        recurring::advance_frame(call, actor, delta)?;
         delta
     } else {
         delta

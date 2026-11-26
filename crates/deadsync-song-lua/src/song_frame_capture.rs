@@ -477,14 +477,27 @@ impl CaptureSource for Source<'_> {
             .take_song_overlay_frame_updates(&mut self.runtime.vm, self.screen, true)
             .ok_or("song replay capture is not active")?;
         let result = (|| {
+            let mut player_index_key = None;
             for frame in &frames {
                 let mut player = || {
                     let actor = *self
                         .actors
                         .get(frame.overlay_index)
                         .ok_or("song capture actor index out of range")?;
+                    let key = match player_index_key {
+                        Some(key) => key,
+                        None => {
+                            let key = self
+                                .runtime
+                                .vm
+                                .intern_static(b"__songlua_player_index")
+                                .map_err(|e| e.to_string())?;
+                            player_index_key = Some(key);
+                            key
+                        }
+                    };
                     self.access
-                        .is_player(&mut self.runtime.vm, actor)
+                        .is_player(&mut self.runtime.vm, actor, key)
                         .map_err(|e| e.to_string())
                 };
                 visit(

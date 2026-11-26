@@ -227,74 +227,8 @@ fn check(call: &mut HostCall<'_>, table: TableId, field: Field, value: Value) ->
     Ok(())
 }
 
-/// `table[field]` without metamethods. A table that is an owned actor answers
-/// from what it is known to hold; any other table is read.
-pub(super) fn get(call: &mut HostCall<'_>, table: TableId, field: Field) -> Result<Value, Error> {
-    let version = call.raw_fields_version(table)?;
-    let Some(actor) = call.store().actors.get_mut(&table) else {
-        return call.raw_table_get_static(table, field.name().as_bytes());
-    };
-    if let Some(value) = actor.known.at(table, version).find(field) {
-        check(call, table, field, value)?;
-        return Ok(value);
-    }
-    let value = call.raw_table_get_static(table, field.name().as_bytes())?;
-    // The read ran no Lua, so the version still describes the table.
-    if let Some(actor) = call.store().actors.get_mut(&table) {
-        actor.known.at(table, version).record(field, value);
-    }
-    Ok(value)
-}
-
-/// `get` for several fields of one table. The fields are read together, so
-/// nothing may write to the table between the reads this replaces.
-pub(super) fn get_all<const N: usize>(
-    call: &mut HostCall<'_>,
-    table: TableId,
-    fields: [Field; N],
-) -> Result<[Value; N], Error> {
-    let version = call.raw_fields_version(table)?;
-    let mut values = [Value::Nil; N];
-    let mut cached = [false; N];
-    let owned = if let Some(actor) = call.store().actors.get_mut(&table) {
-        let known = actor.known.at(table, version);
-        for (index, field) in fields.iter().copied().enumerate() {
-            if let Some(value) = known.find(field) {
-                values[index] = value;
-                cached[index] = true;
-            }
-        }
-        true
-    } else {
-        false
-    };
-    let mut missed = false;
-    for (index, field) in fields.iter().copied().enumerate() {
-        if cached[index] {
-            check(call, table, field, values[index])?;
-        } else {
-            values[index] = call.raw_table_get_static(table, field.name().as_bytes())?;
-            missed = true;
-        }
-    }
-    if missed
-        && owned
-        && let Some(actor) = call.store().actors.get_mut(&table)
-    {
-        // Raw reads cannot invoke an authored setter or change the table's version.
-        let known = actor.known.at(table, version);
-        for (index, field) in fields.into_iter().enumerate() {
-            if !cached[index] && known.find(field).is_none() {
-                known.record(field, values[index]);
-            }
-        }
-    }
-    Ok(values)
-}
-
 /// Many reads of one table's fields. What the actor knows of its table is
-/// held here meanwhile, so each read is `get` without finding the actor
-/// again; `finish` hands it back.
+/// held here meanwhile and returned by `finish`.
 ///
 /// The table's version is asked when the reader is made and again by
 /// `refresh`. In between, the caller must not run Lua or write to the table,

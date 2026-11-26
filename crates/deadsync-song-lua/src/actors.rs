@@ -172,6 +172,7 @@ struct Actor {
     raw_instance: bool,
     model_materials: Vec<Option<crate::model_texture::Clock>>,
     known: fields::Known,
+    baked_capture_reset: Option<function_capture::ResetVersion>,
 }
 struct TemplateState {
     state: ActorSnapshot,
@@ -262,6 +263,7 @@ impl Actor {
             raw_instance: false,
             model_materials: Vec::new(),
             known: fields::Known::default(),
+            baked_capture_reset: None,
         }
     }
     fn sync_rotation_getters(&mut self) {
@@ -330,6 +332,7 @@ struct Store {
     startup_discovery: bool,
     capture_scope: Option<f32>,
     perframe_state_reader: Option<perframes::StateRead>,
+    perframe_state_writer: Option<perframes::StateWrite>,
     ease_probe_active: bool,
     command_locals: Option<command_locals::Scope>,
     action_capture: Option<action_capture::State>,
