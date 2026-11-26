@@ -320,11 +320,9 @@ impl SongRuntime {
             .update_options(&mut self.vm, self.catalog)
             .map_err(|e| e.to_string())?;
         let result = (|| {
-            for &value in values.iter().chain(tracked_values) {
-                access
-                    .reset_frame(&mut self.vm, value)
-                    .map_err(|e| e.to_string())?;
-            }
+            access
+                .reset_frames(&mut self.vm, values.iter().chain(tracked_values).copied())
+                .map_err(|e| e.to_string())?;
             let count = overlays.actors.len();
             let initials = values
                 .iter()
@@ -568,11 +566,9 @@ impl SongRuntime {
                 let prior_time = frame_time(beat, seconds);
                 seconds += delta;
                 let next_time = frame_time(next_beat, seconds);
-                for &value in tracked_values {
-                    access
-                        .reset_frame(&mut self.vm, value)
-                        .map_err(|e| e.to_string())?;
-                }
+                access
+                    .reset_frames(&mut self.vm, tracked_values.iter().copied())
+                    .map_err(|e| e.to_string())?;
                 replay_states.copy_from_slice(&current);
                 let started = replay.advance(
                     self,

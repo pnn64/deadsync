@@ -41,28 +41,16 @@ fn write_value(
     {
         return Ok(());
     }
-    let key = crate::frame_capture::overlay_getter_scalar_key(target);
+    let (_, key) = crate::frame_capture::overlay_getter_scalar_keys(target);
     match value {
-        Update::F32(value) if !key.is_empty() => {
-            let current = match target {
-                Target::Aux => Some("__songlua_aux"),
-                Target::X => Some("__songlua_current_x"),
-                Target::Y => Some("__songlua_current_y"),
-                Target::Z => Some("__songlua_current_z"),
-                _ => None,
-            };
-            let key = current
-                .map(str::to_owned)
-                .unwrap_or_else(|| format!("__songlua_state_{key}"));
-            assign(
-                call,
-                actor,
-                &key,
-                Value::Number(f64::from(value)),
-                target,
-                &Update::F32(value),
-            )
-        }
+        Update::F32(value) if !key.is_empty() => assign(
+            call,
+            actor,
+            key,
+            Value::Number(f64::from(value)),
+            target,
+            &Update::F32(value),
+        ),
         Update::Bool(value) if target == Target::Hibernating => assign(
             call,
             actor,
@@ -140,7 +128,7 @@ fn write_value(
 fn assign(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
     value: Value,
     target: Target,
     update: &Update,
@@ -156,7 +144,12 @@ fn assign(
                 && guard.actors.get(&actor).is_some_and(|a| !a.raw_live_epoch)
         };
     if !native_base {
-        call.with_roots(&[value], |call| sprites::set(call, actor, key, value))?;
+        let set = |call: &mut HostCall<'_>| sprites::set_static(call, actor, key, value);
+        if matches!(value, Value::Boolean(_) | Value::Number(_)) {
+            set(call)?;
+        } else {
+            call.with_roots(&[value], set)?;
+        }
     }
     sync(call.store(), actor, target, update);
     Ok(())

@@ -4,6 +4,14 @@ use deadsync_song_lua::{
 };
 use std::{fs, path::Path};
 
+#[cfg(feature = "test-support")]
+#[path = "../../../tests/support/allocations.rs"]
+#[expect(dead_code, reason = "only the allocation measurement is used here")]
+mod allocations;
+#[cfg(feature = "test-support")]
+#[path = "support/thread_cycles.rs"]
+mod thread_cycles;
+
 #[test]
 fn scheduled_xml_runs_inline_lua_and_legacy_commands() {
     let dir = tempfile::tempdir().unwrap();
@@ -170,16 +178,44 @@ fn eros_and_apollo_runs_baked_and_runtime() {
             }
             output
         };
-        let mut prepared = deadsync_song_lua::playback::prepare_song_lua(
-            &song,
-            &context,
-            compile_song_lua,
-            compile,
-        );
+        let prepare = || {
+            deadsync_song_lua::playback::prepare_song_lua(
+                &song,
+                &context,
+                compile_song_lua,
+                compile,
+            )
+        };
+        // With test-support, set DEADSYNC_EROS_MODE=baked and run the ignored
+        // test alone with --nocapture. Measure allocation churn separately.
+        #[cfg(feature = "test-support")]
+        let mut prepared = if live {
+            prepare()
+        } else {
+            measure_eros_bake(duration, prepare)
+        };
+        #[cfg(not(feature = "test-support"))]
+        let mut prepared = prepare();
         assert!(
             prepared.compile_succeeded(),
             "legacy chart preparation live={live}"
         );
+        #[cfg(feature = "test-support")]
+        if !live && std::env::var_os("DEADSYNC_EROS_FINGERPRINT").is_some() {
+            for (index, layer) in prepared.compiled_layers().enumerate() {
+                use std::fmt::Write as _;
+                let mut hash = Fingerprint::default();
+                writeln!(hash, "{:?}", layer.foreground_beats).unwrap();
+                writeln!(hash, "{:?}", layer.eases).unwrap();
+                writeln!(hash, "{:?}", layer.messages).unwrap();
+                writeln!(hash, "{:?}", layer.overlays).unwrap();
+                writeln!(hash, "{:?}", layer.overlay_updates).unwrap();
+                writeln!(hash, "{:?}", layer.draw_frames).unwrap();
+                writeln!(hash, "{:?}", layer.column_splines).unwrap();
+                writeln!(hash, "{:?}", layer.stateful_message_captures).unwrap();
+                println!("eros_bake_layer,{index},{:016x}", hash.finish());
+            }
+        }
         if live {
             let mut scene = prepared
                 .take_live_scene()
@@ -208,5 +244,49 @@ fn eros_and_apollo_runs_baked_and_runtime() {
             let calls = native["native_modifier_calls"].as_f64().unwrap();
             assert_eq!(cursor, deadlib_lua::Value::Number(calls + 1.0));
         }
+    }
+}
+
+#[cfg(feature = "test-support")]
+#[derive(Default)]
+struct Fingerprint(std::hash::DefaultHasher);
+
+#[cfg(feature = "test-support")]
+impl Fingerprint {
+    fn finish(&self) -> u64 {
+        std::hash::Hasher::finish(&self.0)
+    }
+}
+
+#[cfg(feature = "test-support")]
+impl std::fmt::Write for Fingerprint {
+    fn write_str(&mut self, text: &str) -> std::fmt::Result {
+        std::hash::Hasher::write(&mut self.0, text.as_bytes());
+        Ok(())
+    }
+}
+
+#[cfg(feature = "test-support")]
+fn measure_eros_bake<T>(duration: f32, prepare: impl FnOnce() -> T) -> T {
+    match std::env::var("DEADSYNC_EROS_MEASURE").as_deref() {
+        Ok("allocations") => {
+            let (prepared, churn) = allocations::measure(prepare);
+            println!(
+                "eros_bake_allocations,{},{},{},{},{}",
+                churn.allocs, churn.reallocs, churn.frees, churn.allocated_bytes, churn.peak_bytes
+            );
+            prepared
+        }
+        Ok("cycles") => {
+            let start = std::time::Instant::now();
+            let cycles = thread_cycles::cycles();
+            let prepared = prepare();
+            let cycles = thread_cycles::cycles() - cycles;
+            let seconds = start.elapsed().as_secs_f64();
+            println!("eros_bake_cycles,{duration},{cycles},{seconds:.6}");
+            prepared
+        }
+        Err(std::env::VarError::NotPresent) => prepare(),
+        _ => panic!("DEADSYNC_EROS_MEASURE must be cycles or allocations"),
     }
 }

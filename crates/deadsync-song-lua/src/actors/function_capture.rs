@@ -210,33 +210,65 @@ pub(super) fn reset(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error
     reset_fields(call, actor)
 }
 pub(super) fn reset_frame(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
-    if let Some(capture) = call
-        .store()
+    reset_native_frame(call.store(), actor);
+    reset_fields(call, actor)
+}
+
+pub(super) struct BakedFrameReset {
+    keys: [Value; RESET_FIELDS.len()],
+    blocks_key: Value,
+}
+
+impl BakedFrameReset {
+    pub(super) fn new() -> Self {
+        Self {
+            keys: [Value::Nil; RESET_FIELDS.len()],
+            blocks_key: Value::Nil,
+        }
+    }
+
+    pub(super) fn reset(&mut self, vm: &mut Vm, actor: TableId) -> Result<(), Error> {
+        reset_native_frame(vm.store(), actor);
+        for ((name, value), key) in RESET_FIELDS.into_iter().zip(&mut self.keys) {
+            if *key == Value::Nil {
+                *key = vm.intern_static(name.as_bytes())?;
+            }
+            vm.raw_table_set(actor, *key, value)?;
+        }
+        if self.blocks_key == Value::Nil {
+            self.blocks_key = vm.intern_static(BLOCKS_KEY.as_bytes())?;
+        }
+        let blocks = vm.try_new_table()?;
+        vm.raw_table_set(actor, self.blocks_key, Value::Table(blocks))
+    }
+}
+
+fn reset_native_frame(store: &mut Store, actor: TableId) {
+    if let Some(capture) = store
         .actors
         .get_mut(&actor)
         .and_then(|a| a.capture.as_mut())
     {
         capture.reset_blocks();
     }
-    reset_fields(call, actor)
 }
+
+const RESET_FIELDS: [(&str, Value); 9] = [
+    ("__songlua_capture_cursor", Value::Number(0.)),
+    ("__songlua_capture_duration", Value::Number(0.)),
+    ("__songlua_capture_tween_time_left", Value::Number(0.)),
+    ("__songlua_startup_queue_seconds", Value::Nil),
+    ("__songlua_capture_easing", Value::Nil),
+    ("__songlua_capture_opt1", Value::Nil),
+    ("__songlua_capture_opt2", Value::Nil),
+    ("__songlua_capture_block", Value::Nil),
+    ("__songlua_capture_immediate_block", Value::Nil),
+];
+const BLOCKS_KEY: &str = "__songlua_capture_blocks";
+
 fn reset_fields(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
-    for key in [
-        "__songlua_capture_cursor",
-        "__songlua_capture_duration",
-        "__songlua_capture_tween_time_left",
-    ] {
-        song_replay::raw_set(call, actor, key, Value::Number(0.))?;
-    }
-    for key in [
-        "__songlua_startup_queue_seconds",
-        "__songlua_capture_easing",
-        "__songlua_capture_opt1",
-        "__songlua_capture_opt2",
-        "__songlua_capture_block",
-        "__songlua_capture_immediate_block",
-    ] {
-        song_replay::raw_set(call, actor, key, Value::Nil)?;
+    for (key, value) in RESET_FIELDS {
+        song_replay::raw_set(call, actor, key, value)?;
     }
     if call
         .store()
@@ -244,7 +276,7 @@ fn reset_fields(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
         .live
         .load(std::sync::atomic::Ordering::Relaxed)
     {
-        let value = get_static(call, actor, b"__songlua_capture_blocks")?;
+        let value = get_static(call, actor, BLOCKS_KEY.as_bytes())?;
         if value != Value::Nil {
             let blocks = table(call, value)?;
             let mut stack = call.native_stack()?;
@@ -267,12 +299,7 @@ fn reset_fields(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
         }
     }
     let blocks = call.try_new_table()?;
-    song_replay::raw_set(
-        call,
-        actor,
-        "__songlua_capture_blocks",
-        Value::Table(blocks),
-    )
+    song_replay::raw_set(call, actor, BLOCKS_KEY, Value::Table(blocks))
 }
 fn setup(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Run>().unwrap().clone();

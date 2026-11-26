@@ -255,24 +255,39 @@ pub(super) fn get_all<const N: usize>(
 ) -> Result<[Value; N], Error> {
     let version = call.raw_fields_version(table)?;
     let mut values = [Value::Nil; N];
-    if let Some(actor) = call.store().actors.get_mut(&table) {
+    let mut cached = [false; N];
+    let owned = if let Some(actor) = call.store().actors.get_mut(&table) {
         let known = actor.known.at(table, version);
-        let mut remembered = true;
-        for (value, field) in values.iter_mut().zip(fields) {
-            match known.find(field) {
-                Some(found) => *value = found,
-                None => remembered = false,
+        for (index, field) in fields.iter().copied().enumerate() {
+            if let Some(value) = known.find(field) {
+                values[index] = value;
+                cached[index] = true;
             }
         }
-        if remembered {
-            for (value, field) in values.iter().zip(fields) {
-                check(call, table, field, *value)?;
-            }
-            return Ok(values);
+        true
+    } else {
+        false
+    };
+    let mut missed = false;
+    for (index, field) in fields.iter().copied().enumerate() {
+        if cached[index] {
+            check(call, table, field, values[index])?;
+        } else {
+            values[index] = call.raw_table_get_static(table, field.name().as_bytes())?;
+            missed = true;
         }
     }
-    for (value, field) in values.iter_mut().zip(fields) {
-        *value = get(call, table, field)?;
+    if missed
+        && owned
+        && let Some(actor) = call.store().actors.get_mut(&table)
+    {
+        // Raw reads cannot invoke an authored setter or change the table's version.
+        let known = actor.known.at(table, version);
+        for (index, field) in fields.into_iter().enumerate() {
+            if !cached[index] && known.find(field).is_none() {
+                known.record(field, values[index]);
+            }
+        }
     }
     Ok(values)
 }
@@ -288,8 +303,7 @@ pub(super) struct Reader {
     table: TableId,
     // `None` for a table that is not an owned actor.
     known: Option<Known>,
-    version: u32,
-    // The fields known not to be in the table at `version`.
+    // The fields known absent at the version established by refresh.
     absent: [u64; WORDS],
 }
 impl Reader {
@@ -302,7 +316,6 @@ impl Reader {
         let mut reader = Self {
             table,
             known,
-            version: 0,
             absent: [0; WORDS],
         };
         reader.refresh(call)?;
@@ -310,19 +323,12 @@ impl Reader {
     }
     /// Ask the table's version again, after something that may have run Lua.
     pub(super) fn refresh(&mut self, call: &mut HostCall<'_>) -> Result<(), Error> {
-        if self.known.is_some() {
-            self.version = call.raw_fields_version(self.table)?;
+        if let Some(known) = &mut self.known {
+            let version = call.raw_fields_version(self.table)?;
+            known.at(self.table, version);
+            self.absent = std::array::from_fn(|word| known.read[word] & !known.present[word]);
         }
-        self.note_absent();
         Ok(())
-    }
-    fn note_absent(&mut self) {
-        self.absent = match &self.known {
-            Some(known) if known.table == Some(self.table) && known.version == self.version => {
-                std::array::from_fn(|word| known.read[word] & !known.present[word])
-            }
-            _ => [0; WORDS],
-        };
     }
     /// Skip a section only after every field it reads was found absent at
     /// this version. Unknown fields and any present value keep the full read.
@@ -358,8 +364,6 @@ impl Reader {
     #[inline(never)]
     fn lookup(&mut self, call: &mut HostCall<'_>, field: Field) -> Result<Value, Error> {
         if let Some(known) = &self.known
-            && known.table == Some(self.table)
-            && known.version == self.version
             && let Some(value) = known.find(field)
         {
             check(call, self.table, field, value)?;
@@ -367,11 +371,13 @@ impl Reader {
         }
         let value = call.raw_table_get_static(self.table, field.name().as_bytes())?;
         if let Some(known) = &mut self.known {
-            // The read ran no Lua, so the version still describes the table.
-            self.version = call.raw_fields_version(self.table)?;
-            known.at(self.table, self.version).record(field, value);
+            // Raw reads leave the version established by refresh unchanged.
+            known.record(field, value);
+            if value == Value::Nil {
+                let (word, bit) = field.bit();
+                self.absent[word] |= bit;
+            }
         }
-        self.note_absent();
         Ok(value)
     }
     /// Give the actor back what it knows. Without this the actor merely

@@ -8,6 +8,19 @@ pub(crate) struct Access {
 }
 type Output<T> = Arc<Mutex<Option<T>>>;
 type Reader<T> = fn(&mut HostCall<'_>, TableId) -> Result<T, Error>;
+
+pub(super) struct StateRead {
+    callback: Root,
+    result: Option<State>,
+}
+
+fn read_state(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let actor = table(call, arg(call, 0))?;
+    let state = initial_state::read(call, actor)?;
+    call.store().perframe_state_reader.as_mut().unwrap().result = Some(state);
+    Ok(())
+}
+
 impl Actors {
     pub(crate) fn perframe_access(&self) -> Access {
         Access {
@@ -46,7 +59,34 @@ impl Access {
         Ok(output.lock().unwrap().take().unwrap())
     }
     pub fn state(&self, vm: &mut Vm, actor: Value) -> Result<State, Error> {
-        self.read(vm, actor, initial_state::read)
+        let callback = match &vm.store_ref().perframe_state_reader {
+            Some(reader) => reader.callback,
+            None => {
+                let function = vm.new_host_function(
+                    read_state,
+                    &[Value::Table(self.registry), Value::Table(self.helpers)],
+                )?;
+                let callback = vm.pin(function)?;
+                vm.store().perframe_state_reader = Some(StateRead {
+                    callback,
+                    result: None,
+                });
+                callback
+            }
+        };
+        // The actor is rooted by the call arguments. The cached callback only
+        // retains the shared registry and helpers between observations.
+        let function = vm.rooted(callback)?;
+        let result = vm.call(function, &[actor]).map(|_| ());
+        let state = vm
+            .store()
+            .perframe_state_reader
+            .as_mut()
+            .unwrap()
+            .result
+            .take();
+        result?;
+        Ok(state.expect("state callback completed"))
     }
     pub fn player(&self, vm: &mut Vm, actor: Value) -> Result<Player, Error> {
         self.read(vm, actor, |call, actor| {
@@ -93,10 +133,34 @@ impl Access {
     pub fn reset(&self, vm: &mut Vm, actor: Value) -> Result<(), Error> {
         self.read(vm, actor, function_capture::reset)
     }
-    pub fn reset_frame(&self, vm: &mut Vm, actor: Value) -> Result<(), Error> {
-        self.read(vm, actor, function_capture::reset_frame)
+    pub fn reset_frames(
+        &self,
+        vm: &mut Vm,
+        actors: impl IntoIterator<Item = Value>,
+    ) -> Result<(), Error> {
+        // Baked replay only resets raw fields and replaces the blocks table.
+        let baked = !vm
+            .store_ref()
+            .clock
+            .live
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let mut reset = function_capture::BakedFrameReset::new();
+        for actor in actors {
+            if baked && let Value::Table(actor) = actor {
+                reset.reset(vm, actor)?;
+            } else {
+                self.read(vm, actor, function_capture::reset_frame)?;
+            }
+        }
+        Ok(())
     }
     pub fn is_player(&self, vm: &mut Vm, actor: Value) -> Result<bool, Error> {
+        if let Value::Table(id) = actor {
+            let key = vm.intern_static(b"__songlua_player_index")?;
+            if vm.raw_table_get(id, key)? == Value::Nil {
+                return Ok(false);
+            }
+        }
         self.read(vm, actor, is_player)
     }
     pub fn update_getter(
@@ -193,12 +257,12 @@ fn number(
 fn assign(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
     value: Value,
     state: &State,
+    frame: bool,
 ) -> Result<(), Error> {
-    sprites::set(call, actor, key, value)?;
-    let frame = call.function_data::<(State, bool)>().unwrap().1;
+    sprites::set_static(call, actor, key, value)?;
     let guard = call.store();
     let Some(actor) = guard.actors.get_mut(&actor) else {
         return Ok(());
@@ -281,11 +345,11 @@ fn assign(
     Ok(())
 }
 fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (s, _) = call.function_data::<(State, bool)>().unwrap().clone();
+    let (s, frame) = *call.function_data::<(State, bool)>().unwrap();
     let actor = table(call, call.captures()[2])?;
     macro_rules! set {
         ($key:literal, $value:expr) => {
-            assign(call, actor, $key, $value, &s)?
+            assign(call, actor, $key, $value, &s, frame)?
         };
     }
     macro_rules! scalar {
@@ -344,8 +408,8 @@ fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
     scalar!("__songlua_state_effect_period", s.effect_period);
     let value = sprites::vector_value(call, &s.diffuse)?;
     call.with_roots(&[value], |call| {
-        assign(call, actor, "__songlua_state_diffuse", value, &s)?;
-        assign(call, actor, "__songlua_diffuse", value, &s)
+        assign(call, actor, "__songlua_state_diffuse", value, &s, frame)?;
+        assign(call, actor, "__songlua_diffuse", value, &s, frame)
     })?;
     let value = sprites::vector_value(call, &s.glow)?;
     set!("__songlua_state_glow", value);

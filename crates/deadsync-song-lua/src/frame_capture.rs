@@ -30,7 +30,7 @@ pub(crate) trait CaptureSource {
     fn actor_count(&self) -> usize;
     fn chronological(&self) -> bool;
     fn drain(&mut self, visit: &mut CaptureVisitor<'_>) -> Result<(), String>;
-    fn reset(&mut self, index: usize) -> Result<(), String>;
+    fn reset(&mut self, indices: &[usize]) -> Result<(), String>;
 }
 
 pub(crate) struct CaptureFrameArgs<'a, H: std::hash::BuildHasher> {
@@ -1014,10 +1014,7 @@ pub(crate) fn capture_update_overlay_samples(
             message,
         );
     }
-    for &overlay_index in reset_indices.iter() {
-        source.reset(overlay_index)?;
-    }
-    Ok(())
+    source.reset(reset_indices)
 }
 
 fn initialize_update_state(
@@ -1460,38 +1457,49 @@ pub(crate) fn merge_scheduled_overlay_samples_from_buffer(
 
 /// Field routing of the existing preparation getter handoff.
 pub(crate) fn overlay_getter_scalar_key(target: SongLuaOverlayUpdateTarget) -> &'static str {
+    overlay_getter_scalar_keys(target).0
+}
+
+pub(crate) fn overlay_getter_scalar_keys(
+    target: SongLuaOverlayUpdateTarget,
+) -> (&'static str, &'static str) {
     use SongLuaOverlayUpdateTarget as Target;
+    macro_rules! keys {
+        ($name:literal) => {
+            ($name, concat!("__songlua_state_", $name))
+        };
+    }
     match target {
-        Target::Aux => "aux",
-        Target::X => "x",
-        Target::Y => "y",
-        Target::Z => "z",
-        Target::Zoom => "zoom",
-        Target::ZoomX => "zoom_x",
-        Target::ZoomY => "zoom_y",
-        Target::ZoomZ => "zoom_z",
-        Target::BaseZoom => "basezoom",
-        Target::BaseZoomX => "basezoom_x",
-        Target::BaseZoomY => "basezoom_y",
-        Target::BaseZoomZ => "basezoom_z",
-        Target::RotationX => "rot_x_deg",
-        Target::RotationY => "rot_y_deg",
-        Target::RotationZ => "rot_z_deg",
-        Target::BaseRotation => "base_rotation",
-        Target::Quaternion => "quaternion",
-        Target::BaseAlpha => "base_alpha",
-        Target::SkewX => "skew_x",
-        Target::SkewY => "skew_y",
-        Target::CropLeft => "cropleft",
-        Target::CropRight => "cropright",
-        Target::CropTop => "croptop",
-        Target::CropBottom => "cropbottom",
-        Target::FadeLeft => "fadeleft",
-        Target::FadeRight => "faderight",
-        Target::FadeTop => "fadetop",
-        Target::FadeBottom => "fadebottom",
-        Target::EffectPeriod => "effect_period",
-        Target::EffectOffset => "effect_offset",
-        _ => "",
+        Target::Aux => ("aux", "__songlua_aux"),
+        Target::X => ("x", "__songlua_current_x"),
+        Target::Y => ("y", "__songlua_current_y"),
+        Target::Z => ("z", "__songlua_current_z"),
+        Target::Zoom => keys!("zoom"),
+        Target::ZoomX => keys!("zoom_x"),
+        Target::ZoomY => keys!("zoom_y"),
+        Target::ZoomZ => keys!("zoom_z"),
+        Target::BaseZoom => keys!("basezoom"),
+        Target::BaseZoomX => keys!("basezoom_x"),
+        Target::BaseZoomY => keys!("basezoom_y"),
+        Target::BaseZoomZ => keys!("basezoom_z"),
+        Target::RotationX => keys!("rot_x_deg"),
+        Target::RotationY => keys!("rot_y_deg"),
+        Target::RotationZ => keys!("rot_z_deg"),
+        Target::BaseRotation => keys!("base_rotation"),
+        Target::Quaternion => keys!("quaternion"),
+        Target::BaseAlpha => keys!("base_alpha"),
+        Target::SkewX => keys!("skew_x"),
+        Target::SkewY => keys!("skew_y"),
+        Target::CropLeft => keys!("cropleft"),
+        Target::CropRight => keys!("cropright"),
+        Target::CropTop => keys!("croptop"),
+        Target::CropBottom => keys!("cropbottom"),
+        Target::FadeLeft => keys!("fadeleft"),
+        Target::FadeRight => keys!("faderight"),
+        Target::FadeTop => keys!("fadetop"),
+        Target::FadeBottom => keys!("fadebottom"),
+        Target::EffectPeriod => keys!("effect_period"),
+        Target::EffectOffset => keys!("effect_offset"),
+        _ => ("", ""),
     }
 }

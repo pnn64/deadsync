@@ -393,7 +393,7 @@ pub(super) fn apply_message_with_pose(
     let current = access
         .state(&mut runtime.vm, row.actor)
         .map_err(|e| e.to_string())?;
-    for target in [
+    const PRESERVED_TARGETS: [Target; 23] = [
         Target::Hibernating,
         Target::HAlign,
         Target::VAlign,
@@ -417,15 +417,23 @@ pub(super) fn apply_message_with_pose(
         Target::EffectTime,
         Target::EffectTiming,
         Target::Rainbow,
-    ] {
-        let written = command.blocks.iter().filter(keep).any(|block| {
-            block.delta.has_update_target(target)
-                && crate::overlay_block_factor(block, elapsed).is_some()
-                && message
-                    .elapsed
-                    .is_none_or(|prior| crate::overlay_block_factor(block, prior).is_none())
-        });
-        if !written {
+    ];
+    let mut written = 0_u32;
+    for block in command.blocks.iter().filter(keep) {
+        if message
+            .elapsed
+            .is_none_or(|prior| crate::overlay_block_factor(block, prior).is_none())
+            && crate::overlay_block_factor(block, elapsed).is_some()
+        {
+            for (index, target) in PRESERVED_TARGETS.into_iter().enumerate() {
+                if block.delta.has_update_target(target) {
+                    written |= 1 << index;
+                }
+            }
+        }
+    }
+    for (index, target) in PRESERVED_TARGETS.into_iter().enumerate() {
+        if written & (1 << index) == 0 {
             let value = crate::perframe::overlay_state_update_value(&current, target);
             crate::perframe::set_overlay_state_update_value(&mut state, target, &value);
         }

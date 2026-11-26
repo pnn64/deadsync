@@ -15,6 +15,9 @@ use std::{hint::black_box, path::Path, sync::Arc, time::Instant};
 mod allocations;
 #[path = "../src/actors/mesh_geometry.rs"]
 mod geometry;
+#[path = "support/thread_cycles.rs"]
+mod thread_cycles;
+use thread_cycles::cycles;
 
 fn execute(runtime: &mut SongRuntime, text: &str) -> Value {
     runtime
@@ -184,27 +187,6 @@ fn mesh_expansion_preserves_order_remainders_and_float_bits() {
             );
         }
     }
-}
-
-// OS accounting counts this thread's executed cycles, excluding descheduling.
-#[cfg(windows)]
-fn cycles() -> u64 {
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn GetCurrentThread() -> *mut std::ffi::c_void;
-        fn QueryThreadCycleTime(thread: *mut std::ffi::c_void, cycles: *mut u64) -> i32;
-    }
-    let mut cycles = 0;
-    // SAFETY: the pseudo-handle is valid and the output is writable during the call.
-    assert_ne!(
-        unsafe { QueryThreadCycleTime(GetCurrentThread(), &mut cycles) },
-        0
-    );
-    cycles
-}
-#[cfg(not(windows))]
-fn cycles() -> u64 {
-    0
 }
 
 fn measure(label: &str, iterations: usize, mut work: impl FnMut()) {

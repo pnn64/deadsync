@@ -313,7 +313,7 @@ mod tests {
             }
             Ok(())
         }
-        fn reset(&mut self, _: usize) -> Result<(), String> {
+        fn reset(&mut self, _: &[usize]) -> Result<(), String> {
             Ok(())
         }
     }
@@ -504,12 +504,21 @@ impl CaptureSource for Source<'_> {
                 self.screen,
                 frames,
             );
+        } else {
+            self.runtime.actors.recycle_song_overlay_updates(
+                &mut self.runtime.vm,
+                self.screen,
+                frames,
+            );
         }
         result
     }
-    fn reset(&mut self, index: usize) -> Result<(), String> {
+    fn reset(&mut self, indices: &[usize]) -> Result<(), String> {
         self.access
-            .reset_frame(&mut self.runtime.vm, self.actors[index])
+            .reset_frames(
+                &mut self.runtime.vm,
+                indices.iter().map(|&index| self.actors[index]),
+            )
             .map_err(|e| e.to_string())
     }
 }

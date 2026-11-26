@@ -49,6 +49,9 @@ pub(super) struct Dispatch {
 pub(super) struct Capture {
     touched: Vec<usize>,
     pub(super) frames: HashMap<usize, SongReplayImmediateUpdates>,
+    // The compiler returns rows after a successful drain. Keep their buffers
+    // for subsequent frames while publishing in the usual touched order.
+    recycled: Vec<SongReplayImmediateUpdates>,
     // Actual setters are discontinuities; published tween/effect poses are
     // samples of continuous motion. Retain that distinction until frame drain.
     step_targets: HashMap<usize, u128>,
@@ -83,10 +86,9 @@ impl Capture {
     pub(super) fn touch(&mut self, index: usize) -> &mut SongReplayImmediateUpdates {
         self.frames.entry(index).or_insert_with(|| {
             self.touched.push(index);
-            SongReplayImmediateUpdates {
-                overlay_index: index,
-                ..Default::default()
-            }
+            let mut row = self.recycled.pop().unwrap_or_default();
+            row.overlay_index = index;
+            row
         })
     }
 
@@ -142,6 +144,16 @@ impl Capture {
                     || !frame.final_values.is_empty()
             })
             .collect()
+    }
+
+    fn recycle(&mut self, frames: Vec<SongReplayImmediateUpdates>) {
+        self.recycled.extend(frames.into_iter().map(|mut frame| {
+            frame.values.clear();
+            frame.scheduled.clear();
+            frame.final_values.clear();
+            frame.tween_reset = false;
+            frame
+        }));
     }
 }
 
@@ -308,6 +320,23 @@ impl Actors {
 
     pub(crate) fn chronological_song_capture(&self, vm: &Vm) -> bool {
         vm.store_ref().replay_clock.is_some()
+    }
+
+    pub(crate) fn recycle_song_overlay_updates(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+        frames: Vec<SongReplayImmediateUpdates>,
+    ) {
+        let store = vm.store();
+        if let Some(capture) = store
+            .scenes
+            .get_mut(&screen.id)
+            .and_then(|scene| scene.song_session.as_mut())
+            .and_then(|session| session.messages.as_mut())
+        {
+            capture.immediate.recycle(frames);
+        }
     }
 
     /// Metadata classification performs no authored calls. If it fails, retain

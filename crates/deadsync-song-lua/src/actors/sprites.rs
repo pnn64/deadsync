@@ -67,6 +67,27 @@ pub(super) fn set(
     let key = call.try_intern(key.as_bytes())?;
     call.table_set(Value::Table(actor), key, value)
 }
+pub(super) fn set_static(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &'static str,
+    value: Value,
+) -> Result<(), Error> {
+    let key = call.intern_static(key.as_bytes())?;
+    // Lua only dispatches __newindex when the raw slot is empty.
+    let prior = call.raw_table_get(actor, key)?;
+    if prior == Value::Nil {
+        return call.table_set(Value::Table(actor), key, value);
+    }
+    let unchanged = match (prior, value) {
+        (Value::Number(prior), Value::Number(value)) => prior.to_bits() == value.to_bits(),
+        _ => prior == value,
+    };
+    if !unchanged {
+        call.raw_table_set(actor, key, value)?;
+    }
+    Ok(())
+}
 fn raw_set(call: &mut HostCall<'_>, actor: TableId, key: &str, value: Value) -> Result<(), Error> {
     let key = call.try_intern(key.as_bytes())?;
     call.raw_table_set(actor, key, value)

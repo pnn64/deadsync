@@ -447,9 +447,8 @@ pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Re
         (units, units - previous)
     };
     let store = call.store();
-    let fallback = super::song_pose::mode(&store, actor);
-    let actor = store.actors.get_mut(&actor).unwrap();
-    actor.effects.motion = Some(Motion {
+    let entry = store.actors.get_mut(&actor).unwrap();
+    entry.effects.motion = Some(Motion {
         units: Some(units),
         delta: elapsed,
     });
@@ -458,9 +457,11 @@ pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Re
         || render.effect_mode != EffectMode::None
         || (!render.effect_timer && render.effect_clock == EffectClock::Time)
     {
-        actor.effects.clock_visible = true;
+        entry.effects.clock_visible = true;
     }
-    if actor.effects.spin_seen {
+    if entry.effects.spin_seen {
+        let fallback = super::song_pose::mode(store, actor);
+        let actor = store.actors.get_mut(&actor).unwrap();
         if fallback {
             super::capture::advance_spin(actor, elapsed, delta);
         } else if actor.state.render.effect_mode == EffectMode::Spin {

@@ -150,11 +150,13 @@ fn read_fields(
             hibernating
         );
     }
-    let class = text(call, r, Field::ACTOR_TYPE, live)?;
+    let (model, sprite) = text(call, r, Field::ACTOR_TYPE, live)?.map_or((false, false), |class| {
+        (
+            class.eq_ignore_ascii_case("Model"),
+            class.eq_ignore_ascii_case("Sprite"),
+        )
+    });
     if !metadata || !call.store().actors.contains_key(&actor) {
-        let model = class
-            .as_deref()
-            .is_some_and(|class| class.eq_ignore_ascii_case("Model"));
         state.depth_test = model;
         state.depth_write = model;
         state.texture_wrapping = model;
@@ -183,17 +185,14 @@ fn read_fields(
     }
     if let Some(value) = flag(call, r, Field::STATE_SPRITE_TEXTURE, live)? {
         state.sprite_texture = value;
-    } else if class
-        .as_deref()
-        .is_some_and(|class| class.eq_ignore_ascii_case("Sprite"))
-    {
+    } else if sprite {
         // These lookups may run an authored `__index`, so the reader asks
         // the table's version again after each.
         let texture = sprites::field(call, actor, "Texture")?;
         r.refresh(call)?;
-        let has_texture = value_text(call, texture)?.is_some();
-        let capture = if has_texture {
-            None
+        let has_texture = string_slice(call, texture)?.is_some();
+        let has_capture = if has_texture {
+            false
         } else {
             let allocation = get(call, r, Field::AFT_ALLOCATION, live)?;
             let value = if allocation == Value::Nil {
@@ -201,9 +200,9 @@ fn read_fields(
             } else {
                 sprites::field(call, table(call, allocation)?, "name")?
             };
-            value_text(call, value)?
+            string_slice(call, value)?.is_some()
         };
-        state.sprite_texture = has_texture || capture.is_some();
+        state.sprite_texture = has_texture || has_capture;
         r.refresh(call)?;
     }
     // The common live actor has no raw overrides left after promotion. Once
@@ -501,33 +500,28 @@ fn read_fields(
             state.vertex_colors = Some(out);
         }
     }
-    if let Some(value) = text(call, r, Field::STATE_TEXT_ALIGN, live)?
-        .as_deref()
-        .and_then(crate::parse_overlay_text_align)
+    if let Some(value) =
+        text(call, r, Field::STATE_TEXT_ALIGN, live)?.and_then(crate::parse_overlay_text_align)
     {
         state.text_align = value;
     }
-    if let Some(value) = text(call, r, Field::STATE_EFFECT_CLOCK, live)?
-        .as_deref()
-        .and_then(crate::parse_overlay_effect_clock)
+    if let Some(value) =
+        text(call, r, Field::STATE_EFFECT_CLOCK, live)?.and_then(crate::parse_overlay_effect_clock)
     {
         state.effect_clock = value;
     }
     if let Some(value) = text(call, r, Field::STATE_TEXT_GLOW_MODE, live)?
-        .as_deref()
         .and_then(crate::parse_overlay_text_glow_mode)
     {
         state.text_glow_mode = value;
     }
-    if let Some(value) = text(call, r, Field::STATE_BLEND, live)?
-        .as_deref()
-        .and_then(crate::parse_overlay_blend_mode)
+    if let Some(value) =
+        text(call, r, Field::STATE_BLEND, live)?.and_then(crate::parse_overlay_blend_mode)
     {
         state.blend = value;
     }
-    if let Some(value) = text(call, r, Field::STATE_EFFECT_MODE, live)?
-        .as_deref()
-        .and_then(crate::parse_overlay_effect_mode)
+    if let Some(value) =
+        text(call, r, Field::STATE_EFFECT_MODE, live)?.and_then(crate::parse_overlay_effect_mode)
     {
         state.effect_mode = value;
     }
@@ -590,6 +584,9 @@ fn flag(
     Ok((value != Value::Nil).then_some(!matches!(value, Value::Nil | Value::Boolean(false))))
 }
 pub(super) fn value_text(call: &mut HostCall<'_>, value: Value) -> Result<Option<String>, Error> {
+    string_slice(call, value).map(|text| text.map(str::to_owned))
+}
+fn string_slice<'a>(call: &'a mut HostCall<'_>, value: Value) -> Result<Option<&'a str>, Error> {
     if value == Value::Nil {
         return Ok(None);
     }
@@ -598,33 +595,16 @@ pub(super) fn value_text(call: &mut HostCall<'_>, value: Value) -> Result<Option
         .ok_or_else(|| call.error(b"actor state: string expected"))?;
     let text = std::str::from_utf8(call.string_bytes(id).unwrap())
         .map_err(|e| call.error(e.to_string().as_bytes()))?;
-    Ok(Some(text.to_owned()))
+    Ok(Some(text))
 }
-fn text(
-    call: &mut HostCall<'_>,
+fn text<'a>(
+    call: &'a mut HostCall<'_>,
     r: &mut Reader,
     key: Field,
     live: bool,
-) -> Result<Option<StateText>, Error> {
+) -> Result<Option<&'a str>, Error> {
     let value = get(call, r, key, live)?;
-    if value == Value::Nil {
-        return Ok(None);
-    }
-    let id = call
-        .coerce_string(value)?
-        .ok_or_else(|| call.error(b"actor state: string expected"))?;
-    let bytes = call.string_bytes(id).unwrap();
-    std::str::from_utf8(bytes).map_err(|e| call.error(e.to_string().as_bytes()))?;
-    Ok(Some(StateText(smallvec::SmallVec::from_slice(bytes))))
-}
-// Actor class and enum names usually fit inline. Spill without truncation for
-// authored long strings, retaining the same UTF-8 validation and coercions.
-struct StateText(smallvec::SmallVec<[u8; 64]>);
-impl std::ops::Deref for StateText {
-    type Target = str;
-    fn deref(&self) -> &str {
-        std::str::from_utf8(&self.0).expect("validated actor state text")
-    }
+    string_slice(call, value)
 }
 #[inline(always)]
 fn optional_table(
@@ -648,9 +628,11 @@ fn vector<const N: usize>(
 ) -> Result<Option<[f32; N]>, Error> {
     match optional_table(call, r, key, live)? {
         Some(t) => {
-            // A component that is not a number goes through `tonumber`.
-            let value = components(call, t)?;
-            r.refresh(call)?;
+            let (value, coerced) = read_components(call, t)?;
+            // Only coercions run Lua and can change the actor table.
+            if coerced {
+                r.refresh(call)?;
+            }
             Ok(value)
         }
         None => Ok(None),
@@ -660,21 +642,30 @@ pub(super) fn components<const N: usize>(
     call: &mut HostCall<'_>,
     t: TableId,
 ) -> Result<Option<[f32; N]>, Error> {
+    read_components(call, t).map(|(value, _)| value)
+}
+
+fn read_components<const N: usize>(
+    call: &mut HostCall<'_>,
+    t: TableId,
+) -> Result<(Option<[f32; N]>, bool), Error> {
     let mut values = [0.; N];
+    let mut coerced = false;
     for (i, dest) in values.iter_mut().enumerate() {
         let value = call.raw_table_get(t, Value::Number((i + 1) as f64))?;
         // Vector conversion ignores malformed components; scalar properties error.
         let converted = if matches!(value, Value::Number(_)) {
             value
         } else {
+            coerced = true;
             call.call(helper(call, 6)?, &[value])?[0]
         };
         let Value::Number(value) = converted else {
-            return Ok(None);
+            return Ok((None, coerced));
         };
         *dest = value as f32;
     }
-    Ok(Some(values))
+    Ok((Some(values), coerced))
 }
 
 /// Decode the existing four raw rows without invoking authored indexing hooks.

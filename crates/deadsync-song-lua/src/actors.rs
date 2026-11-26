@@ -329,6 +329,7 @@ struct Store {
     startup_queues: Option<Vec<TableId>>,
     startup_discovery: bool,
     capture_scope: Option<f32>,
+    perframe_state_reader: Option<perframes::StateRead>,
     ease_probe_active: bool,
     command_locals: Option<command_locals::Scope>,
     action_capture: Option<action_capture::State>,
