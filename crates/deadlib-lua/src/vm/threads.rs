@@ -203,6 +203,9 @@ impl Thread {
         let Some((_, frame)) = self.plain_suspended_builtin(builtin) else {
             return false;
         };
+        if builtin == CO_YIELD && self.api_stack.end + values.len() < frame.vararg_start {
+            return false;
+        }
         let actual = values.len() + usize::from(first.is_some());
         let wanted = if frame.wanted == FRAME_OPEN {
             actual
@@ -1231,13 +1234,13 @@ impl Vm {
             .try_reserve(needed.saturating_sub(state.registers.len()))
             .map_err(|_| self.memory_failure())?;
         self.resume_api_barriers(thread);
-        let direct = count == 0 && self.sort_fast_context() && self.can_skip_gc_checkpoint();
+        let direct = self.sort_fast_context() && self.can_skip_gc_checkpoint();
         let args =
             &self.registers[frame.vararg_start + offset..frame.vararg_start + offset + count];
         let state = &mut self.threads[slot_index(thread.0)];
         if direct
             && state.resumed_values.is_none()
-            && state.finish_plain_builtin(CO_YIELD, None, &[])
+            && state.finish_plain_builtin(CO_YIELD, None, args)
         {
             self.gc.pending = false;
         } else if state.frames.is_empty() {

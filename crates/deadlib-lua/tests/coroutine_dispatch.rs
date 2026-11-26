@@ -28,6 +28,43 @@ fn resume_preserves_the_parked_yield_frame_and_deoptimizes_at_return() {
 }
 
 #[test]
+fn resume_moves_feedback_into_fixed_and_open_yield_results() {
+    let program = compile(
+        br#"
+        local yield, resume = coroutine.yield, coroutine.resume
+        local token = {}
+        local co = coroutine.create(function()
+            local first, missing = yield(token)
+            assert(first == token and missing == nil)
+            local function check(...)
+                assert(select('#', ...) == 3)
+                local a, b, c = ...
+                assert(a == token and b == nil and c == 23)
+            end
+            check(yield(first))
+            local last = yield(nil)
+            assert(last == 42)
+            return last
+        end)
+        local ok, value = resume(co)
+        assert(ok and value == token)
+        ok, value = resume(co, value)
+        assert(ok and value == token)
+        ok, value = resume(co, value, nil, 23)
+        assert(ok and value == nil)
+        ok, value = resume(co, 42, token)
+        assert(ok and coroutine.status(co) == 'dead')
+        return value
+    "#,
+    )
+    .unwrap();
+    let mut vm = Vm::new();
+    assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+    vm.set_instruction_limit(Some(10_000));
+    assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+}
+
+#[test]
 fn resume_falls_back_when_the_captured_yield_is_replaced() {
     let program = compile(
         br#"
