@@ -3,6 +3,7 @@
 use super::*;
 use crate::bytecode::{Instruction, NUMERIC_WHILE, OPEN_ARGS, Op, RK};
 mod cycle;
+mod feedback;
 mod numeric;
 
 const REGISTER_LIMIT: usize = 16;
@@ -367,7 +368,6 @@ impl Thread {
             || suspended.barriers != 1
             || suspended.c_level_bias != 0
             || suspended.tail_calls != 0
-            || !matches!(suspended.wanted, 0 | FRAME_OPEN)
             || self.frames.len() >= usize::from(self.call_slots)
             || !self.loads.is_empty()
             || self.frames[..self.frames.len() - 1]
@@ -403,6 +403,9 @@ impl Vm {
         }
         let state = &self.threads[slot_index(thread.0)];
         let (caller, suspended) = state.ordinary_yield()?;
+        if !matches!(suspended.wanted, 0 | FRAME_OPEN) {
+            return None;
+        }
         let FrameKind::Lua(function) = caller.function else {
             return None;
         };
@@ -492,6 +495,9 @@ impl Vm {
         let Some((caller, suspended)) = state.ordinary_yield() else {
             return false;
         };
+        if !matches!(suspended.wanted, 0 | FRAME_OPEN) {
+            return false;
+        }
         let FrameKind::Lua(function) = caller.function else {
             unreachable!("plain suspension has a Lua caller");
         };

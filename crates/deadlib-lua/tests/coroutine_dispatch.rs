@@ -65,6 +65,80 @@ fn resume_moves_feedback_into_fixed_and_open_yield_results() {
 }
 
 #[test]
+fn paired_feedback_loops_publish_the_parked_frame_and_retry_field_misses() {
+    let program = compile(
+        br#"
+        local function setup(inherited)
+            local yield, resume = coroutine.yield, coroutine.resume
+            local tokens = {{value=4}, {value=7}, {value=11}, {value=13}}
+            local width, reads = 4, 0
+            local co
+            if inherited then
+                tokens[3] = setmetatable({}, {__index = function(_, key)
+                    assert(key == 'value')
+                    local _, slot = debug.getlocal(co, 1, 1)
+                    local _, sum = debug.getlocal(co, 1, 2)
+                    assert(slot == 3 and sum == 11 + reads * 35)
+                    reads = reads + 1
+                    return 11
+                end})
+            end
+            co = coroutine.create(function()
+                local slot, sum = 1, 0
+                for i = 9, 1, -1 do
+                    local reply = yield(tokens[slot])
+                    sum = sum + reply
+                    slot = slot % width + 1
+                end
+                return sum
+            end)
+            local function consume(count)
+                local reply, sum = 0, 0
+                for i = 1, count do
+                    local ok, token = resume(co, reply)
+                    assert(ok)
+                    reply = token.value
+                    sum = sum + reply
+                end
+                return sum, reply
+            end
+            return co, consume, function() return reads end
+        end
+        for pass = 1, 2 do
+            local co, consume, reads = setup(pass == 2)
+            local sum, reply = consume(7)
+            assert(sum == 57 and reply == 11 and reads() == (pass - 1) * 2)
+            local slot_name, slot = debug.getlocal(co, 1, 1)
+            local sum_name, child_sum = debug.getlocal(co, 1, 2)
+            assert(slot_name == 'slot' and slot == 3 and sum_name == 'sum' and child_sum == 46)
+            assert(debug.getinfo(co, 0, 'f').func == coroutine.yield)
+            local ok, token = coroutine.resume(co, reply)
+            assert(ok and token.value == 13)
+            ok, token = coroutine.resume(co, token.value)
+            assert(ok and token.value == 4)
+            local done, total = coroutine.resume(co, token.value)
+            assert(done and total == 74 and coroutine.status(co) == 'dead')
+        end
+        local short, consume = setup(false)
+        local ok = pcall(consume, 10)
+        assert(not ok and coroutine.status(short) == 'dead')
+        local _, observed = setup(false)
+        local check, checks = assert, 0
+        assert = function(ok) checks = checks + 1; check(ok) end
+        local sum = observed(7)
+        assert = check
+        assert(checks == 7 and sum == 57)
+        return 42
+    "#,
+    )
+    .unwrap();
+    let mut vm = Vm::new();
+    assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+    vm.set_instruction_limit(Some(10_000));
+    assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+}
+
+#[test]
 fn resume_falls_back_when_the_captured_yield_is_replaced() {
     let program = compile(
         br#"

@@ -2581,6 +2581,21 @@ impl Vm {
                                         &mut resume_hints,
                                     )
                                 }
+                                Value::Native(threads::CO_RESUME)
+                                    if i.b == 2
+                                        && i.c == 2
+                                        && prototype
+                                            .code
+                                            .get(pc + 3)
+                                            .is_some_and(|next| next.op == Op::GetTable) =>
+                                {
+                                    if let Some(next) = self.try_run_coroutine_feedback_cycle(pc - 1) {
+                                        pc = next;
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
                                 // Readers often revisit the same byte ranges across loads.
                                 Value::Native(strings::STR_SUB)
                                     if i.b == 3 && i.c == 1 && !self.loads.is_empty() =>
