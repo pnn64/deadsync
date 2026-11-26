@@ -264,6 +264,17 @@ impl MbWeights<'_> {
 }
 
 impl WeightContext<'_> {
+    // For a frame MB, use the regular average or the implicit L0 weight.
+    // Explicit weights also need denominators and offsets for each plane.
+    #[cfg(target_arch = "x86_64")]
+    pub(crate) fn frame_bi_weight(&self, l0: usize, l1: usize) -> Option<i32> {
+        match self.use_weight {
+            1 => None,
+            2 => Some(self.implicit_weights.get(l0, l1).unwrap_or(32)),
+            _ => Some(32),
+        }
+    }
+
     fn apply_uni<P: Pixel>(
         &self,
         pred: &mut [P],

@@ -895,90 +895,116 @@ impl<P: Pixel> SliceContext<'_, P> {
             None
         };
 
-        let mut luma_pred = [P::default(); 256];
-        match (ref_l0, ref_l1) {
-            (Some(ref0), Some(ref1)) => {
-                let mut p0 = [P::default(); 256];
-                let mut p1 = [P::default(); 256];
-                let (mc_y_l0, ref_stride_l0, ref_y_off_l0, _, _, _) =
-                    self.mc_params(mb_idx, mb_y, ref0.width as usize, r0);
-                let (mc_y_l1, ref_stride_l1, ref_y_off_l1, _, _, _) =
-                    self.mc_params(mb_idx, mb_y, ref1.width as usize, r1);
-                P::luma_mc(
-                    ref0,
-                    mb_x as i32,
-                    mc_y_l0,
-                    mv0[0] as i32,
-                    mv0[1] as i32,
-                    16,
-                    16,
-                    &mut p0,
-                    ref_stride_l0,
-                    ref_y_off_l0,
-                );
-                P::luma_mc(
-                    ref1,
-                    mb_x as i32,
-                    mc_y_l1,
-                    mv1[0] as i32,
-                    mv1[1] as i32,
-                    16,
-                    16,
-                    &mut p1,
-                    ref_stride_l1,
-                    ref_y_off_l1,
-                );
-                sp.wctx
-                    .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
-                    .apply_bi(&p0, &p1, &mut luma_pred, r0 as usize, r1 as usize, false, 0);
+        #[cfg(target_arch = "x86_64")]
+        let luma_written = if P::BYTES == 1 && !self.mbaff && !self.field_pic_flag {
+            match (ref_l0, ref_l1) {
+                (Some(a), Some(b)) => sp
+                    .wctx
+                    .frame_bi_weight(r0 as usize, r1 as usize)
+                    .is_some_and(|weight| {
+                        crate::inter_pred::predict_integer_bi_luma(
+                            [(a, mv0), (b, mv1)],
+                            mb_x,
+                            mb_y,
+                            &mut self.frame.y[self.ly_offset + mb_x..],
+                            self.ly_stride,
+                            weight,
+                        )
+                    }),
+                _ => false,
             }
-            (Some(ref0), None) => {
-                let (mc_y, ref_stride, ref_y_off, _, _, _) =
-                    self.mc_params(mb_idx, mb_y, ref0.width as usize, r0);
-                P::luma_mc(
-                    ref0,
-                    mb_x as i32,
-                    mc_y,
-                    mv0[0] as i32,
-                    mv0[1] as i32,
-                    16,
-                    16,
-                    &mut luma_pred,
-                    ref_stride,
-                    ref_y_off,
-                );
-                if sp.use_weight == 1 {
+        } else {
+            false
+        };
+        #[cfg(not(target_arch = "x86_64"))]
+        let luma_written = false;
+
+        if !luma_written {
+            let mut luma_pred = [P::default(); 256];
+            match (ref_l0, ref_l1) {
+                (Some(ref0), Some(ref1)) => {
+                    let mut p0 = [P::default(); 256];
+                    let mut p1 = [P::default(); 256];
+                    let (mc_y_l0, ref_stride_l0, ref_y_off_l0, _, _, _) =
+                        self.mc_params(mb_idx, mb_y, ref0.width as usize, r0);
+                    let (mc_y_l1, ref_stride_l1, ref_y_off_l1, _, _, _) =
+                        self.mc_params(mb_idx, mb_y, ref1.width as usize, r1);
+                    P::luma_mc(
+                        ref0,
+                        mb_x as i32,
+                        mc_y_l0,
+                        mv0[0] as i32,
+                        mv0[1] as i32,
+                        16,
+                        16,
+                        &mut p0,
+                        ref_stride_l0,
+                        ref_y_off_l0,
+                    );
+                    P::luma_mc(
+                        ref1,
+                        mb_x as i32,
+                        mc_y_l1,
+                        mv1[0] as i32,
+                        mv1[1] as i32,
+                        16,
+                        16,
+                        &mut p1,
+                        ref_stride_l1,
+                        ref_y_off_l1,
+                    );
                     sp.wctx
                         .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
-                        .apply_uni(&mut luma_pred, 0, r0 as usize, false, 0);
+                        .apply_bi(&p0, &p1, &mut luma_pred, r0 as usize, r1 as usize, false, 0);
                 }
-            }
-            (None, Some(ref1)) => {
-                let (mc_y, ref_stride, ref_y_off, _, _, _) =
-                    self.mc_params(mb_idx, mb_y, ref1.width as usize, r1);
-                P::luma_mc(
-                    ref1,
-                    mb_x as i32,
-                    mc_y,
-                    mv1[0] as i32,
-                    mv1[1] as i32,
-                    16,
-                    16,
-                    &mut luma_pred,
-                    ref_stride,
-                    ref_y_off,
-                );
-                if sp.use_weight == 1 {
-                    sp.wctx
-                        .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
-                        .apply_uni(&mut luma_pred, 1, r1 as usize, false, 0);
+                (Some(ref0), None) => {
+                    let (mc_y, ref_stride, ref_y_off, _, _, _) =
+                        self.mc_params(mb_idx, mb_y, ref0.width as usize, r0);
+                    P::luma_mc(
+                        ref0,
+                        mb_x as i32,
+                        mc_y,
+                        mv0[0] as i32,
+                        mv0[1] as i32,
+                        16,
+                        16,
+                        &mut luma_pred,
+                        ref_stride,
+                        ref_y_off,
+                    );
+                    if sp.use_weight == 1 {
+                        sp.wctx
+                            .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                            .apply_uni(&mut luma_pred, 0, r0 as usize, false, 0);
+                    }
                 }
+                (None, Some(ref1)) => {
+                    let (mc_y, ref_stride, ref_y_off, _, _, _) =
+                        self.mc_params(mb_idx, mb_y, ref1.width as usize, r1);
+                    P::luma_mc(
+                        ref1,
+                        mb_x as i32,
+                        mc_y,
+                        mv1[0] as i32,
+                        mv1[1] as i32,
+                        16,
+                        16,
+                        &mut luma_pred,
+                        ref_stride,
+                        ref_y_off,
+                    );
+                    if sp.use_weight == 1 {
+                        sp.wctx
+                            .mb(self.mbaff && self.mb_field_decoding[mb_idx / 2], mb_idx)
+                            .apply_uni(&mut luma_pred, 1, r1 as usize, false, 0);
+                    }
+                }
+                (None, None) => {}
             }
-            (None, None) => {}
-        }
-        for (r, row) in luma_pred.as_chunks::<16>().0.iter().enumerate() {
-            let o = self.ly_offset + r * self.ly_stride + mb_x;
-            P::store_row(&mut self.frame.y, o, row);
+            for (r, row) in luma_pred.as_chunks::<16>().0.iter().enumerate() {
+                let o = self.ly_offset + r * self.ly_stride + mb_x;
+                P::store_row(&mut self.frame.y, o, row);
+            }
         }
 
         self.predict_chroma_part(

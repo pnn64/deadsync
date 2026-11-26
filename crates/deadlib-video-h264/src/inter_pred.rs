@@ -249,6 +249,43 @@ pub fn luma_mc_stride(
     }
 }
 
+/// Blend two full-pel 16×16 predictions directly into a frame's luma plane.
+/// The caller selects this path only for 8-bit frame motion compensation.
+#[cfg(target_arch = "x86_64")]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn predict_integer_bi_luma(
+    refs: [(&DecodedPicture, [i16; 2]); 2],
+    x: usize,
+    y: usize,
+    out: &mut [u8],
+    stride: usize,
+    w0: i32,
+) -> bool {
+    fn source(
+        (pic, mv): (&DecodedPicture, [i16; 2]),
+        x: usize,
+        y: usize,
+    ) -> Option<(&[u8], usize)> {
+        if (mv[0] | mv[1]) & 3 != 0 {
+            return None;
+        }
+        let x = x.checked_add_signed(isize::from(mv[0] >> 2))?;
+        let y = y.checked_add_signed(isize::from(mv[1] >> 2))?;
+        let width = pic.width as usize;
+        if x + 16 > width || y + 16 > pic.height as usize {
+            return None;
+        }
+        pic.wait_luma((y + 16) * width);
+        Some((&pic.luma()[y * width + x..], width))
+    }
+
+    let (Some(a), Some(b)) = (source(refs[0], x, y), source(refs[1], x, y)) else {
+        return false;
+    };
+    crate::simd::block_bi_weighted_16(a, b, out, stride, w0);
+    true
+}
+
 /// Extend the reference edge into a macroblock-sized tile with a filter halo,
 /// then run the same interpolation as for an in-bounds block.
 #[allow(clippy::too_many_arguments)]

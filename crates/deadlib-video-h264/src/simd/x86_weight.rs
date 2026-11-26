@@ -3,6 +3,44 @@
 use super::{bi_pred_avg, load8, scalar, store16, store8, widen8, widen8_hi};
 use core::arch::x86_64::*;
 
+/// Apply frame bi-prediction to a full luma macroblock with strided planes.
+pub(crate) fn block_bi_weighted_16(
+    (a, stride_a): (&[u8], usize),
+    (b, stride_b): (&[u8], usize),
+    out: &mut [u8],
+    stride_out: usize,
+    w0: i32,
+) {
+    assert!(a.len() >= 15 * stride_a + 16);
+    assert!(b.len() >= 15 * stride_b + 16);
+    assert!(out.len() >= 15 * stride_out + 16);
+    debug_assert!((-64..=128).contains(&w0));
+    // SAFETY: all row accesses are in bounds and SSE2 is available on
+    // x86-64. Implicit weights and rounding fit in signed 16-bit lanes.
+    unsafe {
+        let weight0 = _mm_set1_epi16(w0 as i16);
+        let weight1 = _mm_set1_epi16((64 - w0) as i16);
+        let round = _mm_set1_epi16(32);
+        let apply = |a, b| {
+            let sum = _mm_add_epi16(_mm_mullo_epi16(a, weight0), _mm_mullo_epi16(b, weight1));
+            _mm_srai_epi16(_mm_add_epi16(sum, round), 6)
+        };
+        for row in 0..16 {
+            let x = _mm_loadu_si128(a.as_ptr().add(row * stride_a).cast());
+            let y = _mm_loadu_si128(b.as_ptr().add(row * stride_b).cast());
+            let values = if w0 == 32 {
+                _mm_avg_epu8(x, y)
+            } else {
+                _mm_packus_epi16(
+                    apply(widen8(x), widen8(y)),
+                    apply(widen8_hi(x), widen8_hi(y)),
+                )
+            };
+            store16(out, row * stride_out, values);
+        }
+    }
+}
+
 pub fn weighted_uni(pred: &mut [u8], log2_denom: u32, weight: i32, offset: i32) {
     if log2_denom <= 7 && weight == 1 << log2_denom && offset == 0 {
         return;
@@ -89,6 +127,27 @@ pub fn weighted_bi_implicit(a: &[u8], b: &[u8], out: &mut [u8], w0: i32, w1: i32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strided_luma_bi_prediction_matches_the_scalar_formula() {
+        let a = core::array::from_fn::<u8, { 19 * 16 }, _>(|i| (i * 37) as u8);
+        let b = core::array::from_fn::<u8, { 23 * 16 }, _>(|i| (i * 91 + 7) as u8);
+        for w0 in [-64, -1, 0, 21, 32, 64, 113, 128] {
+            let mut actual = [117; 29 * 16];
+            let mut expected = actual;
+            for row in 0..16 {
+                scalar::weighted_bi_implicit(
+                    &a[row * 19..][..16],
+                    &b[row * 23..][..16],
+                    &mut expected[row * 29..][..16],
+                    w0,
+                    64 - w0,
+                );
+            }
+            block_bi_weighted_16((&a, 19), (&b, 23), &mut actual, 29, w0);
+            assert_eq!(actual, expected, "w0={w0}");
+        }
+    }
 
     #[test]
     fn implicit_weights_match_scalar_including_saturation_and_tails() {
