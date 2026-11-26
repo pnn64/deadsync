@@ -124,3 +124,41 @@ return 42
         [Value::Number(42.0)]
     );
 }
+
+#[test]
+fn interned_substrings_keep_adjusted_bounds_and_call_hooks() {
+    check_with_and_without_budget(
+        br#"
+collectgarbage('stop')
+local sub=string.sub
+local source='ab\0cd\255ef'
+local suffix='d\255ef'
+local function slice(first,last)
+    local result=sub(source,first,last)
+    return result
+end
+local function compile_reader()
+    local finished=false
+    return assert(load(function()
+        if finished then return nil end
+        finished=true
+        assert(slice(-4,100)==suffix)
+        assert(slice(2.9,4.9)=='b\0c')
+        assert(slice(4,3)=='')
+        return 'return 42'
+    end))
+end
+assert(compile_reader()()==42)
+local calls,returns=0,0
+debug.sethook(function(event)
+    if debug.getinfo(2,'f').func == sub then
+        if event=='call' then calls=calls+1 else returns=returns+1 end
+    end
+end,'cr')
+assert(compile_reader()()==42)
+debug.sethook()
+assert(calls==3 and returns==3)
+return 42
+"#,
+    );
+}

@@ -1,6 +1,40 @@
 //! Non-allocating builtin results when no frame observer is active.
 use super::*;
 impl Vm {
+    #[inline(never)]
+    pub(super) fn try_inline_substring(&mut self, call: usize, checkpoint_ready: bool) -> bool {
+        let [_, Value::String(source), Value::Number(first), Value::Number(last)] =
+            self.registers[call..call + 4]
+        else {
+            return false;
+        };
+        if self.frames.len() == self.frames.capacity()
+            || self.frames.len() + 1 >= usize::from(self.call_slots)
+            || !checkpoint_ready && !self.sort_fast_context()
+        {
+            return false;
+        }
+        let bytes = &self.strings.bytes[slot_index(source.0)];
+        let len = bytes.len();
+        let first = strings::relative(lua_integer(first), len);
+        let last = strings::relative(lua_integer(last), len);
+        let range = strings::slice_range(first, last, len);
+        let result = if range.len() == len {
+            source
+        } else if let Some(result) = self.strings.find(&bytes[range]) {
+            result
+        } else {
+            return false;
+        };
+        if !checkpoint_ready && !self.sort_gc_ready() {
+            return false;
+        }
+        self.strings.bytes.preserve_new_reference(result.0);
+        self.registers[call] = Value::String(result);
+        self.top = call + 1;
+        true
+    }
+
     pub(super) fn try_inline_extremum(
         &mut self,
         call: usize,

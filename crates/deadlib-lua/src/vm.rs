@@ -2547,6 +2547,12 @@ impl Vm {
                                         &mut resume_hints,
                                     )
                                 }
+                                // Readers often revisit the same byte ranges across loads.
+                                Value::Native(strings::STR_SUB)
+                                    if i.b == 3 && i.c == 1 && !self.loads.is_empty() =>
+                                {
+                                    self.try_inline_substring(a, checkpoint_ready)
+                                }
                                 Value::Function(_) if i.c <= 1 => self.try_numeric_leaf_call(
                                     &mut numeric_call_cache,
                                     checkpoint_ready,

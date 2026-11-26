@@ -87,6 +87,15 @@ pub(super) fn relative(index: i64, len: usize) -> i64 {
         index
     }
 }
+pub(super) fn slice_range(start: i64, end: i64, len: usize) -> std::ops::Range<usize> {
+    let start = start.max(1);
+    let end = end.min(len as i64);
+    if end < start {
+        0..0
+    } else {
+        start as usize - 1..end as usize
+    }
+}
 pub(super) fn find_start(index: i64, len: usize) -> usize {
     relative(index, len).saturating_sub(1).clamp(0, len as i64) as usize
 }
@@ -359,13 +368,7 @@ impl Vm {
                     )?,
                     len,
                 );
-                let start = start.max(1);
-                let end = end.min(len as i64);
-                let range = if end < start {
-                    0..0
-                } else {
-                    start as usize - 1..end as usize
-                };
+                let range = slice_range(start, end, len);
                 if id == STR_SUB {
                     self.string_slice(source, range)?
                 } else {
