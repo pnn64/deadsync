@@ -11,6 +11,7 @@ use super::{
 use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN_ARGS, Op, Prototype, RK};
 
 mod dense_array;
+mod periodic;
 mod substring;
 pub(super) mod while_numeric;
 
@@ -108,6 +109,7 @@ struct Body<'a> {
     call_registers: Option<usize>,
     forwarded_calls_fit: Option<bool>,
     segment_limit: Option<i128>,
+    period: Option<i128>,
     parked: Option<(ParkedIndex, f64)>,
     wait_for_yield: bool,
     assertion: bool,
@@ -115,7 +117,42 @@ struct Body<'a> {
     write_count: usize,
 }
 
-impl Body<'_> {
+impl<'a> Body<'a> {
+    fn new(
+        vm: &'a Vm,
+        registers: &'a [Value],
+        constants: &'a [Value],
+        control: usize,
+        env: Option<TableId>,
+        indices: Series,
+        iterations: i128,
+    ) -> Option<Self> {
+        let mut body = Self {
+            vm,
+            registers,
+            constants,
+            control,
+            env,
+            iterations,
+            bindings: [0; 256],
+            values: [Operand::Initial(0); BODY_LIMIT + 3],
+            written: 0,
+            read_initial: [false; 256],
+            invariant: [false; 256],
+            call_registers: None,
+            forwarded_calls_fit: None,
+            segment_limit: None,
+            period: None,
+            parked: None,
+            wait_for_yield: false,
+            assertion: false,
+            field_writes: [TableId(0); BODY_LIMIT],
+            write_count: 0,
+        };
+        body.write(control + 3, Operand::Series(indices))?;
+        Some(body)
+    }
+
     fn read(&mut self, register: usize) -> Option<Operand> {
         if (self.control..self.control + 3).contains(&register) {
             return None;
@@ -516,11 +553,15 @@ impl Body<'_> {
                 // Frame entry initialized these slots. The opcode is a no-op.
                 Op::Load => continue,
                 Op::Move if i.c == 0 => self.read(usize::from(i.b))?,
-                Op::Add | Op::Sub | Op::Mul => {
+                Op::Add | Op::Sub | Op::Mul | Op::Mod => {
                     let left = self.operand(u32::from(i.b))?;
                     let right = self.operand(i.c)?;
                     if i.op == Op::Add {
                         self.add(left, right, &result_slots)?
+                    } else if i.op == Op::Mod {
+                        let numerator = self.series(left)?;
+                        let divisor = self.series(right)?;
+                        Operand::Series(self.remainder(numerator, divisor)?)
                     } else {
                         Operand::Series(self.series(left)?.arithmetic(i.op, self.series(right)?)?)
                     }
@@ -572,6 +613,15 @@ impl Body<'_> {
         }
         Some(sum)
     }
+}
+
+fn add_exact_sum(total: i128, terms: Series, count: i128) -> Option<i128> {
+    // Same-signed terms and accumulator make every partial sum monotone.
+    if total != 0 && total.signum() != terms.first.signum() {
+        return None;
+    }
+    let total = total + terms.sum(count);
+    (total.abs() <= EXACT_INTEGER).then_some(total)
 }
 
 impl Vm {
@@ -628,6 +678,7 @@ impl Vm {
                         | Op::Add
                         | Op::Sub
                         | Op::Mul
+                        | Op::Mod
                         | Op::Neg
                         | Op::Call
                         | Op::Close
@@ -692,33 +743,17 @@ impl Vm {
         let (sum_update, parked, assertion, field_writes, write_count) = loop {
             attempts = attempts.checked_sub(1)?;
             let segment_last = segment_first + (segment_count - 1) * step;
-            let mut analysis = Body {
-                vm: self,
-                registers: &self.registers[base..],
-                constants: self.programs[program].bound_constants(prototype_index),
+            let mut analysis = Body::new(
+                self,
+                &self.registers[base..],
+                self.programs[program].bound_constants(prototype_index),
                 control,
                 env,
-                iterations: segment_count,
-                bindings: [0; 256],
-                values: [Operand::Initial(0); BODY_LIMIT + 3],
-                written: 0,
-                read_initial: [false; 256],
-                invariant: [false; 256],
-                call_registers: None,
-                forwarded_calls_fit: None,
-                segment_limit: None,
-                parked: None,
-                wait_for_yield: false,
-                assertion: false,
-                field_writes: [TableId(0); BODY_LIMIT],
-                write_count: 0,
-            };
-            analysis.write(
-                control + 3,
-                Operand::Series(Series {
+                Series {
                     first: segment_first,
                     last: segment_last,
-                }),
+                },
+                segment_count,
             )?;
             let Some(accumulator) = analysis.accumulator(body, start_pc, writes) else {
                 if let Some(boundary) = analysis.segment_limit {
@@ -728,6 +763,17 @@ impl Vm {
                     segment_count = boundary;
                     segmented = true;
                     continue;
+                }
+                if !segmented
+                    && !writes
+                    && let Some(period) = analysis.period
+                    && self.sort_fast_context()
+                    && self.open_upvalues.is_empty()
+                {
+                    let (sum, registers) =
+                        analysis.periodic_sum(body, start_pc, indices, step, count, period)?;
+                    call_registers = registers;
+                    break (Some(sum), None, false, analysis.field_writes, 0);
                 }
                 return (!segmented && analysis.wait_for_yield).then_some(Reduction::Retry);
             };
@@ -765,14 +811,7 @@ impl Vm {
                     Some(_) => return None,
                     None => integer(self.registers[base + register])?,
                 };
-                // Same-signed terms and accumulator make every partial sum monotone.
-                let sum = terms.sum(segment_count);
-                if (total != 0 && total.signum() != terms.first.signum())
-                    || (total + sum).abs() > EXACT_INTEGER
-                {
-                    return None;
-                }
-                Some((register, total + sum, terms.last))
+                Some((register, add_exact_sum(total, terms, segment_count)?, terms.last))
             } else {
                 None
             };

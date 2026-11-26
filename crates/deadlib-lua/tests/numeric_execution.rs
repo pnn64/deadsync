@@ -469,3 +469,33 @@ fn substring_lengths_follow_clipping_relative_indices_and_default_ends() {
         "#,
     );
 }
+
+#[test]
+fn periodic_substring_lengths_preserve_signed_remainders_and_the_last_iteration() {
+    check(
+        br#"
+        local function setup()
+            local source = string.rep("abc\000\255d", 100)
+            local sub = string.sub
+            return function(first, last, step, width)
+                local total, piece = 0, ""
+                for i = first, last, step do
+                    local start = 200 + i * 3
+                    piece = sub(source, start, start + 20 + (i * 2 + 1) % width)
+                    total = total + #piece
+                end
+                return total, piece
+            end, source
+        end
+        local sum, source = setup()
+        local total, piece = sum(-31, 54, 2, 6)
+        assert(total == 1034 and piece == string.sub(source, 359, 384))
+        total, piece = sum(72, -12, -3, -7)
+        assert(total == 523 and piece == string.sub(source, 164, 182))
+        total, piece = sum(3, 6, 1, -7)
+        assert(total == 75 and piece == string.sub(source, 218, 237))
+        total, piece = sum(-9, 49, 4, 0)
+        return total == 0 and piece == ""
+        "#,
+    );
+}
