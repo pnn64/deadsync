@@ -677,3 +677,38 @@ fn checked_pairs_count_preserves_updates_and_assertion_failures() {
         [Value::Number(23.0)]
     );
 }
+
+#[test]
+fn dense_global_array_writes_preserve_hash_entries_and_newindex() {
+    let mut vm = Vm::new();
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+local function fill()
+    for i = 1, 20 do write_target[i] = i end
+end
+
+write_target = {name = 6}
+fill()
+assert(write_target.name == 6 and write_target[1] == 1 and write_target[20] == 20)
+
+write_target = {[3] = 90, [21] = 110, tag = 4}
+fill()
+assert(write_target[3] == 3 and write_target[21] == 110 and write_target.tag == 4)
+
+local count = 0
+write_target = setmetatable({}, {
+    __newindex = function(t, k, v)
+        count = count + 1
+        rawset(t, k, v + 1)
+    end,
+})
+fill()
+assert(count == 20 and write_target[1] == 2 and write_target[20] == 21)
+return true
+"#,
+        ),
+        [Value::Boolean(true)]
+    );
+}

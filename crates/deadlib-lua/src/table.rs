@@ -1229,10 +1229,16 @@ impl Table {
         growth_bytes: usize,
     ) -> Option<(usize, usize)> {
         if self.metatable != 0
-            || !self.hash_part().slots.is_empty()
             || matches!(self.array, ArrayStorage::SharedScalars { .. })
             || start > self.array.len()
         {
+            return None;
+        }
+        let hash = self.hash_part();
+        if !hash.slots.is_empty()
+            && (self.native51 || (end > self.array.len() && hash.may_have_array_keys))
+        {
+            // A numeric hash key can migrate into the newly extended array.
             return None;
         }
         let capacity = self.array.allocated_capacity();
@@ -1404,6 +1410,18 @@ impl Table {
         value: Value,
         hint: &mut u32,
     ) -> bool {
+        self.set_string_scalar_in_place(key, value, hint, false)
+    }
+
+    /// Use an already-reserved hash slot. Callers permitting new keys must
+    /// have established that the collector needs no write barrier.
+    pub(crate) fn set_string_scalar_in_place(
+        &mut self,
+        key: StringId,
+        value: Value,
+        hint: &mut u32,
+        allow_new: bool,
+    ) -> bool {
         if !matches!(
             value,
             Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_)
@@ -1421,21 +1439,47 @@ impl Table {
             self.touch_fields();
             return true;
         }
-        self.find_and_set_string_scalar(key, value, hint)
+        self.find_and_set_string_scalar(key, value, hint, allow_new)
     }
 
     #[cold]
-    fn find_and_set_string_scalar(&mut self, key: StringId, value: Value, hint: &mut u32) -> bool {
-        if let Some((_, Some(index))) = self.slot(Key::String(key))
-            && self.hash_part().entries[index].value != Value::Nil
-        {
+    fn find_and_set_string_scalar(
+        &mut self,
+        key: StringId,
+        value: Value,
+        hint: &mut u32,
+        allow_new: bool,
+    ) -> bool {
+        let key = Key::String(key);
+        let hash = key.hash();
+        let Some((slot, index)) = self.slot_hashed(key, hash) else {
+            return false;
+        };
+        if let Some(index) = index {
+            if self.hash_part().entries[index].value == Value::Nil {
+                return false;
+            }
             self.hash_part_mut().entries[index].value = value;
             self.touch_fields();
             *hint = (index + 1) as u32;
-            true
-        } else {
-            false
+            return true;
         }
+        let part = self.hash_part();
+        let next = part.entries.len() + 1;
+        if !allow_new
+            || self.native51
+            || self.metatable != 0
+            || next > part.entries.capacity()
+            || next * 4 >= part.slots.len() * 3
+        {
+            return false;
+        }
+        let Ok(index) = u32::try_from(next) else {
+            return false;
+        };
+        self.append_hash_entry(key, value, slot, index, hash);
+        *hint = index;
+        true
     }
 
     /// Update a validated string slot without growing the hash part.
@@ -1624,21 +1668,25 @@ impl Table {
         } else {
             vacant.expect("nonempty table has a vacant hash slot")
         };
+        self.hash_part_mut().may_have_array_keys |= array.is_some();
+        self.append_hash_entry(k, value, slot, index, k.hash());
+        Ok(())
+    }
+
+    fn append_hash_entry(&mut self, key: Key, value: Value, slot: usize, index: u32, hash: usize) {
         let part = self.hash_part_mut();
-        part.slots[slot] = index | Self::slot_tag(part.slots.len(), k.hash()).0;
-        part.may_have_array_keys |= array.is_some();
+        part.slots[slot] = index | Self::slot_tag(part.slots.len(), hash).0;
         part.entries.push(Entry {
-            key: k,
+            key,
             value,
             native_hash: 0,
             next: 0,
         });
         self.touch_fields();
-        if matches!(k, Key::String(_)) {
+        if matches!(key, Key::String(_)) {
             self.note_string_key_added();
             self.remember_hash_entry(index);
         }
-        Ok(())
     }
     #[inline]
     pub(crate) fn set_grown_list(&mut self, index: usize, value: Value) {
@@ -1876,6 +1924,27 @@ mod allocation_tests {
     fn hash_key(n: i32) -> Value {
         Value::Number(-f64::from(n))
     }
+    #[test]
+    fn reserved_string_slots_require_insert_permission_and_a_plain_table() {
+        let mut table = Table::with_capacity(0, 4).unwrap();
+        let key = StringId(1);
+        let second = StringId(2);
+        let mut hint = 0;
+        let version = table.fields_version();
+        let added = table.string_keys_added();
+        assert!(!table.set_string_scalar_in_place(key, Value::Number(1.0), &mut hint, false));
+        assert!(table.set_string_scalar_in_place(key, Value::Number(1.0), &mut hint, true));
+        assert_eq!(table.fields_version(), version.wrapping_add(1));
+        assert_eq!(table.string_keys_added(), added.saturating_add(1));
+        assert_eq!(table.get_string(key), Value::Number(1.0));
+
+        table.set_metatable(Some(TableId(1)));
+        assert!(!table.set_string_scalar_in_place(second, Value::Number(2.0), &mut hint, true));
+        assert!(table.set_string_scalar_in_place(key, Value::Number(2.0), &mut hint, true));
+        assert_eq!(table.get_string(key), Value::Number(2.0));
+        assert_eq!(table.get_string(second), Value::Nil);
+    }
+
     #[test]
     fn array_watch_tracks_two_distinct_blocks_before_invalidating() {
         let mut table = Table::default();

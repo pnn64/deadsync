@@ -1,4 +1,6 @@
-use super::{Instruction, Op, Prototype, RK, Reduction, Value, Vm, integer, slot_index};
+use super::{
+    Cell, FrameKind, Instruction, Op, Prototype, RK, Reduction, Value, Vm, integer, slot_index,
+};
 use crate::bytecode::Constant;
 
 pub(in crate::vm) fn dense_loop_store(control: usize, body: &[Instruction]) -> Option<Instruction> {
@@ -23,10 +25,41 @@ impl Vm {
         body: &[Instruction],
         prototype: &Prototype,
     ) -> Option<Reduction> {
-        let store = dense_loop_store(control, body)?;
         let index = control + 3;
+        let (store, table, scratch) = if let Some(store) = dense_loop_store(control, body) {
+            (store, self.registers[base + usize::from(store.a)], None)
+        } else {
+            let [global, store, rest @ ..] = body else {
+                return None;
+            };
+            if global.op != Op::GetGlobal
+                || global.b != 0
+                || usize::from(global.a) <= index
+                || store.op != Op::SetTable
+                || store.a != global.a
+                || usize::from(store.b) != index
+                || !(rest.is_empty()
+                    || matches!(rest, [close] if close.op == Op::Close && usize::from(close.a) == index))
+            {
+                return None;
+            }
+            let FrameKind::Lua(function) = self.frames.last()?.function else {
+                return None;
+            };
+            let closure = &self.functions[slot_index(function.0)];
+            let constants = self.programs[closure.program].bound_constants(closure.prototype);
+            let Value::String(name) = *constants.get(global.c as usize)? else {
+                return None;
+            };
+            let table = self.tables[slot_index(closure.env.0)].get_string(name);
+            (*store, table, Some(base + usize::from(global.a)))
+        };
         if !self.sort_fast_context()
-            || !self.open_upvalues.is_empty()
+            || self.open_upvalues.iter().any(|&id| {
+                matches!(self.upvalues[id as usize],
+                         Cell::Open(thread, register)
+                             if thread == self.thread && register >= base + control)
+            })
             || !self.registers.memory().uses_global_allocator()
         {
             return None;
@@ -42,7 +75,7 @@ impl Vm {
         if end.saturating_sub(start) < 2 {
             return None;
         }
-        let Value::Table(id) = self.registers[base + usize::from(store.a)] else {
+        let Value::Table(id) = table else {
             return None;
         };
         let repeated = if store.c as usize == index {
@@ -97,6 +130,9 @@ impl Vm {
         let index = Value::Number(stop as f64);
         self.registers[internal] = index;
         self.registers[internal + 3] = index;
+        if let Some(scratch) = scratch {
+            self.registers[scratch] = Value::Table(id);
+        }
         if stop < end {
             Some(Reduction::Retry)
         } else {

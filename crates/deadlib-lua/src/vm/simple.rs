@@ -288,10 +288,11 @@ pub(super) fn step(
             // metatable. Array writes need an absent metatable because a
             // missing value can trigger __newindex. Scalars create no GC edge.
             let written = match key {
-                Value::String(name) => table.set_string_scalar_cached(
+                Value::String(name) => table.set_string_scalar_in_place(
                     name,
                     value,
                     &mut cx.field_hints[pc % FIELD_HINTS][0],
+                    cx.can_change_field_liveness,
                 ),
                 _ if table.metatable().is_none() => table.set_array_scalar_in_place(key, value),
                 _ => false,
