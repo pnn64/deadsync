@@ -1021,10 +1021,77 @@ impl Vm {
         let frame = self.frames[state.owner];
         self.return_frame(frame, frame.vararg_start + state.top - 2, 2)
     }
+
+    fn try_plain_string_removal(
+        &mut self,
+        frame: Frame,
+    ) -> Result<Option<(StringId, usize)>, Error> {
+        const MAX_SUBJECT: usize = 1024;
+        if frame.argc() != 3 || !self.registers.memory().uses_global_allocator() {
+            return Ok(None);
+        }
+        let start = frame.vararg_start;
+        let (Value::String(source), Value::String(pattern), Value::String(replacement)) = (
+            self.registers[start],
+            self.registers[start + 1],
+            self.registers[start + 2],
+        ) else {
+            return Ok(None);
+        };
+        let pattern = &self.strings.bytes[slot_index(pattern.0)];
+        let text = &self.strings.bytes[slot_index(source.0)];
+        if pattern.is_empty()
+            || pattern.len() > 16
+            || pattern.contains(&0)
+            || pattern.contains(&b')')
+            || has_magic(pattern)
+            || !self.strings.bytes[slot_index(replacement.0)].is_empty()
+            || text.len() > MAX_SUBJECT
+            || !self.sort_fast_context()
+        {
+            return Ok(None);
+        }
+
+        let find = |bytes: &[u8]| {
+            let mut offset = 0;
+            while let Some(next) = find_byte(&bytes[offset..], pattern[0]) {
+                offset += next;
+                if bytes[offset..].starts_with(pattern) {
+                    return Some(offset);
+                }
+                offset += 1;
+            }
+            None
+        };
+        let Some(first) = find(text) else {
+            self.strings.bytes.preserve_new_reference(source.0);
+            return Ok(Some((source, 0)));
+        };
+        let mut output = [0; MAX_SUBJECT];
+        output[..first].copy_from_slice(&text[..first]);
+        let mut written = first;
+        let mut count = 1;
+        let mut tail = &text[first + pattern.len()..];
+        while let Some(next) = find(tail) {
+            output[written..written + next].copy_from_slice(&tail[..next]);
+            written += next;
+            count += 1;
+            tail = &tail[next + pattern.len()..];
+        }
+        output[written..written + tail.len()].copy_from_slice(tail);
+        let result = self.strings.try_intern(&output[..written + tail.len()])?;
+        Ok(Some((result, count)))
+    }
+
     pub(super) fn substitute_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
         let owner = self.frames.len() - 1;
         let base = frame.base;
         let index = if frame.pc() == 0 {
+            if let Some((result, count)) = self.try_plain_string_removal(frame)? {
+                self.registers[base] = Value::String(result);
+                self.registers[base + 1] = Value::Number(count as f64);
+                return self.return_frame(frame, base, 2);
+            }
             let args = frame.vararg_start - 1;
             let argc = frame.argc();
             let source = self.string_argument(args, argc, 0)?;

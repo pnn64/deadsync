@@ -12,6 +12,40 @@ fn check_with_and_without_budget(source: &[u8]) {
 }
 
 #[test]
+fn plain_string_removal_preserves_nonoverlapping_matches_and_binary_subjects() {
+    check_with_and_without_budget(
+        br#"
+local function remove(s, p) return string.gsub(s, p, '') end
+local a,n = remove('aaa', 'aa')
+assert(a == 'a' and n == 1)
+a,n = remove('xxabcabcxab\0abc!', 'abc')
+assert(a == 'xxxab\0!' and n == 3)
+a,n = remove('prefixprefix', 'prefix')
+assert(a == '' and n == 2)
+a,n = remove('\255\0xyz', 'absent')
+assert(a == '\255\0xyz' and n == 0)
+a,n = remove('', 'x')
+assert(a == '' and n == 0)
+a,n = remove('X' .. string.rep('a', 1024) .. 'X', 'X')
+assert(#a == 1024 and n == 2)
+
+a,n = string.gsub('abab', 'ab', '', 1)
+assert(a == 'ab' and n == 1)
+a,n = remove('one two', '%a+')
+assert(a == ' ' and n == 2)
+a,n = remove('a\0b', 'a\0')
+assert(a == '\0b' and n == 1)
+a,n = remove('a.', '%.')
+assert(a == 'a' and n == 1)
+a,n = remove('abc', '')
+assert(a == 'abc' and n == 4)
+assert(not pcall(remove, 'x)', 'x)'))
+return 42
+"#,
+    );
+}
+
+#[test]
 fn string_method_lookup_observes_replacement_and_inherited_handlers() {
     check_with_and_without_budget(
         br#"
