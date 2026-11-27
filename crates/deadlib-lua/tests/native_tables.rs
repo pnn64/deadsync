@@ -531,3 +531,41 @@ return same, version(t) ~= first
         [Value::Boolean(true), Value::Boolean(true)]
     );
 }
+
+#[test]
+fn next_fixed_results_keep_deleted_controls_errors_and_call_hooks() {
+    let mut vm = Vm::new();
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+local function advance(t, key)
+    assert(t)
+    local k, v = next(t, key)
+    return k, v
+end
+local t = {11, nil, 33}
+local k, v = advance(t, nil)
+assert(k == 1 and v == 11)
+t[k] = nil
+k, v = advance(t, k)
+assert(k == 3 and v == 33)
+k, v = advance(t, k)
+assert(k == nil and v == nil)
+local ok, message = pcall(advance, t, 'missing')
+assert(not ok and string.find(message, "invalid key to 'next'", 1, true))
+
+local native_next, calls = next, 0
+debug.sethook(function(event)
+    if event == 'call' and debug.getinfo(2, 'f').func == native_next then
+        calls = calls + 1
+    end
+end, 'c')
+k, v = advance(t, nil)
+debug.sethook()
+return k, v, calls
+"#,
+        ),
+        [Value::Number(3.0), Value::Number(33.0), Value::Number(1.0)]
+    );
+}

@@ -1,5 +1,22 @@
 //! Builtin results when no frame observer is active.
 use super::*;
+
+pub(super) fn next_pair(tables: &Arena<Table>, registers: &mut [Value], call: usize) -> bool {
+    let Value::Table(id) = registers[call + 1] else {
+        return false;
+    };
+    let Some(table) = tables.get(id.0) else {
+        return false;
+    };
+    let Ok(entry) = table.next_entry(registers[call + 2]) else {
+        return false;
+    };
+    let (key, value) = entry.unwrap_or((Value::Nil, Value::Nil));
+    registers[call] = key;
+    registers[call + 1] = value;
+    true
+}
+
 impl Vm {
     #[inline(never)]
     pub(super) fn try_inline_source_load(
@@ -141,6 +158,18 @@ impl Vm {
         }
         self.registers[call] = value;
         self.top = call + usize::from(keep);
+        true
+    }
+
+    pub(super) fn try_inline_next_pair(&mut self, call: usize, checkpoint_ready: bool) -> bool {
+        if self.frames.len() == self.frames.capacity()
+            || self.frames.len() + 1 >= usize::from(self.call_slots)
+            || (!checkpoint_ready && !(self.sort_fast_context() && self.sort_gc_ready()))
+            || !next_pair(&self.tables, &mut self.registers, call)
+        {
+            return false;
+        }
+        self.top = call + 2;
         true
     }
 

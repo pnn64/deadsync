@@ -2291,6 +2291,9 @@ impl Vm {
                             {
                                 self.gc.pending = false;
                             }
+                            (Value::Native(NEXT | PAIRS_NEXT), 2)
+                                if call.c == 2
+                                    && native_fast::next_pair(cx.tables, cx.registers, slot) => {}
                             (Value::Native(0), 1)
                                 if call.c <= 1 && cx.registers[slot + 1].is_truthy() =>
                             {
@@ -2880,6 +2883,9 @@ impl Vm {
                                         continue 'frames;
                                     }
                                     completed
+                                }
+                                Value::Native(NEXT | PAIRS_NEXT) if i.b == 2 && i.c == 2 => {
+                                    self.try_inline_next_pair(a, checkpoint_ready)
                                 }
                                 Value::Native(0) if i.b == 1 && i.c <= 1 => {
                                     self.try_inline_assert(a, i.c == 1, checkpoint_ready)
