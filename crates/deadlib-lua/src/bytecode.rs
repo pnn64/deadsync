@@ -681,6 +681,14 @@ pub(crate) struct ProgramData {
     host_owners: AtomicUsize,
 }
 
+impl Drop for ProgramData {
+    fn drop(&mut self) {
+        if self.prototypes.len() == 1 {
+            crate::compiler::recycle_retired_code(self);
+        }
+    }
+}
+
 #[cfg(test)]
 impl Clone for ProgramData {
     fn clone(&self) -> Self {
@@ -694,6 +702,21 @@ impl Clone for ProgramData {
 }
 
 impl ProgramData {
+    pub(crate) fn take_reusable_code(
+        &mut self,
+    ) -> Option<(Box<[Instruction]>, Box<[InstructionMetadata]>)> {
+        let [prototype] = &mut *self.prototypes else {
+            return None;
+        };
+        let PrototypeStorage::Owned(body) = &mut prototype.storage else {
+            return None;
+        };
+        Some((
+            std::mem::take(&mut body.code),
+            std::mem::take(&mut body.metadata),
+        ))
+    }
+
     pub(crate) fn new(
         prototypes: Box<[Prototype]>,
         entry: u32,

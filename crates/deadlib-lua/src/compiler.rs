@@ -14,6 +14,7 @@ use crate::{
 };
 
 mod boolean;
+mod buffers;
 mod constants;
 mod direct;
 mod expressions;
@@ -21,6 +22,7 @@ mod numeric_templates;
 mod statements;
 mod tasks;
 mod templates;
+pub(crate) use buffers::recycle_retired_code;
 pub(crate) use direct::compile_direct;
 use tasks::Task;
 
@@ -208,9 +210,14 @@ pub(crate) struct Spare {
     assignment_targets: Vec<Target>,
     templates: templates::Templates,
     numeric_templates: numeric_templates::NumericTemplates,
+    code: buffers::Pool,
 }
 
 impl Spare {
+    pub(crate) fn collect_with_code_pool<R>(&mut self, collect: impl FnOnce() -> R) -> R {
+        self.code.collect(collect)
+    }
+
     pub(crate) fn folded_literals(&self) -> &[Option<f64>] {
         &self.folded
     }
@@ -343,6 +350,10 @@ impl<'a> Compiler<'a> {
         }
     }
     fn finish(&mut self) -> Result<u32, Error> {
+        self.finish_with_buffers(None)
+    }
+
+    fn finish_with_buffers(&mut self, pool: Option<&mut buffers::Pool>) -> Result<u32, Error> {
         let f = &mut *self.function;
         boolean::thread_jumps(&mut f.code, &mut f.jump_targets, &mut f.jump_path)?;
         for &pc in &f.logical_tests {
@@ -374,8 +385,15 @@ impl<'a> Compiler<'a> {
             upvalues.push(value);
         }
         let id = self.prototypes.len() as u32;
-        let mut code = fallible::with_capacity(f.code.len())?;
-        let mut metadata = fallible::with_capacity(f.code.len())?;
+        let (mut code, mut metadata) = if let Some(saved) = pool.and_then(|p| p.take(f.code.len()))
+        {
+            saved
+        } else {
+            (
+                fallible::with_capacity(f.code.len())?,
+                fallible::with_capacity(f.code.len())?,
+            )
+        };
         let mut previous: Option<Instruction> = None;
         let first_line = f.defined[0].clamp(1, u32::MAX - 63);
         let mut nearby_lines = 0u64;
@@ -453,7 +471,8 @@ impl<'a> Compiler<'a> {
         let sort_lines = !f.active_lines.is_empty();
         fallible::reserve(&mut f.active_lines, nearby_lines.count_ones() as usize)?;
         while nearby_lines != 0 {
-            f.active_lines.push(first_line + nearby_lines.trailing_zeros());
+            f.active_lines
+                .push(first_line + nearby_lines.trailing_zeros());
             nearby_lines &= nearby_lines - 1;
         }
         if sort_lines {
@@ -790,7 +809,11 @@ impl<'a> Compiler<'a> {
             }
             _ => false,
         };
-        let after = if writes_register { self.live_map()? } else { before };
+        let after = if writes_register {
+            self.live_map()?
+        } else {
+            before
+        };
         let hook = if op == Op::Close { 0 } else { self.line };
         self.function.code.try_push(Emission {
             instruction: Instruction { op, a, b, c },

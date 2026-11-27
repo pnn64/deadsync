@@ -69,6 +69,12 @@ pub(super) struct Spare {
     constant_strings: [Option<(ShortConstant, StringId)>; 32],
 }
 
+impl Spare {
+    pub(super) fn collect_with_code_pool<R>(&mut self, collect: impl FnOnce() -> R) -> R {
+        self.compiler.collect_with_code_pool(collect)
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct SourceKey {
     source: StringId,

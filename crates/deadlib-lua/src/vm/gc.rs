@@ -2001,10 +2001,19 @@ impl Vm {
                 }
                 5 => {
                     let bytes = &mut self.object_payload_bytes;
-                    self.programs
-                        .sweep_with(&mut cursor, budget, |programs, index| {
+                    let memory = self.registers.memory();
+                    let recycle = memory.allocator().is_none() && memory.budget_usage().is_none();
+                    let programs = &mut self.programs;
+                    let mut collect = || {
+                        programs.sweep_with(&mut cursor, budget, |programs, index| {
                             *bytes -= program_bytes(&programs[index]);
                         })
+                    };
+                    if recycle {
+                        self.compile_spare.collect_with_code_pool(collect)
+                    } else {
+                        collect()
+                    }
                 }
                 6 => {
                     let later = self
@@ -3233,7 +3242,9 @@ mod tests {
             chunk[11] = 0;
         }
         let parent = pool.intern(&source);
-        let block = pool.pack_substrings(parent, 0, 24, 24, 32, usize::MAX).unwrap();
+        let block = pool
+            .pack_substrings(parent, 0, 24, 24, 32, usize::MAX)
+            .unwrap();
         let ids: Vec<_> = (0..32)
             .map(|i| pool.intern_packed(&block, 25 * i, 24).unwrap())
             .collect();

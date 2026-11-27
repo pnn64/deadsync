@@ -68,7 +68,7 @@ pub(crate) fn compile_direct(
         last_label: None,
         nil_run: None,
     };
-    let entry = match parser.compile() {
+    let entry = match parser.compile(&mut spare.code) {
         Ok(entry) => Some(entry),
         Err(error) if error.kind() == ErrorKind::Memory => return Err(error),
         Err(_) => None,
@@ -129,7 +129,7 @@ struct Frontend<'a> {
 }
 
 impl Frontend<'_> {
-    fn compile(&mut self) -> Result<u32, Error> {
+    fn compile(&mut self, pool: &mut buffers::Pool) -> Result<u32, Error> {
         self.block(0)?;
         let function = &self.compiler.function;
         if self.token.kind != Kind::Eof
@@ -142,7 +142,7 @@ impl Frontend<'_> {
         self.compiler.function.debug_stack = self.compiler.function.max;
         self.compiler.emit(Op::Return, 0, 0, 0)?;
         self.compiler.prototypes = fallible::with_capacity(1)?;
-        self.compiler.finish()
+        self.compiler.finish_with_buffers(Some(pool))
     }
 
     fn unsupported(&self) -> Error {
