@@ -118,6 +118,7 @@ impl AsRef<[u8]> for ByteString {
 #[derive(Debug, Default)]
 struct Strings {
     bytes: Arena<ByteString>,
+    reclaimed_epoch: u64,
     buckets: Buffer<u32>,
     payload_bytes: usize,
     // The owner list charges shared payloads once and releases empty blocks
@@ -134,6 +135,7 @@ impl Strings {
     fn new_in(memory: Memory) -> Self {
         Self {
             bytes: Arena::new_in(memory.clone()),
+            reclaimed_epoch: 0,
             buckets: Buffer::new_in(memory.clone()),
             payload_bytes: 0,
             packed: Buffer::new_in(memory),

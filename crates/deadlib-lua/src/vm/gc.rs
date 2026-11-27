@@ -290,6 +290,19 @@ enum Phase {
 
 impl Strings {
     fn sweep_some(&mut self, cursor: &mut usize, budget: usize, finishes_sweep: bool) -> u64 {
+        let reclaimed = self.sweep_string_slots(cursor, budget, finishes_sweep);
+        if reclaimed != 0 {
+            self.reclaimed_epoch = self.reclaimed_epoch.saturating_add(1);
+        }
+        reclaimed
+    }
+
+    fn sweep_string_slots(
+        &mut self,
+        cursor: &mut usize,
+        budget: usize,
+        finishes_sweep: bool,
+    ) -> u64 {
         let live = self.bytes.live_len();
         if live >= 1024
             && *cursor == self.bytes.len()

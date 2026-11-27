@@ -4,13 +4,21 @@
 use super::*;
 use crate::memory::{Shared, text::Text};
 use crate::parser::{NativeRootEvent, RootText};
-use std::sync::atomic::AtomicU64;
+use crate::table::ParserTableLayout;
+use std::{
+    ops::Range,
+    sync::{
+        Mutex,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+    },
+};
 
 const MIN_PREFIX: usize = 64;
 const MAX_ENTRIES: usize = 24;
 const MAX_BATCHES: usize = 256;
 const MAX_EVENT_BYTES: usize = 128 * 1024;
 const MAX_CACHE_BYTES: usize = 4 * 1024 * 1024;
+const MAX_LAYOUT_BYTES: usize = 128 * 1024;
 
 #[derive(Debug)]
 struct Interval {
@@ -18,12 +26,41 @@ struct Interval {
     nesting: usize,
     closed: bool,
     events: Box<[RecordedEvent]>,
+    segments: Box<[RootSegment]>,
 }
 
 #[derive(Debug)]
 struct RecordedEvent {
     event: NativeRootEvent,
     string_hint: AtomicU64,
+}
+
+#[derive(Debug)]
+pub(in crate::vm) struct RootSegment {
+    pub range: Range<usize>,
+    pub exact: bool,
+    pub snapshot: Mutex<Option<RootSegmentSnapshot>>,
+}
+
+#[derive(Debug)]
+pub(in crate::vm) struct RootSegmentSnapshot {
+    pub layout: Option<ParserTableLayout>,
+    pub strings: Box<[StringId]>,
+    pub anchors: Box<[StringId]>,
+    pub count_before: usize,
+    pub count_after: usize,
+    pub reclaimed_epoch: u64,
+}
+
+impl RootSegmentSnapshot {
+    pub fn heap_bytes(&self) -> usize {
+        size_of_val(&*self.strings)
+            + size_of_val(&*self.anchors)
+            + self
+                .layout
+                .as_ref()
+                .map_or(0, ParserTableLayout::heap_bytes)
+    }
 }
 
 #[derive(Debug)]
@@ -37,28 +74,88 @@ pub(in crate::vm) struct Plan {
     program: Shared<ProgramData>,
     target: (usize, usize),
     bytes: usize,
+    layout_bytes: AtomicUsize,
 }
 
 impl Plan {
+    pub fn segments(&self, interval: usize) -> &[RootSegment] {
+        &self.intervals[interval].segments
+    }
+
+    pub fn event_count(&self, interval: usize) -> usize {
+        self.intervals[interval].events.len()
+    }
+
+    pub fn layout_budget(&self) -> usize {
+        MAX_LAYOUT_BYTES - self.layout_bytes.load(Ordering::Relaxed)
+    }
+
+    pub fn note_layout(&self, bytes: usize) {
+        self.layout_bytes.fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    pub fn forget_layout(&self, bytes: usize) {
+        self.layout_bytes.fetch_sub(bytes, Ordering::Relaxed);
+    }
+
     pub(in crate::vm) fn events(
         &self,
         interval: usize,
+        range: Range<usize>,
     ) -> impl Iterator<Item = (&NativeRootEvent, Option<&AtomicU64>)> {
-        self.intervals[interval].events.iter().map(|saved| {
+        self.intervals[interval].events[range].iter().map(|saved| {
             // The replay checks every byte except the preamble number.
-            let hint = match &saved.event {
-                NativeRootEvent::Anchor(RootText::Source { start, end })
-                | NativeRootEvent::ConstantText(RootText::Source { start, end })
-                    if (*start as usize) < self.digits.end
-                        && (*end as usize) > self.digits.start =>
-                {
-                    None
-                }
-                _ => Some(&saved.string_hint),
-            };
+            let hint = exact_text(&saved.event, &self.digits).then_some(&saved.string_hint);
             (&saved.event, hint)
         })
     }
+}
+
+fn exact_text(event: &NativeRootEvent, digits: &Range<usize>) -> bool {
+    match event {
+        NativeRootEvent::Anchor(RootText::Source { start, end })
+        | NativeRootEvent::ConstantText(RootText::Source { start, end }) => {
+            *start as usize >= digits.end || *end as usize <= digits.start
+        }
+        _ => true,
+    }
+}
+
+fn table_event(event: &NativeRootEvent) -> bool {
+    matches!(
+        event,
+        NativeRootEvent::Anchor(_)
+            | NativeRootEvent::Constant(_)
+            | NativeRootEvent::ConstantText(_)
+    )
+}
+
+fn record_segments(
+    events: &[NativeRootEvent],
+    digits: &Range<usize>,
+) -> Option<Box<[RootSegment]>> {
+    let mut segments = Vec::new();
+    let mut next = 0;
+    while next < events.len() {
+        let start = next;
+        if !table_event(&events[next]) {
+            next += 1;
+            continue;
+        }
+        let mut exact = true;
+        while next < events.len() && table_event(&events[next]) {
+            exact &= exact_text(&events[next], digits);
+            next += 1;
+        }
+        segments
+            .try_push(RootSegment {
+                range: start..next,
+                exact,
+                snapshot: Mutex::new(None),
+            })
+            .ok()?;
+    }
+    segments.try_into_boxed_slice().ok()
 }
 
 #[derive(Debug)]
@@ -219,12 +316,17 @@ impl Recording {
                 string_hint: AtomicU64::new(0),
             });
         }
+        let segments = record_segments(events, &self.preamble.digits)
+            .filter(|segments| size_of_val(&**segments) <= MAX_EVENT_BYTES - bytes)
+            .unwrap_or_default();
+        let bytes = bytes + size_of_val(&*segments);
         self.intervals
             .try_push(Interval {
                 end: source.len(),
                 nesting,
                 closed,
                 events: saved.try_into_boxed_slice().ok()?,
+                segments,
             })
             .ok()?;
         self.bytes = bytes;
@@ -379,6 +481,7 @@ impl Cache {
                 program: program.data.clone(),
                 target,
                 bytes,
+                layout_bytes: AtomicUsize::new(0),
             },
             Memory::default(),
         ) else {
@@ -458,5 +561,86 @@ mod tests {
         assert!(hidden_first_constant(first, 11.0));
         assert_eq!(code[0], code[1]);
         assert_ne!(code[1], code[2]);
+    }
+
+    #[test]
+    fn replayed_root_layouts_keep_order_and_reader_array_writes() {
+        let program = crate::compile(
+            br#"
+            return function(sequence, edit, name)
+                local blocks = {
+                    "local function sequence() return " .. sequence .. " end\n" ..
+                    "-- make room for the first packet prefix match\nlocal stable = 6\n",
+                    "local alpha = 1; local beta = 2; local gamma = 3\n",
+                    "local delta = 4; local epsilon = 'value'; local zeta = 7\n",
+                    "return sequence() + alpha + gamma + zeta\n",
+                }
+                local offset, first, seen = 0, nil, {}
+                local loaded = assert(load(function()
+                    offset = offset + 1
+                    if offset > 1 then
+                        local _, root = debug.getlocal(2, 4)
+                        assert(type(root) == 'table')
+                        first = first or root
+                        assert(first == root)
+                        if edit and offset == 3 then
+                            assert(rawget(root, 1) ~= nil)
+                            rawset(root, 1, 999)
+                        elseif edit and offset > 3 then
+                            assert(rawget(root, 1) == 999)
+                        end
+                        for k, v in pairs(root) do
+                            seen[#seen + 1] = type(k) .. ':' .. tostring(k) .. '=' .. tostring(v)
+                        end
+                        seen[#seen + 1] = ';'
+                    end
+                    return blocks[offset]
+                end, name))
+                return table.concat(seen, '|'), loaded
+            end
+            "#,
+        )
+        .unwrap();
+        for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+            let callback = vm.execute(&program).unwrap()[0];
+            let callback = vm.pin(callback).unwrap();
+            let run = |vm: &mut Vm, sequence: f64, edit, name: &[u8]| {
+                let name = vm.try_intern(name).unwrap();
+                let [Value::String(log), loaded] = *vm
+                    .call(
+                        vm.rooted(callback).unwrap(),
+                        &[Value::Number(sequence), Value::Boolean(edit), name],
+                    )
+                    .unwrap()
+                else {
+                    panic!("expected observations and a loaded chunk");
+                };
+                let log = vm.string_bytes(log).unwrap().to_vec();
+                assert_eq!(
+                    vm.call(loaded, &[]).unwrap(),
+                    &[Value::Number(sequence + 11.0)]
+                );
+                log
+            };
+            run(&mut vm, 11.0, false, b"@warm-roots");
+            run(&mut vm, 12.0, false, b"@warm-roots");
+            assert!(
+                vm.compile_spare.reader_intervals.plans[0]
+                    .intervals
+                    .iter()
+                    .flat_map(|interval| &interval.segments)
+                    .any(|segment| segment
+                        .snapshot
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .is_some_and(|s| s.layout.is_some()))
+            );
+            let edited = run(&mut vm, 13.0, true, b"@warm-roots");
+            assert_eq!(edited, run(&mut vm, 13.0, true, b"@cold-edited"));
+            vm.collect_garbage().unwrap();
+            let unedited = run(&mut vm, 14.0, false, b"@warm-roots");
+            assert_eq!(unedited, run(&mut vm, 14.0, false, b"@cold-clean"));
+        }
     }
 }

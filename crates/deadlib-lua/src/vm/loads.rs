@@ -8,7 +8,7 @@ mod constructor_templates;
 mod eof;
 mod literal_tables;
 mod reader;
-mod reader_intervals;
+pub(super) mod reader_intervals;
 mod source_templates;
 
 /// A genuine, non-callable collector object for an unfinished/retained prototype.

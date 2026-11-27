@@ -327,6 +327,9 @@ impl<T> Arena<T> {
     pub fn protect_new(&mut self, enabled: bool) {
         self.protect_new = enabled;
     }
+    pub fn preserves_new_references(&self) -> bool {
+        self.protect_new
+    }
     pub fn preserve_new_reference(&mut self, key: u64) {
         if self.protect_new {
             self.mark(key);

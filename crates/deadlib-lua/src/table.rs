@@ -2,6 +2,7 @@
 
 mod native51;
 pub(crate) mod sort;
+use crate::memory::fallible::SliceExt;
 use crate::memory::{Buffer, Memory, Unique};
 use crate::{
     Error, ErrorKind, FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value,
@@ -345,6 +346,32 @@ static EMPTY_HASH: HashPart = HashPart {
     next_hash_hint: AtomicU64::new(0),
 };
 
+/// The physical table layout at a parser replay boundary. The VM validates
+/// string identities before publishing it in another table.
+#[derive(Debug)]
+pub(crate) struct ParserTableLayout {
+    array: Box<[Value]>,
+    entries: Box<[Entry]>,
+    slots: Box<[u32]>,
+    last_free: u32,
+    fields_version: u32,
+}
+
+impl ParserTableLayout {
+    pub(crate) fn heap_bytes(&self) -> usize {
+        std::mem::size_of_val(&*self.array)
+            + std::mem::size_of_val(&*self.entries)
+            + std::mem::size_of_val(&*self.slots)
+    }
+
+    pub(crate) fn string_ids(&self) -> impl Iterator<Item = StringId> + Clone + '_ {
+        self.entries.iter().filter_map(|entry| match entry.key {
+            Key::String(id) => Some(id),
+            _ => None,
+        })
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct Table {
     array: ArrayStorage,
@@ -363,6 +390,9 @@ pub(crate) struct Table {
     pub trace: TableTrace,
     // The second block is meaningful only while the first block is dirty.
     array_watch_second: u8,
+    // A reader replay can restore this after applying its own events.
+    // Mutations between reader boundaries clear it.
+    parser_pristine: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -385,6 +415,7 @@ impl Table {
             array_watch: 0,
             trace: TableTrace::Idle,
             array_watch_second: 0,
+            parser_pristine: false,
         }
     }
     #[cfg(test)]
@@ -476,12 +507,14 @@ impl Table {
         (self.metatable != 0).then_some(TableId(self.metatable))
     }
     pub fn set_metatable(&mut self, table: Option<TableId>) {
+        self.parser_pristine = false;
         self.metatable = table.map_or(0, |id| id.0);
     }
     pub fn host_state(&self) -> Option<TableId> {
         (self.host_state != 0).then_some(TableId(self.host_state))
     }
     pub fn set_host_state(&mut self, table: Option<TableId>) {
+        self.parser_pristine = false;
         self.host_state = table.map_or(0, |id| id.0);
     }
     /// A counter that changes whenever an entry outside the array part is
@@ -496,6 +529,7 @@ impl Table {
         self.advance_fields_version(1);
     }
     pub(crate) fn advance_fields_version(&mut self, writes: u32) {
+        self.parser_pristine = false;
         self.fields_version = self.fields_version.wrapping_add(writes);
     }
     pub(crate) fn array_change(&self) -> ArrayChange {
@@ -520,10 +554,12 @@ impl Table {
     }
     #[inline]
     fn touch_array(&mut self) {
+        self.parser_pristine = false;
         self.array_watch = 0;
     }
     #[inline]
     fn touch_array_at(&mut self, index: usize) {
+        self.parser_pristine = false;
         let first = self.array_watch;
         if first != 0 {
             let Ok(block) = u8::try_from(index / ARRAY_WATCH_BLOCK + 2) else {
@@ -549,6 +585,76 @@ impl Table {
                     + part.entries.capacity() * size_of::<Entry>()
                     + part.slots.capacity() * size_of::<u32>()
             })
+    }
+    pub(crate) fn parser_pristine(&self) -> bool {
+        self.parser_pristine
+    }
+
+    pub(crate) fn mark_parser_pristine(&mut self) {
+        self.parser_pristine = true;
+    }
+
+    pub(crate) fn clear_parser_pristine(&mut self) {
+        self.parser_pristine = false;
+    }
+
+    pub(crate) fn capture_parser_layout(&self, limit: usize) -> Option<ParserTableLayout> {
+        let part = self.hash_part();
+        let bytes =
+            size_of_val(&*self.array) + size_of_val(&*part.entries) + size_of_val(&*part.slots);
+        if bytes > limit
+            || !self.array.iter().copied().all(array_scalar)
+            || !part.entries.iter().all(|entry| {
+                matches!(
+                    entry.key,
+                    Key::Vacant | Key::Boolean(_) | Key::Number(_) | Key::String(_)
+                ) && array_scalar(entry.value)
+            })
+        {
+            return None;
+        }
+        Some(ParserTableLayout {
+            array: self.array.try_boxed().ok()?,
+            entries: part.entries.try_boxed().ok()?,
+            slots: part.slots.try_boxed().ok()?,
+            last_free: part.last_free,
+            fields_version: self.fields_version,
+        })
+    }
+
+    pub(crate) fn install_parser_layout(
+        &mut self,
+        layout: &ParserTableLayout,
+    ) -> Result<(), Error> {
+        debug_assert!(self.parser_pristine);
+        // If a reservation fails, the original contents remain available
+        // for ordinary replay. Commit only after all storage is ready.
+        let array = self.array.heap_mut();
+        array.try_reserve(layout.array.len().saturating_sub(array.len()))?;
+        if !layout.slots.is_empty() {
+            let part = self.ensure_hash_part()?;
+            part.entries
+                .try_reserve(layout.entries.len().saturating_sub(part.entries.len()))?;
+            part.slots
+                .try_reserve(layout.slots.len().saturating_sub(part.slots.len()))?;
+            part.entries.clear();
+            part.entries.extend_from_slice(&layout.entries);
+            part.slots.clear();
+            part.slots.extend_from_slice(&layout.slots);
+            part.last_free = layout.last_free;
+            part.native_dead_keys = 0;
+            part.next_hash_hint.store(0, Ordering::Relaxed);
+        } else {
+            self.hash = None;
+        }
+        let array = self.array.heap_mut();
+        array.clear();
+        array.extend_from_slice(&layout.array);
+        self.fields_version = layout.fields_version;
+        self.invalidate_trace();
+        self.touch_array();
+        self.mark_parser_pristine();
+        Ok(())
     }
     #[cfg(test)]
     pub fn pairs(&self) -> impl Iterator<Item = (Value, Value)> + '_ {
