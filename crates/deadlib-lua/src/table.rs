@@ -432,6 +432,8 @@ pub(crate) struct Table {
     host_state: u64,
     // Counts changes to keyed entries; see `fields_version`.
     fields_version: u32,
+    // A raw absence can only be invalidated by making a string key live.
+    string_keys_added: u32,
     // Zero invalidates the watch, one is clean, and higher values identify
     // the first dirty block plus two.
     array_watch: u8,
@@ -460,6 +462,7 @@ impl Table {
             metatable: 0,
             host_state: 0,
             fields_version: 0,
+            string_keys_added: 0,
             array_watch: 0,
             trace: TableTrace::Idle,
             array_watch_second: 0,
@@ -643,6 +646,13 @@ impl Table {
     pub fn fields_version(&self) -> u32 {
         self.fields_version
     }
+    pub(crate) fn string_keys_added(&self) -> u32 {
+        self.string_keys_added
+    }
+    #[inline]
+    fn note_string_key_added(&mut self) {
+        self.string_keys_added = self.string_keys_added.saturating_add(1);
+    }
     #[inline]
     fn touch_fields(&mut self) {
         self.advance_fields_version(1);
@@ -771,6 +781,7 @@ impl Table {
         array.clear();
         array.extend_from_slice(&layout.array);
         self.fields_version = layout.fields_version;
+        self.note_string_key_added();
         self.invalidate_trace();
         self.touch_array();
         self.mark_parser_pristine();
@@ -1485,6 +1496,12 @@ impl Table {
         }
         let vacant = match self.slot(k) {
             Some((_, Some(i))) => {
+                if matches!(k, Key::String(_))
+                    && value != Value::Nil
+                    && self.hash_part().entries[i].value == Value::Nil
+                {
+                    self.note_string_key_added();
+                }
                 self.hash_part_mut().entries[i].value = value;
                 self.touch_fields();
                 if matches!(k, Key::String(_)) {
@@ -1545,6 +1562,7 @@ impl Table {
         });
         self.touch_fields();
         if matches!(k, Key::String(_)) {
+            self.note_string_key_added();
             self.remember_hash_entry(index);
         }
         Ok(())

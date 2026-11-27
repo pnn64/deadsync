@@ -235,6 +235,9 @@ fn read_actor(call: &mut HostCall<'_>, actor: TableId, query: Query) -> Result<A
     Ok(match query {
         Query::Active => Answer::Active(active(call, actor)?),
         Query::Motion(clock, include_spin) => {
+            if has_default_motion(call, actor, include_spin)? {
+                return Ok(Answer::Motion(None, None));
+            }
             let time = effect_time(call, actor, clock)?;
             let spin = if include_spin {
                 render_spin(call, actor)?
@@ -262,6 +265,45 @@ fn read_actor(call: &mut HostCall<'_>, actor: TableId, query: Query) -> Result<A
         }
     })
 }
+// New raw fields invalidate cached absence. Native effects can change
+// independently of the Lua table.
+fn has_default_motion(
+    call: &mut HostCall<'_>,
+    id: TableId,
+    include_spin: bool,
+) -> Result<bool, Error> {
+    use deadlib_present::anim::EffectMode;
+    let store = call.store_ref();
+    let Some(actor) = store.actors.get(&id) else {
+        return Ok(false);
+    };
+    let render = &actor.state.render;
+    if render.rainbow
+        || !matches!(render.effect_mode, EffectMode::None | EffectMode::Spin)
+        || (include_spin && actor.effects.spin_baked)
+    {
+        return Ok(false);
+    }
+    let absent_at = actor.motion_mirrors_absent_at;
+    let version = call.raw_string_keys_added(id)?;
+    if version != u32::MAX && absent_at == Some(version) {
+        return Ok(true);
+    }
+
+    let absent = call.raw_table_get_static(id, Field::STATE_RAINBOW.name().as_bytes())?
+        == Value::Nil
+        && call.raw_table_get_static(id, Field::STATE_EFFECT_MODE.name().as_bytes())? == Value::Nil
+        && call.raw_table_get_static(id, Field::STATE_SPIN.name().as_bytes())? == Value::Nil;
+    if absent {
+        call.store()
+            .actors
+            .get_mut(&id)
+            .unwrap()
+            .motion_mirrors_absent_at = Some(version);
+    }
+    Ok(absent)
+}
+
 fn boolean(call: &HostCall<'_>, value: Value) -> Result<Option<bool>, Error> {
     match value {
         Value::Nil => Ok(None),
@@ -846,6 +888,28 @@ mod tests {
                 panic!("motion answer")
             };
             assert_eq!(time, expected);
+        }
+        for (source, expected) in [
+            ("", None),
+            (
+                "actor.__songlua_state_spin={baked=true,rotation={2,3,4}}",
+                Some([2., 3., 4.]),
+            ),
+            ("actor.__songlua_state_spin=nil", None),
+            (
+                "actor.__songlua_state_spin={baked=true,rotation={5,6,7}}",
+                Some([5., 6., 7.]),
+            ),
+        ] {
+            execute(&mut runtime, source);
+            let Answer::Motion(_, spin) = runtime
+                .actors
+                .chronological_read(&mut runtime.vm, actor, Query::Motion([10., 20.], true))
+                .unwrap()
+            else {
+                panic!("motion answer")
+            };
+            assert_eq!(spin, expected, "{source}");
         }
         runtime.actors.release(&mut runtime.vm, scene).unwrap();
     }

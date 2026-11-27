@@ -203,11 +203,13 @@ impl Table {
                     if self.hash_part().entries[index].value != Value::Nil && key.dead().is_some() {
                         self.hash_part_mut().native_dead_keys += 1;
                     }
-                } else if self.hash_part().native_dead_keys != 0
-                    && self.hash_part().entries[index].value == Value::Nil
-                    && key.dead().is_some()
-                {
-                    self.hash_part_mut().native_dead_keys -= 1;
+                } else if self.hash_part().entries[index].value == Value::Nil {
+                    if self.hash_part().native_dead_keys != 0 && key.dead().is_some() {
+                        self.hash_part_mut().native_dead_keys -= 1;
+                    }
+                    if matches!(key, Key::String(_)) {
+                        self.note_string_key_added();
+                    }
                 }
                 self.hash_part_mut().entries[index].value = value;
                 self.touch_fields();
@@ -283,6 +285,9 @@ impl Table {
         self.touch_fields();
         self.invalidate_trace();
         if matches!(key, Key::String(_)) {
+            if value != Value::Nil {
+                self.note_string_key_added();
+            }
             self.remember_hash_entry(position as u32 + 1);
         }
         Ok(())

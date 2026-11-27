@@ -2,6 +2,50 @@ use super::*;
 use crate::compile;
 
 #[test]
+fn raw_string_absence_survives_overwrites_and_expires_on_reinsertion() {
+    fn version(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let [Value::Table(table)] = *call.arguments() else {
+            unreachable!()
+        };
+        let value = f64::from(call.raw_string_keys_added(table)?);
+        call.push(Value::Number(value))
+    }
+
+    let program = compile(
+        br#"
+        local actor = {}
+        local empty = version(actor)
+        rawset(actor, 'mode', nil)
+        assert(version(actor) == empty)
+        rawset(actor, 'mode', 'bob')
+        local added = version(actor)
+        assert(added > empty)
+        rawset(actor, 'mode', false)
+        for i = 1, 64 do rawset(actor, i, i) end
+        assert(version(actor) == added)
+        assert(rawget(actor, 'mode') == false)
+        rawset(actor, 'mode', nil)
+        collectgarbage('collect')
+        assert(version(actor) == added and rawget(actor, 'mode') == nil)
+        rawset(actor, 'mode', 'spin')
+        assert(version(actor) > added)
+    "#,
+    )
+    .unwrap();
+
+    for native in [false, true] {
+        let mut vm = if native {
+            Vm::try_new_with_lua51_table_order().unwrap()
+        } else {
+            Vm::new()
+        };
+        let callback = vm.new_host_function(version, &[]).unwrap();
+        vm.set_global(b"version", callback).unwrap();
+        vm.execute(&program).unwrap();
+    }
+}
+
+#[test]
 fn bound_number_fields_preserve_raw_writes_across_layouts_and_vms() {
     use std::sync::{Arc, Mutex};
 

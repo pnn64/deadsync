@@ -1749,6 +1749,19 @@ impl HostCall<'_> {
         Ok(self.vm.tables[slot_index(table.0)].fields_version())
     }
 
+    /// Track previously absent raw string fields for the same table handle.
+    /// A change can mark a string key becoming present or a table layout
+    /// being restored. An unchanged counter below `u32::MAX` means previously
+    /// absent raw string keys are still absent.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid or collected table handle.
+    #[inline]
+    pub fn raw_string_keys_added(&self, table: TableId) -> Result<u32, Error> {
+        self.vm.validate_value(Value::Table(table))?;
+        Ok(self.vm.tables[slot_index(table.0)].string_keys_added())
+    }
+
     /// Read a field named by a literal without invoking metamethods. The
     /// name is found as [`Vm::intern_static`] finds it.
     ///

@@ -172,6 +172,7 @@ struct Actor {
     raw_instance: bool,
     model_materials: Vec<Option<crate::model_texture::Clock>>,
     known: fields::Known,
+    motion_mirrors_absent_at: Option<u32>,
     baked_capture_reset: Option<function_capture::ResetVersion>,
 }
 struct TemplateState {
@@ -263,6 +264,7 @@ impl Actor {
             raw_instance: false,
             model_materials: Vec::new(),
             known: fields::Known::default(),
+            motion_mirrors_absent_at: None,
             baked_capture_reset: None,
         }
     }
