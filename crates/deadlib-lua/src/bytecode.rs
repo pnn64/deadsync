@@ -362,9 +362,11 @@ pub(crate) enum RegisterMaps {
 }
 
 impl RegisterMaps {
+    const PREFIX_CAPACITY: usize = 65;
+
     pub(crate) fn prefix(start: u8, len: u8) -> &'static [[u64; 4]] {
-        static MASKS: [[u64; 4]; 65] = {
-            let mut masks = [[0; 4]; 65];
+        static MASKS: [[u64; 4]; RegisterMaps::PREFIX_CAPACITY] = {
+            let mut masks = [[0; 4]; RegisterMaps::PREFIX_CAPACITY];
             let mut n = 1;
             while n < masks.len() {
                 masks[n][0] = u64::MAX >> (64 - n);
@@ -374,6 +376,28 @@ impl RegisterMaps {
         };
         let start = usize::from(start);
         &MASKS[start..start + usize::from(len)]
+    }
+
+    fn verified_len(&self, registers: u16) -> Option<usize> {
+        match self {
+            &Self::Prefix { start, len } => {
+                // Each mask is a prefix of the next, so check the largest.
+                let len = usize::from(len);
+                let end = usize::from(start) + len;
+                (end <= Self::PREFIX_CAPACITY && (len == 0 || end - 1 <= usize::from(registers)))
+                    .then_some(len)
+            }
+            Self::Owned(maps) => {
+                let invalid = maps.iter().any(|mask| {
+                    // Any live bit at or above the register count is invalid.
+                    mask.iter().enumerate().any(|(word, &bits)| {
+                        let valid = usize::from(registers).saturating_sub(word * 64);
+                        valid < 64 && bits >> valid != 0
+                    })
+                });
+                (!invalid).then_some(maps.len())
+            }
+        }
     }
 
     pub(crate) fn heap_bytes(&self) -> usize {
@@ -1074,6 +1098,9 @@ impl Prototype {
                 message,
             )
         };
+        let Some(gc_map_count) = self.gc_maps.verified_len(self.registers) else {
+            return Err(fail(0, "invalid program layout"));
+        };
         if self.registers > 256
             || self.debug.stack > self.registers
             || self.registers == 0
@@ -1084,15 +1111,8 @@ impl Prototype {
             })
             || self.metadata.len() != self.code.len()
             || self.metadata.iter().any(|m| {
-                (m.gc_live as u16 as usize) >= self.gc_maps.len()
-                    || ((m.gc_live >> 16) as usize) >= self.gc_maps.len()
-            })
-            || self.gc_maps.iter().any(|mask| {
-                // Any live bit at or above the register count is invalid.
-                mask.iter().enumerate().any(|(word, &bits)| {
-                    let valid = usize::from(self.registers).saturating_sub(word * 64);
-                    valid < 64 && bits >> valid != 0
-                })
+                (m.gc_live as u16 as usize) >= gc_map_count
+                    || ((m.gc_live >> 16) as usize) >= gc_map_count
             })
             || self.code.is_empty()
             || self.constants().iter().any(|constant| {
@@ -1410,6 +1430,20 @@ mod tests {
         assert!(matches!(maps, RegisterMaps::Owned(_)));
         assert!(maps.iter().any(|map| map[1] != 0));
         wide.verify().unwrap();
+    }
+
+    #[test]
+    fn verifier_rejects_invalid_register_prefix_descriptors() {
+        for (start, len) in [(64, 2), (0, 65), (0, 0)] {
+            let mut program = crate::compile(b"return 42").unwrap();
+            let data = program.data_mut();
+            data.prototypes[data.entry as usize].gc_maps = RegisterMaps::Prefix { start, len };
+            assert_eq!(program.verify().unwrap_err().kind(), ErrorKind::Bytecode);
+        }
+        assert_eq!(
+            RegisterMaps::Prefix { start: 63, len: 2 }.verified_len(64),
+            Some(2)
+        );
     }
 
     #[test]
