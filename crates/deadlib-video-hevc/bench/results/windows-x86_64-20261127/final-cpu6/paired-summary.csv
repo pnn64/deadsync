@@ -1,0 +1,3 @@
+clip,rounds,median_cycle_ratio,min_cycle_ratio,max_cycle_ratio,median_throughput_ratio
+bg,9,1.003994,0.9809,1.015791,0.996022
+main,9,0.952865,0.927035,0.965481,1.049467
