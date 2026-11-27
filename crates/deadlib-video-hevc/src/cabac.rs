@@ -73,40 +73,25 @@ impl<'a> CabacReader<'a> {
     #[inline]
     fn refill2(&mut self) {
         let i = self.low.trailing_zeros().wrapping_sub(CABAC_BITS);
-
-        let b0 = if self.pos < self.data.len() {
-            self.data[self.pos]
-        } else {
-            0
-        };
-        let b1 = if self.pos + 1 < self.data.len() {
-            self.data[self.pos + 1]
-        } else {
-            0
-        };
-        let x = (b0 as u32) << 9 | (b1 as u32) << 1;
-        let x = x.wrapping_sub(CABAC_MASK);
+        let x = self.refill_value();
         self.low = self.low.wrapping_add(x << i);
-        self.pos += 2;
     }
 
     /// Refill used by bypass / terminate paths (single renormalization step).
     #[inline]
     fn refill(&mut self) {
-        let b0 = if self.pos < self.data.len() {
-            self.data[self.pos]
-        } else {
-            0
+        self.low = self.low.wrapping_add(self.refill_value());
+    }
+
+    #[inline]
+    fn refill_value(&mut self) -> u32 {
+        let bytes = match self.data.get(self.pos..) {
+            Some([hi, lo, ..]) => u16::from_be_bytes([*hi, *lo]),
+            Some([hi]) => u16::from_be_bytes([*hi, 0]),
+            _ => 0,
         };
-        let b1 = if self.pos + 1 < self.data.len() {
-            self.data[self.pos + 1]
-        } else {
-            0
-        };
-        self.low = self.low.wrapping_add((b0 as u32) << 9);
-        self.low = self.low.wrapping_add((b1 as u32) << 1);
-        self.low = self.low.wrapping_sub(CABAC_MASK);
         self.pos += 2;
+        (u32::from(bytes) << 1).wrapping_sub(CABAC_MASK)
     }
 
     /// Decode a context-coded bin (HEVC spec 9.3.4.3.2). Returns 0 or 1 and
@@ -155,12 +140,9 @@ impl<'a> CabacReader<'a> {
             self.refill();
         }
         let range = self.range << (CABAC_BITS + 1);
-        if self.low < range {
-            0
-        } else {
-            self.low = self.low.wrapping_sub(range);
-            1
-        }
+        let bin = u32::from(self.low >= range);
+        self.low = self.low.wrapping_sub(range & bin.wrapping_neg());
+        bin
     }
 
     /// Alignment prior to aligned bypass decoding (spec 9.3.4.3.6, used with

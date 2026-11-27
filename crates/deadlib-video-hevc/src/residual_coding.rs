@@ -286,20 +286,6 @@ fn decode_coded_sub_block_flag(
     cabac.decode_bin(&mut contexts.state[ctx::SIGNIFICANT_COEFF_GROUP_FLAG + inc])
 }
 
-/// Decode `sig_coeff_flag` for `(x_c, y_c)` within the sub-block, using the
-/// pre-computed `ctx_idx_map` and `scf_offset` (HEVC spec 9.3.4.2.5).
-fn decode_sig_coeff_flag(
-    cabac: &mut CabacReader,
-    contexts: &mut CabacContexts,
-    x_c: u8,
-    y_c: u8,
-    scf_offset: usize,
-    ctx_idx_map: &[u8; 16],
-) -> u32 {
-    let inc = ctx_idx_map[((y_c as usize) << 2) + x_c as usize] as usize + scf_offset;
-    cabac.decode_bin(&mut contexts.state[ctx::SIGNIFICANT_COEFF_FLAG + inc])
-}
-
 /// Decode `sig_coeff_flag` at the (0, 0) position of a sub-block — uses just
 /// the per-component DC context, no map.
 fn decode_sig_coeff_flag_dc(
@@ -417,6 +403,28 @@ const SIG_CTX_IDX_MAP: [u8; 5 * 16] = [
     2, 1, 0, 0, 2, 1, 0, 0, 2, 1, 0, 0, 2, 1, 0, 0,
     // default (prev_sig_group_pattern == 3)
     2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+];
+
+/// Context increments indexed by scan position for each sub-block pattern.
+const fn scan_significance_contexts(x: [u8; 16], y: [u8; 16]) -> [[u8; 16]; 5] {
+    let mut contexts = [[0; 16]; 5];
+    let mut pattern = 0;
+    while pattern < contexts.len() {
+        let mut position = 0;
+        while position < 16 {
+            let xy = 4 * y[position] as usize + x[position] as usize;
+            contexts[pattern][position] = SIG_CTX_IDX_MAP[16 * pattern + xy];
+            position += 1;
+        }
+        pattern += 1;
+    }
+    contexts
+}
+
+const SCAN_SIG_CONTEXTS: [[[u8; 16]; 5]; 3] = [
+    scan_significance_contexts(DIAG_SCAN_4X4_X, DIAG_SCAN_4X4_Y),
+    scan_significance_contexts(HORIZ_SCAN_4X4_X, HORIZ_SCAN_4X4_Y),
+    scan_significance_contexts(VERT_SCAN_4X4_X, VERT_SCAN_4X4_Y),
 ];
 
 // ---- Main residual_coding entry point ---------------------------------------
@@ -636,6 +644,7 @@ pub fn decode_residual_coding(
     }
     num_coeff += 1;
     let num_last_subset = ((num_coeff - 1) >> 4) as usize;
+    let scan_sig_contexts = &SCAN_SIG_CONTEXTS[scan_idx as usize];
 
     // Spec 8.6.3: the QP used for dequantization includes the bit-depth
     // offset: qP = qPY + QpBdOffsetY (luma) or qP = qPC + QpBdOffsetC (chroma).
@@ -753,15 +762,12 @@ pub fn decode_residual_coding(
             }
             if single_sig_ctx {
                 // Every position maps to 2: contexts 42 (luma) / 43 (chroma).
-                ctx_idx_map_p = (&SIG_CTX_IDX_MAP[64..80]).try_into().unwrap();
+                ctx_idx_map_p = &scan_sig_contexts[4];
                 scf_offset = if c_idx == 0 { 40 } else { 41 };
             } else if log2_trafo_size == 2 {
-                ctx_idx_map_p = (&SIG_CTX_IDX_MAP[0..16]).try_into().unwrap();
+                ctx_idx_map_p = &scan_sig_contexts[0];
             } else {
-                let map_idx = ((prev_sig + 1) << 4) as usize;
-                ctx_idx_map_p = (&SIG_CTX_IDX_MAP[map_idx..map_idx + 16])
-                    .try_into()
-                    .unwrap();
+                ctx_idx_map_p = &scan_sig_contexts[prev_sig as usize + 1];
                 if c_idx == 0 {
                     if x_cg > 0 || y_cg > 0 {
                         scf_offset += 3;
@@ -779,17 +785,19 @@ pub fn decode_residual_coding(
             }
 
             // Iterate scan positions n_end_initial..=1, decoding sig_coeff_flag.
-            let mut n = n_end_initial;
-            while n > 0 {
-                let x_c = scan_x_off[n as usize];
-                let y_c = scan_y_off[n as usize];
-                if decode_sig_coeff_flag(cabac, contexts, x_c, y_c, scf_offset, ctx_idx_map_p) != 0
-                {
-                    significant_coeff_flag_idx[nb_significant_coeff_flag as usize] = n as u8;
-                    nb_significant_coeff_flag += 1;
-                    implicit_non_zero_coeff = false;
-                }
-                n -= 1;
+            let state = &mut contexts.state[ctx::SIGNIFICANT_COEFF_FLAG + scf_offset..];
+            for (n, &inc) in ctx_idx_map_p
+                .iter()
+                .enumerate()
+                .take(n_end_initial as usize + 1)
+                .skip(1)
+                .rev()
+            {
+                let significant = cabac.decode_bin(&mut state[inc as usize]);
+                // A zero bin leaves this slot available for the next position.
+                significant_coeff_flag_idx[nb_significant_coeff_flag as usize] = n as u8;
+                nb_significant_coeff_flag += significant as u8;
+                implicit_non_zero_coeff &= significant == 0;
             }
 
             // Position 0 (DC of the sub-block).
