@@ -19,6 +19,26 @@ for i = 1, 30 do
     assert(choose(9, source) == 42 and env.stride == 12)
 end
 
+env.choose = choose
+local function read_between(source)
+    return choose(9, source), stride, choose(9, source), stride
+end
+setfenv(read_between, env)
+env.stride = 4
+local first, middle, second, last = read_between(source)
+assert(first == 42 and middle == 12 and second == 11 and last == 36)
+
+local function alias(index, source)
+    local width = source.stride
+    local key = calc.remainder(calc.round(index / stride), width) + 0.5
+    stride = width * stride
+    return source[key]
+end
+setfenv(alias, env)
+env.stride, env[0.5], env[2.5] = 2, 21, 55
+local first, second = alias(9, env), alias(9, env)
+assert(first == 21 and second == 55 and env.stride == 16)
+
 local hits = 0
 local proxy = setmetatable({ width = 3 }, {
     __index = function(_, key)
@@ -29,6 +49,17 @@ local proxy = setmetatable({ width = 3 }, {
 })
 env.stride = 4
 assert(choose(9, proxy) == 42 and hits == 1 and env.stride == 12)
+
+local follower = setmetatable({ width = 3 }, {
+    __index = function(_, key)
+        assert(key == 0.5 and env.stride == 36)
+        hits = hits + 1
+        return 17
+    end,
+})
+env.stride = 4
+local first, second = choose(9, source), choose(9, follower)
+assert(first == 42 and second == 17 and hits == 2 and env.stride == 36)
 
 local rounded = 0
 env.calc.round = function(x)

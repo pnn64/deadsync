@@ -2823,17 +2823,23 @@ impl Vm {
                             continue;
                         }
                         if i.op == Op::Call && i.b != OPEN_ARGS {
-                            if i.c <= 1
+                            if i.b >= 2 && i.c <= 1
                                 && let Value::Function(callee) = self.registers[a]
-                                && self.try_radix_selection(
+                                && let Some(next) = self.try_radix_selection(
                                     &mut radix_cache,
                                     callee,
-                                    a,
-                                    usize::from(i.b),
-                                    c,
+                                    radix_selector::Window {
+                                        code: &prototype.code,
+                                        hints: &mut field_hints,
+                                        caller: function,
+                                        env,
+                                        base,
+                                        next: pc,
+                                    },
                                     error_line,
                                 )
                             {
+                                pc = next;
                                 numeric_checkpoint_ready = self.open_upvalues.is_empty();
                                 continue;
                             }

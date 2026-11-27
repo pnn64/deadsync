@@ -1,6 +1,6 @@
 //! Fuse a guarded quotient/remainder table lookup and scalar state update.
-use super::{FunctionId, StringId, Value, Vm, math, slot_index};
-use crate::bytecode::{Op, RK};
+use super::{Arena, FunctionId, StringId, Table, TableId, Value, Vm, math, simple, slot_index};
+use crate::bytecode::{Instruction, OPEN, OPEN_ARGS, Op, RK};
 
 const REGISTER_LIMIT: usize = 16;
 const NODE_LIMIT: usize = 16;
@@ -258,24 +258,69 @@ impl Cache {
     }
 }
 
+pub(super) struct Window<'a> {
+    pub code: &'a [Instruction],
+    pub hints: &'a mut [[u32; 2]; simple::FIELD_HINTS],
+    pub caller: FunctionId,
+    pub env: TableId,
+    pub base: usize,
+    pub next: usize,
+}
+
+impl Plan {
+    #[inline]
+    fn select(
+        &self,
+        tables: &Arena<Table>,
+        args: &[Value],
+        env: TableId,
+        state: f64,
+        radix_hint: &mut u32,
+    ) -> Option<(Value, f64)> {
+        let (&Value::Table(receiver), &Value::Number(numerator)) =
+            (args.get(self.receiver)?, args.get(self.numerator)?)
+        else {
+            return None;
+        };
+        let table = &tables[slot_index(receiver.0)];
+        let radix = if receiver == env && self.radix_key == self.state_key {
+            state
+        } else {
+            let Value::Number(radix) = table.get_string_cached(self.radix_key, radix_hint) else {
+                return None;
+            };
+            radix
+        };
+        let index = (numerator / state).floor() % radix + self.offset;
+        let result = table.get(Value::Number(index));
+        if result == Value::Nil && table.metatable().is_some() {
+            return None;
+        }
+        let number = if self.state_first {
+            state * radix
+        } else {
+            radix * state
+        };
+        Some((result, number))
+    }
+}
+
 impl Vm {
     #[inline(never)]
     pub(super) fn try_radix_selection(
         &mut self,
         cache: &mut Cache,
         function: FunctionId,
-        call: usize,
-        argc: usize,
-        wanted: usize,
+        window: Window<'_>,
         error_line: &mut u32,
-    ) -> bool {
-        let Some(Cached {
+    ) -> Option<usize> {
+        let Cached {
             plan,
             slots: [radix_hint, math_hint, floor_hint, rem_hint, state_hint],
-        }) = cache.get(self, function)
-        else {
-            return false;
-        };
+        } = cache.get(self, function)?;
+        let first = window.code[window.next - 1];
+        let call = window.base + usize::from(first.a);
+        let argc = usize::from(first.b);
         let frame_count = self.frames.len() + 1;
         if argc <= plan.receiver.max(plan.numerator)
             || frame_count >= self.frames.capacity()
@@ -284,53 +329,104 @@ impl Vm {
             || !self.sort_fast_context()
             || !self.sort_gc_ready()
         {
-            return false;
+            return None;
         }
-        let (Value::Table(receiver), Value::Number(numerator)) = (
-            self.registers[call + 1 + plan.receiver],
-            self.registers[call + 1 + plan.numerator],
-        ) else {
-            return false;
-        };
         let env = self.functions[slot_index(function.0)].env;
         let globals = &self.tables[slot_index(env.0)];
-        let table = &self.tables[slot_index(receiver.0)];
-        let (Value::Number(radix), Value::Number(state), Value::Table(math)) = (
-            table.get_string_cached(plan.radix_key, radix_hint),
+        let (Value::Number(state), Value::Table(math)) = (
             globals.get_string_cached(plan.state_key, state_hint),
             globals.get_string_cached(plan.math_key, math_hint),
         ) else {
-            return false;
+            return None;
         };
         let math = &self.tables[slot_index(math.0)];
         if math.get_string_cached(plan.floor_key, floor_hint) != Value::Native(MATH_FLOOR)
             || math.get_string_cached(plan.remainder_key, rem_hint)
                 != Value::Native(math::MATH_FMOD)
         {
-            return false;
+            return None;
         }
-        let index = (numerator / state).floor() % radix + plan.offset;
-        let result = table.get(Value::Number(index));
-        if result == Value::Nil && table.metatable().is_some() {
-            return false;
-        }
-        let number = if plan.state_first {
-            state * radix
-        } else {
-            radix * state
-        };
+        let (result, mut state) = plan.select(
+            &self.tables,
+            &self.registers[call + 1..call + 1 + argc],
+            env,
+            state,
+            radix_hint,
+        )?;
         if !self.tables[slot_index(env.0)].set_string_scalar_cached(
             plan.state_key,
-            Value::Number(number),
+            Value::Number(state),
             state_hint,
         ) {
-            return false;
+            return None;
         }
-        if wanted != 0 {
+        if first.c != 0 {
             self.registers[call] = result;
         }
-        self.top = call + wanted;
+        self.top = call + first.c as usize;
         *error_line = plan.line;
-        true
+
+        let caller = &self.functions[slot_index(window.caller.0)];
+        let constants = self.programs[caller.program].bound_constants(caller.prototype);
+        let mut pc = window.next;
+        let mut writes = 0u32;
+        // The window never allocates, calls user code, or writes a table.
+        // Keep the one scalar update local and publish it before leaving.
+        loop {
+            let i = window.code[pc];
+            let slot = window.base + usize::from(i.a);
+            match i.op {
+                Op::Move if i.c != OPEN => {
+                    self.registers[slot] = self.registers[window.base + usize::from(i.b)];
+                }
+                Op::Load if i.b == 0 => self.registers[slot] = constants[i.c as usize],
+                Op::Load => {}
+                Op::GetGlobal => {
+                    let Value::String(key) = constants[i.c as usize] else {
+                        break;
+                    };
+                    let value = if window.env == env && key == plan.state_key {
+                        Value::Number(state)
+                    } else {
+                        self.tables[slot_index(window.env.0)]
+                            .get_string_cached(key, &mut window.hints[pc % simple::FIELD_HINTS][0])
+                    };
+                    if value == Value::Nil {
+                        break;
+                    }
+                    self.registers[slot] = value;
+                }
+                Op::Call
+                    if i.c <= 1
+                        && i.b != OPEN_ARGS
+                        && self.registers[slot] == Value::Function(function) =>
+                {
+                    let args = &self.registers[slot + 1..slot + 1 + usize::from(i.b)];
+                    let Some((value, next)) =
+                        plan.select(&self.tables, args, env, state, radix_hint)
+                    else {
+                        break;
+                    };
+                    if i.c != 0 {
+                        self.registers[slot] = value;
+                    }
+                    self.top = slot + i.c as usize;
+                    state = next;
+                    writes += 1;
+                }
+                _ => break,
+            }
+            pc += 1;
+        }
+        if writes != 0 {
+            let globals = &mut self.tables[slot_index(env.0)];
+            assert!(globals.set_string_scalar_cached(
+                plan.state_key,
+                Value::Number(state),
+                state_hint
+            ));
+            globals.advance_fields_version(writes - 1);
+        }
+        Some(pc)
     }
 }
