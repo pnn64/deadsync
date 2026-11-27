@@ -1473,29 +1473,40 @@ fn spatial_cand_available<P: Pixel>(
     mvf.pred_flag != 0
 }
 
-/// Build the merge candidate list for a PU, per HEVC spec 8.5.3.2.2.
+/// Derives the selected merge candidate for a PU (HEVC spec 8.5.3.2.2).
 ///
-/// Returns a `Vec<MvField>` of length `max_num_merge_cand`.  The caller
-/// selects `candidates[merge_idx]` and writes it to `tab_mvf`.
+/// Only the four candidates before the selected index can be needed for
+/// duplicate checks and B-slice combinations.
 ///
 /// `single_mcl_flag` is set when `log2_parallel_merge_level > 2` and
 /// `cb_size == 8`; in that case the candidate list is derived once for the
 /// whole CU (part_idx forced to 0, PU size = CU size).
 #[allow(clippy::too_many_arguments)]
-fn build_merge_candidates<P: Pixel>(
+fn select_merge_candidate<P: Pixel>(
     state: &PictureState<P>,
     slice_params: &SliceParams,
     x0: u32,
     y0: u32,
     n_pb_w: u32,
     n_pb_h: u32,
-    _log2_cb_size: u8,
+    merge_idx: u32,
     part_mode: PartMode,
     part_idx: u8,
     single_mcl_flag: bool,
-) -> Vec<MvField> {
-    let max_cand = slice_params.max_num_merge_cand as usize;
-    let mut list: Vec<MvField> = Vec::with_capacity(max_cand);
+) -> MvField {
+    let selected = merge_idx.min(slice_params.max_num_merge_cand - 1) as usize;
+    let mut list = [MvField::default(); 4];
+    let mut count = 0;
+    macro_rules! add_candidate {
+        ($mvf:expr) => {{
+            let candidate = $mvf;
+            if count == selected {
+                return candidate;
+            }
+            list[count] = candidate;
+            count += 1;
+        }};
+    }
 
     let x0i = x0 as i32;
     let y0i = y0 as i32;
@@ -1529,10 +1540,7 @@ fn build_merge_candidates<P: Pixel>(
         spatial_cand_available(state, x0i, y0i, x_a1, y_a1)
     };
     if is_available_a1 {
-        list.push(tab_mvf_at(state, x_a1, y_a1));
-        if list.len() >= max_cand {
-            return list;
-        }
+        add_candidate!(tab_mvf_at(state, x_a1, y_a1));
     }
 
     // --- B1 (above) ---
@@ -1556,10 +1564,7 @@ fn build_merge_candidates<P: Pixel>(
         && !(is_available_a1
             && tab_mvf_at(state, x_b1, y_b1).merge_eq(&tab_mvf_at(state, x_a1, y_a1)))
     {
-        list.push(tab_mvf_at(state, x_b1, y_b1));
-        if list.len() >= max_cand {
-            return list;
-        }
+        add_candidate!(tab_mvf_at(state, x_b1, y_b1));
     }
 
     // --- B0 (above-right) ---
@@ -1570,10 +1575,7 @@ fn build_merge_candidates<P: Pixel>(
         && !(is_available_b1
             && tab_mvf_at(state, x_b0, y_b0).merge_eq(&tab_mvf_at(state, x_b1, y_b1)));
     if is_available_b0 {
-        list.push(tab_mvf_at(state, x_b0, y_b0));
-        if list.len() >= max_cand {
-            return list;
-        }
+        add_candidate!(tab_mvf_at(state, x_b0, y_b0));
     }
 
     // --- A0 (below-left) ---
@@ -1584,14 +1586,11 @@ fn build_merge_candidates<P: Pixel>(
         && !(is_available_a1
             && tab_mvf_at(state, x_a0, y_a0).merge_eq(&tab_mvf_at(state, x_a1, y_a1)));
     if is_available_a0 {
-        list.push(tab_mvf_at(state, x_a0, y_a0));
-        if list.len() >= max_cand {
-            return list;
-        }
+        add_candidate!(tab_mvf_at(state, x_a0, y_a0));
     }
 
     // --- B2 (above-left) — only if fewer than 4 candidates so far ---
-    if list.len() < 4 {
+    if count < 4 {
         #[allow(clippy::nonminimal_bool)]
         let is_available_b2 = spatial_cand_available(state, x0i, y0i, x_b2, y_b2)
             && !is_diff_mer(pl, x_b2, y_b2, x0i, y0i)
@@ -1600,15 +1599,12 @@ fn build_merge_candidates<P: Pixel>(
             && !(is_available_b1
                 && tab_mvf_at(state, x_b2, y_b2).merge_eq(&tab_mvf_at(state, x_b1, y_b1)));
         if is_available_b2 {
-            list.push(tab_mvf_at(state, x_b2, y_b2));
-            if list.len() >= max_cand {
-                return list;
-            }
+            add_candidate!(tab_mvf_at(state, x_b2, y_b2));
         }
     }
 
     // --- Temporal merge candidate (spec 8.5.3.2.3) ---
-    if slice_params.slice_temporal_mvp_enabled_flag && list.len() < max_cand {
+    if slice_params.slice_temporal_mvp_enabled_flag {
         let mut mv_l0_col = Mv::default();
         let mut mv_l1_col = Mv::default();
         let available_l0 = temporal_luma_motion_vector(
@@ -1635,23 +1631,17 @@ fn build_merge_candidates<P: Pixel>(
                 mv_l1_col = mv;
             }
             let pred_flag = available_l0.is_some() as u8 | ((available_l1.is_some() as u8) << 1);
-            list.push(MvField {
+            add_candidate!(MvField {
                 mv: [mv_l0_col, mv_l1_col],
                 ref_idx: [0, 0],
                 pred_flag,
             });
-            if list.len() >= max_cand {
-                return list;
-            }
         }
     }
 
     // --- Combined bi-predictive candidates (B-slice only, spec 8.5.3.2.4) ---
-    let nb_orig_merge_cand = list.len();
-    if slice_params.slice_type == SliceType::B
-        && nb_orig_merge_cand > 1
-        && nb_orig_merge_cand < max_cand
-    {
+    let nb_orig_merge_cand = count;
+    if slice_params.slice_type == SliceType::B && nb_orig_merge_cand > 1 {
         // Table of (l0_cand_idx, l1_cand_idx) pairs — matches FFmpeg's
         // `l0_l1_cand_idx` table for up to 4 original candidates.
         const L0_L1_CAND_IDX: [[usize; 2]; 12] = [
@@ -1670,9 +1660,6 @@ fn build_merge_candidates<P: Pixel>(
         ];
         let max_comb = nb_orig_merge_cand * (nb_orig_merge_cand - 1);
         for entry in L0_L1_CAND_IDX.iter().take(max_comb.min(12)) {
-            if list.len() >= max_cand {
-                break;
-            }
             let l0_idx = entry[0];
             let l1_idx = entry[1];
             if l0_idx >= nb_orig_merge_cand || l1_idx >= nb_orig_merge_cand {
@@ -1687,7 +1674,7 @@ fn build_merge_candidates<P: Pixel>(
                     != slice_params.ref_pic_list_pocs[1].get(l1_cand.ref_idx[1] as usize)
                     || l0_cand.mv[0] != l1_cand.mv[1])
             {
-                list.push(MvField {
+                add_candidate!(MvField {
                     mv: [l0_cand.mv[0], l1_cand.mv[1]],
                     ref_idx: [l0_cand.ref_idx[0], l1_cand.ref_idx[1]],
                     pred_flag: 3, // PF_BI
@@ -1696,7 +1683,7 @@ fn build_merge_candidates<P: Pixel>(
         }
     }
 
-    // --- Zero MV fill ---
+    // Remaining candidates are zero vectors in reference-list order.
     let nb_refs = if slice_params.slice_type == SliceType::P {
         slice_params.num_ref_idx_l0_active
     } else {
@@ -1704,32 +1691,22 @@ fn build_merge_candidates<P: Pixel>(
             .num_ref_idx_l0_active
             .min(slice_params.num_ref_idx_l1_active)
     };
-    let mut zero_idx: u32 = 0;
-    while list.len() < max_cand {
-        let ref0 = if zero_idx < nb_refs {
-            zero_idx as i8
-        } else {
-            0
-        };
-        let ref1 = if zero_idx < nb_refs {
-            zero_idx as i8
-        } else {
-            0
-        };
-        let pred = if slice_params.slice_type == SliceType::B {
-            3 // PF_BI = L0 + L1
-        } else {
-            1 // PF_L0
-        };
-        list.push(MvField {
-            mv: [Mv::default(), Mv::default()],
-            ref_idx: [ref0, ref1],
-            pred_flag: pred,
-        });
-        zero_idx += 1;
+    let zero_idx = (selected - count) as u32;
+    let reference = if zero_idx < nb_refs {
+        zero_idx as i8
+    } else {
+        0
+    };
+    let pred_flag = if slice_params.slice_type == SliceType::B {
+        3
+    } else {
+        1
+    };
+    MvField {
+        mv: [Mv::default(); 2],
+        ref_idx: [reference; 2],
+        pred_flag,
     }
-
-    list
 }
 
 /// MV scaling per HEVC spec 8.5.3.2.8 / FFmpeg `mv_scale`.
@@ -2423,20 +2400,18 @@ fn decode_prediction_unit<P: Pixel>(
         } else {
             (x0, y0, n_pb_w, n_pb_h, part_idx)
         };
-        let candidates = build_merge_candidates(
+        current_mv = select_merge_candidate(
             state,
             slice_params,
             mx0,
             my0,
             mw,
             mh,
-            log2_cb_size,
+            merge_idx,
             part_mode,
             m_part_idx,
             single_mcl_flag,
         );
-        let idx = (merge_idx as usize).min(candidates.len().saturating_sub(1));
-        current_mv = candidates[idx];
 
         // Spec: when bi-prediction and the PU is tiny (w+h == 12), demote
         // to L0-only (FFmpeg ff_hevc_luma_mv_merge_mode).
