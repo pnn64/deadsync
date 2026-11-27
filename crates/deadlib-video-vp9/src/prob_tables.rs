@@ -1505,35 +1505,6 @@ pub const DCT_VAL_CATEGORY4: u8 = 8;
 pub const DCT_VAL_CATEGORY5: u8 = 9;
 pub const DCT_VAL_CATEGORY6: u8 = 10;
 
-/// `token_tree[ 20 ]` (spec §9.3.1).
-pub const TOKEN_TREE: [i32; 20] = [
-    -(ZERO_TOKEN as i32),
-    2,
-    -(ONE_TOKEN as i32),
-    4,
-    6,
-    10,
-    -(TWO_TOKEN as i32),
-    8,
-    -(THREE_TOKEN as i32),
-    -(FOUR_TOKEN as i32),
-    12,
-    14,
-    -(DCT_VAL_CATEGORY1 as i32),
-    -(DCT_VAL_CATEGORY2 as i32),
-    16,
-    18,
-    -(DCT_VAL_CATEGORY3 as i32),
-    -(DCT_VAL_CATEGORY4 as i32),
-    -(DCT_VAL_CATEGORY5 as i32),
-    -(DCT_VAL_CATEGORY6 as i32),
-];
-
-/// `binary_tree[ 2 ]` (spec §9.3.1). Represents a single bool (e.g. `more_coefs`) as a
-/// tree structure. `read_tree(&BINARY_TREE, |_| prob)` is equivalent to
-/// `read_bool(prob) as i32`.
-pub const BINARY_TREE: [i32; 2] = [0, -1];
-
 /// `ss_size_lookup[ BLOCK_SIZES ][ 2 ][ 2 ]` (spec §6.4.23).
 /// `get_plane_block_size( subsize, plane )` = `SS_SIZE_LOOKUP[subsize][subx][suby]`.
 #[rustfmt::skip]
@@ -1788,15 +1759,10 @@ const PARETO_FULL: [[u8; 8]; 256] = {
     out
 };
 
-/// `pareto( node, prob )` (spec §9.3.2). Used to select the probability for the
-/// `token` syntax element. Returns `prob` unmodified when `node < 2`; otherwise looks
-/// up [`PARETO_TABLE`] (averaging the two adjacent rows when `prob` is even).
+/// Probabilities for nodes 2 through 9 of the coefficient token tree (spec §9.3.2).
 #[inline]
-pub fn pareto(node: usize, prob: u8) -> u8 {
-    if node < 2 {
-        return prob;
-    }
-    PARETO_FULL[prob as usize][node - 2]
+pub fn pareto_probs(prob: u8) -> &'static [u8; 8] {
+    &PARETO_FULL[prob as usize]
 }
 
 // ---------------------------------------------------------------------------
@@ -1930,14 +1896,3 @@ pub const DEFAULT_MV_HP_PROB: [u8; 2] = [128, 128];
 pub const COUNT_SAT: u32 = 20;
 /// `MAX_UPDATE_FACTOR` (spec §3).
 pub const MAX_UPDATE_FACTOR: u32 = 128;
-
-/// `small_token_tree[ 6 ]` (spec §8.4.3). Used when applying `merge_probs` to
-/// `coef_probs[...][ 1..3 ]` (a 3-value tree combining `ONE_TOKEN`/`TWO_TOKEN` and above).
-pub const SMALL_TOKEN_TREE: [i32; 6] = [
-    0,
-    0, // unused (index 0..1; merge_probs traverses from i=2, so these are never referenced)
-    -(ZERO_TOKEN as i32),
-    4,
-    -(ONE_TOKEN as i32),
-    -(TWO_TOKEN as i32),
-];

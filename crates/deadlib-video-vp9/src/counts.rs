@@ -9,9 +9,9 @@
 
 use crate::compressed_header::CompressedHeaderProbs;
 use crate::prob_tables::{
-    CoefProbs, BINARY_TREE, COUNT_SAT, INTERP_FILTER_TREE, INTER_MODE_TREE, INTRA_MODE_TREE,
-    MAX_UPDATE_FACTOR, MV_CLASS_TREE, MV_FR_TREE, MV_JOINT_TREE, PARTITION_TREE, SMALL_TOKEN_TREE,
-    SWITCHABLE, TX_16X16, TX_32X32, TX_8X8, TX_MODE_SELECT,
+    CoefProbs, COUNT_SAT, INTERP_FILTER_TREE, INTER_MODE_TREE, INTRA_MODE_TREE, MAX_UPDATE_FACTOR,
+    MV_CLASS_TREE, MV_FR_TREE, MV_JOINT_TREE, PARTITION_TREE, SWITCHABLE, TX_16X16, TX_32X32,
+    TX_8X8, TX_MODE_SELECT,
 };
 
 /// `counts_token[TX_SIZES][BLOCK_TYPES][REF_TYPES][COEF_BANDS][PREV_COEF_CONTEXTS][UNCONSTRAINED_NODES]`.
@@ -60,16 +60,16 @@ impl Counts {
 }
 
 /// `merge_prob( preProb, ct0, ct1, countSat, maxUpdateFactor )` (spec §8.4.1).
+#[inline]
 fn merge_prob(pre_prob: u8, ct0: u32, ct1: u32, count_sat: u32, max_update_factor: u32) -> u8 {
     let den = ct0 + ct1;
-    let prob = if den == 0 {
-        128
-    } else {
-        (((ct0 as u64 * 256 + (den as u64 >> 1)) / den as u64) as i64).clamp(1, 255) as u8
-    };
+    if den == 0 {
+        return pre_prob;
+    }
+    let prob = (((ct0 as u64 * 256 + (den as u64 >> 1)) / den as u64) as u32).clamp(1, 255);
     let count = den.min(count_sat);
     let factor = max_update_factor * count / count_sat;
-    let out = (pre_prob as i64 * (256 - factor as i64) + prob as i64 * factor as i64 + 128) >> 8;
+    let out = (u32::from(pre_prob) * (256 - factor) + prob * factor + 128) >> 8;
     out as u8
 }
 
@@ -145,23 +145,12 @@ pub fn adapt_coef_probs(coef_probs: &mut CoefProbs, counts: &Counts, update_fact
                 for k in 0..6 {
                     let max_l = if k == 0 { 3 } else { 6 };
                     for l in 0..max_l {
-                        let probs = &mut coef_probs[t][i][j][k][l];
-                        merge_probs(
-                            &SMALL_TOKEN_TREE,
-                            2,
-                            probs,
-                            &counts.token[t][i][j][k][l],
-                            24,
-                            update_factor,
-                        );
-                        merge_probs(
-                            &BINARY_TREE,
-                            0,
-                            probs,
-                            &counts.more_coefs[t][i][j][k][l],
-                            24,
-                            update_factor,
-                        );
+                        let [zero, one, larger] = counts.token[t][i][j][k][l];
+                        let [end, more] = counts.more_coefs[t][i][j][k][l];
+                        let [eob_prob, zero_prob, one_prob] = &mut coef_probs[t][i][j][k][l];
+                        *eob_prob = merge_prob(*eob_prob, end, more, 24, update_factor);
+                        *zero_prob = merge_prob(*zero_prob, zero, one + larger, 24, update_factor);
+                        *one_prob = merge_prob(*one_prob, one, larger, 24, update_factor);
                     }
                 }
             }

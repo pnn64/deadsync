@@ -11,9 +11,11 @@ use crate::header::{SegmentationParams, MAX_SEGMENTS};
 use crate::predict::predict_intra as predict_intra_block;
 use crate::predict::{predict_inter, InterPredictParams, RefPlaneView};
 use crate::prob_tables::{
-    coefband_8x8plus, mode2txfm_map, pareto, BLOCK_8X8, CAT_PROBS, COEFBAND_4X4, DCT_VAL_CATEGORY6,
-    ENERGY_CLASS, EXTRA_BITS, LAST_FRAME, NUM_4X4_BLOCKS_HIGH_LOOKUP, NUM_4X4_BLOCKS_WIDE_LOOKUP,
-    ONE_TOKEN, SS_SIZE_LOOKUP, TOKEN_TREE, TX_16X16, TX_32X32, TX_4X4, TX_8X8, ZERO_TOKEN,
+    coefband_8x8plus, mode2txfm_map, pareto_probs, BLOCK_8X8, CAT_PROBS, COEFBAND_4X4,
+    DCT_VAL_CATEGORY1, DCT_VAL_CATEGORY2, DCT_VAL_CATEGORY3, DCT_VAL_CATEGORY4, DCT_VAL_CATEGORY5,
+    DCT_VAL_CATEGORY6, ENERGY_CLASS, EXTRA_BITS, FOUR_TOKEN, LAST_FRAME,
+    NUM_4X4_BLOCKS_HIGH_LOOKUP, NUM_4X4_BLOCKS_WIDE_LOOKUP, ONE_TOKEN, SS_SIZE_LOOKUP, THREE_TOKEN,
+    TWO_TOKEN, TX_16X16, TX_32X32, TX_4X4, TX_8X8, ZERO_TOKEN,
 };
 use crate::quant::{get_ac_quant, get_dc_quant, get_qindex};
 use crate::scan::{get_scan_and_nb, TxSize};
@@ -325,20 +327,35 @@ impl TileDecoder<'_> {
         }
     }
 
-    /// Decodes a token >= `TWO_TOKEN` from `TOKEN_TREE` starting at node 2 (after `ZERO_TOKEN`
-    /// and `ONE_TOKEN` were ruled out in the hot loop).
+    /// Traverses the fixed token tree from node 2 after zero and one were ruled out.
     #[inline(never)]
     fn decode_large_token(r: &mut BoolDecoder, p2: u8) -> u8 {
-        let mut n: i32 = 4; // node 2 in TOKEN_TREE
-        loop {
-            let node = (n as usize) >> 1;
-            let bit = r.read_bool(pareto(node, p2)) as i32;
-            n = TOKEN_TREE[(n + bit) as usize];
-            if n <= 0 {
-                break;
+        let p = pareto_probs(p2);
+        if !r.read_bool(p[0]) {
+            if !r.read_bool(p[1]) {
+                TWO_TOKEN
+            } else if r.read_bool(p[2]) {
+                FOUR_TOKEN
+            } else {
+                THREE_TOKEN
             }
+        } else if !r.read_bool(p[3]) {
+            if r.read_bool(p[4]) {
+                DCT_VAL_CATEGORY2
+            } else {
+                DCT_VAL_CATEGORY1
+            }
+        } else if !r.read_bool(p[5]) {
+            if r.read_bool(p[6]) {
+                DCT_VAL_CATEGORY4
+            } else {
+                DCT_VAL_CATEGORY3
+            }
+        } else if r.read_bool(p[7]) {
+            DCT_VAL_CATEGORY6
+        } else {
+            DCT_VAL_CATEGORY5
         }
-        (-n) as u8
     }
 
     /// Fast inline `TOKEN_TREE` decode: handles `ZERO_TOKEN` and `ONE_TOKEN` (~85-90% of all
@@ -581,8 +598,8 @@ impl TileDecoder<'_> {
         quant: i64,
         is_32x32: bool,
     ) -> i64 {
-        let coef = if token == ONE_TOKEN {
-            1i32
+        let coef = if token < DCT_VAL_CATEGORY1 {
+            i32::from(token)
         } else {
             self.read_coef(r, token)
         };
@@ -663,26 +680,28 @@ impl TileDecoder<'_> {
 
     /// `read_coef( token )` (spec §6.4.26).
     fn read_coef(&self, r: &mut BoolDecoder, token: u8) -> i32 {
-        let row = &EXTRA_BITS[token as usize];
-        let cat = row[0] as usize;
-        let num_extra = row[1] as u32;
-        let mut coef = row[2] as i32;
+        #[inline]
+        fn read_extra(r: &mut BoolDecoder, probs: &[u8]) -> i32 {
+            probs.iter().fold(0, |value, &prob| {
+                (value << 1) | i32::from(r.read_bool(prob))
+            })
+        }
 
-        if token == DCT_VAL_CATEGORY6 {
-            // The cat6 high-bit loop (`for e in 0..(BitDepth-8)`): 0 iterations at 8-bit,
-            // 2/4 at 10/12-bit (profiles 2/3), reading the extra magnitude bits above the
-            // 14 base cat6 extra bits. Sweep-verified at all three bit depths.
-            for e in 0..(self.bit_depth.saturating_sub(8) as u32) {
-                let high_bit = r.read_bool(255) as i32;
-                coef += high_bit << (5 + self.bit_depth as u32 - e);
+        let extra = match token {
+            DCT_VAL_CATEGORY1 => read_extra(r, &CAT_PROBS[1][..1]),
+            DCT_VAL_CATEGORY2 => read_extra(r, &CAT_PROBS[2][..2]),
+            DCT_VAL_CATEGORY3 => read_extra(r, &CAT_PROBS[3][..3]),
+            DCT_VAL_CATEGORY4 => read_extra(r, &CAT_PROBS[4][..4]),
+            DCT_VAL_CATEGORY5 => read_extra(r, &CAT_PROBS[5][..5]),
+            DCT_VAL_CATEGORY6 => {
+                let mut high = 0;
+                for _ in 8..self.bit_depth {
+                    high = (high << 1) | i32::from(r.read_bool(255));
+                }
+                (high << 14) | read_extra(r, &CAT_PROBS[6])
             }
-        }
-
-        for e in 0..num_extra {
-            let coef_bit = r.read_bool(CAT_PROBS[cat][e as usize]) as i32;
-            coef += coef_bit << (num_extra - 1 - e);
-        }
-
-        coef
+            _ => unreachable!("small tokens have no extra coefficient bits"),
+        };
+        i32::from(EXTRA_BITS[token as usize][2]) + extra
     }
 }

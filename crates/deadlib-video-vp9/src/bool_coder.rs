@@ -139,20 +139,24 @@ impl<'a> BoolDecoder<'a> {
     #[inline]
     pub fn read_bool(&mut self, p: u8) -> bool {
         let split = 1 + (((self.range - 1) * p as u32) >> 8);
+        self.read_with_split(split)
+    }
+
+    #[inline(always)]
+    fn read_with_split(&mut self, split: u32) -> bool {
         let big_split = (split as u64) << 56;
-        let bit = if self.value < big_split {
-            self.range = split;
-            false
+        let bit = self.value >= big_split;
+        let range = if bit { self.range - split } else { split };
+        let value = if bit {
+            self.value.wrapping_sub(big_split)
         } else {
-            self.range -= split;
-            self.value -= big_split;
-            true
+            self.value
         };
-        // `self.range` is in `1..=254`, so `(self.range as u8).leading_zeros()` is in `0..=7`
+        // `range` is in `1..=255`, so `(range as u8).leading_zeros()` is in `0..=7`
         // and equals the exact number of `while range < 128` doublings required by spec §9.2.2.
-        let shift = (self.range as u8).leading_zeros();
-        self.range <<= shift;
-        self.value <<= shift;
+        let shift = (range as u8).leading_zeros();
+        self.range = range << shift;
+        self.value = value << shift;
         self.count -= shift as i32;
         if self.count < 8 {
             self.refill();
@@ -165,7 +169,7 @@ impl<'a> BoolDecoder<'a> {
     pub fn read_literal(&mut self, n: u32) -> u32 {
         let mut x = 0u32;
         for _ in 0..n {
-            x = (x << 1) | self.read_bool(128) as u32;
+            x = (x << 1) | self.flag() as u32;
         }
         x
     }
@@ -174,7 +178,7 @@ impl<'a> BoolDecoder<'a> {
     /// the very common single-bit `L(1)` reads scattered through the compressed header.
     #[inline]
     pub fn flag(&mut self) -> bool {
-        self.read_bool(128)
+        self.read_with_split((self.range + 1) >> 1)
     }
 
     /// Decoding process for tree-coded syntax elements (spec §9.3.3, "Tree decoding process").

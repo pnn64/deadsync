@@ -18,7 +18,10 @@ pub(super) use adst::iadst_simd;
 use adst_hbd::xform_pass_i64;
 pub(super) use dct::{idct_permute_simd, idct_simd};
 
-use crate::{predict::RefSample, transform::TxType};
+use crate::{
+    predict::RefSample,
+    transform::{cos64, sin64, TxType},
+};
 use core::arch::x86_64::*;
 use core::mem::MaybeUninit;
 
@@ -217,6 +220,8 @@ pub unsafe fn inverse_transform_reconstruct_avx2<T: RefSample>(
             dequant,
             bit_depth,
         );
+    } else if n == 2 && bit_depth == 8 {
+        reconstruct_4x4_avx2(plane_base, plane_width, start_x, start_y, dequant, tx_type);
     } else if tx_type != TxType::DctDct {
         if bit_depth == 8 {
             inverse_transform_adst_reconstruct_avx2(
@@ -262,6 +267,85 @@ pub unsafe fn inverse_transform_reconstruct_avx2<T: RefSample>(
             n,
             max_row,
             max_val,
+        );
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn round_14_128(v: __m128i) -> __m128i {
+    _mm_srai_epi32(_mm_add_epi32(v, _mm_set1_epi32(1 << 13)), 14)
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn idct4([a, b, c, d]: [__m128i; 4]) -> [__m128i; 4] {
+    let even = _mm_set1_epi32(cos64(16) as i32);
+    let cos = _mm_set1_epi32(cos64(24) as i32);
+    let sin = _mm_set1_epi32(sin64(24) as i32);
+    let t0 = round_14_128(_mm_mullo_epi32(_mm_add_epi32(a, c), even));
+    let t1 = round_14_128(_mm_mullo_epi32(_mm_sub_epi32(a, c), even));
+    let t2 = round_14_128(_mm_sub_epi32(
+        _mm_mullo_epi32(b, cos),
+        _mm_mullo_epi32(d, sin),
+    ));
+    let t3 = round_14_128(_mm_add_epi32(
+        _mm_mullo_epi32(b, sin),
+        _mm_mullo_epi32(d, cos),
+    ));
+    [
+        _mm_add_epi32(t0, t3),
+        _mm_add_epi32(t1, t2),
+        _mm_sub_epi32(t1, t2),
+        _mm_sub_epi32(t0, t3),
+    ]
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn iadst4(mut t: [__m128i; 4]) -> [__m128i; 4] {
+    let mul = |v, c: i64| _mm_mullo_epi32(v, _mm_set1_epi32(c as i32));
+    crate::transform::iadst4_body!(&mut t, mul, _mm_add_epi32, _mm_sub_epi32, round_14_128);
+    t
+}
+
+/// Keeps the two 4x4 transform passes in registers before adding to the prediction.
+///
+/// # Safety
+/// AVX2 must be enabled, the coefficient slice must contain 16 entries and the
+/// 4x4 destination must fit in the reconstruction plane.
+#[target_feature(enable = "avx2")]
+unsafe fn reconstruct_4x4_avx2<T: RefSample>(
+    base: *mut T,
+    stride: usize,
+    x: usize,
+    y: usize,
+    dequant: &[i64],
+    tx_type: TxType,
+) {
+    let input = dequant.as_ptr();
+    let rows = [
+        load_4_i64_as_i32(input),
+        load_4_i64_as_i32(input.add(4)),
+        load_4_i64_as_i32(input.add(8)),
+        load_4_i64_as_i32(input.add(12)),
+    ];
+    let columns = transpose4x4_i32(&rows);
+    let row_pass = match tx_type {
+        TxType::DctAdst | TxType::AdstAdst => iadst4(columns),
+        _ => idct4(columns),
+    };
+    let rows = transpose4x4_i32(&row_pass);
+    let col_pass = match tx_type {
+        TxType::AdstDct | TxType::AdstAdst => iadst4(rows),
+        _ => idct4(rows),
+    };
+    for (i, row) in col_pass.into_iter().enumerate() {
+        let residual = _mm_srai_epi32(_mm_add_epi32(row, _mm_set1_epi32(8)), 4);
+        add_residual4(
+            base.add((y + i) * stride + x),
+            residual,
+            _mm_set1_epi32(255),
         );
     }
 }
@@ -653,5 +737,46 @@ unsafe fn inverse_transform_wht_reconstruct_avx2<T: RefSample>(
     for (i, &resid) in col_t.iter().enumerate() {
         let row = base.add((start_y + i) * plane_width + start_x);
         add_residual4(row, resid, max);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transform::inverse_transform_block;
+
+    #[test]
+    fn register_only_4x4_transforms_match_scalar() {
+        if !crate::simd::avx2_enabled() {
+            return;
+        }
+        let mut random = 1u32;
+        let mut next = || {
+            random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            (random >> 16) as u16
+        };
+        for tx_type in [
+            TxType::DctDct,
+            TxType::AdstDct,
+            TxType::DctAdst,
+            TxType::AdstAdst,
+        ] {
+            for _ in 0..64 {
+                let dequant: [i64; 16] = core::array::from_fn(|_| i64::from(next() as i16));
+                let mut actual: [u8; 48] = core::array::from_fn(|_| next() as u8);
+                let mut expected = actual;
+                let mut residual = dequant;
+                inverse_transform_block(&mut residual, 2, tx_type, false);
+                for (row, residual) in residual.as_chunks::<4>().0.iter().enumerate() {
+                    for (col, &delta) in residual.iter().enumerate() {
+                        let sample = &mut expected[(row + 1) * 8 + col + 2];
+                        *sample = (i64::from(*sample) + delta).clamp(0, 255) as u8;
+                    }
+                }
+                // AVX2 is available and the offset 4x4 block fits in the plane.
+                unsafe { reconstruct_4x4_avx2(actual.as_mut_ptr(), 8, 2, 1, &dequant, tx_type) };
+                assert_eq!(actual, expected, "{tx_type:?}");
+            }
+        }
     }
 }
