@@ -1,19 +1,4 @@
-//! Plane representation of the frame buffer (`CurrFrame`).
-//!
-//! The spec treats the frame buffer as a 3-dimensional array `CurrFrame[ plane ][ y ][ x ]`,
-//! but this implementation holds each plane as a 1-dimensional `Vec<u16>` (row-major, with an
-//! explicit `stride >= width` so cropped DPB reference planes can reuse superblock-padded
-//! backing buffers in-place without copying).
-//!
-//! `u16` regardless of `BitDepth`: 8-bit samples (0..=255) are stored widened rather than
-//! packed, so every plane operation (get/set/loop filter/prediction) has exactly one code
-//! path across all 3 bit depths -- narrowing to `u8` happens only at the output boundary
-//! (see `crop_u8`, used for the `Frame`/`PlaneData::U8` output when `BitDepth == 8`).
-//!
-//! The decode working buffer is allocated not at the display size (`FrameWidth`/`FrameHeight`)
-//! but at the size rounded up to the superblock boundary (`Sb64Cols*64`/`Sb64Rows*64`, chroma
-//! planes after subsampling). This is because the block boundary handling of spec §6.4.21
-//! `residual()` can cause blocks at the frame edge to write slightly beyond `(MiCols*8, MiRows*8)`.
+//! Working planes and reference-picture sample storage.
 
 use alloc::{vec, vec::Vec};
 
@@ -28,7 +13,7 @@ pub struct Plane {
     stride: usize,
     /// Absolute pixel column of this buffer's first column (0 for a whole-frame plane).
     pub x0: usize,
-    pixels: Vec<u16>,
+    pixels: RefPlaneData,
 }
 
 impl fmt::Debug for Plane {
@@ -43,13 +28,17 @@ impl fmt::Debug for Plane {
 }
 
 impl Plane {
-    pub fn new(width: usize, height: usize) -> Self {
+    pub fn new(width: usize, height: usize, byte: bool) -> Self {
         Self {
             width,
             height,
             stride: width,
             x0: 0,
-            pixels: vec![0u16; width * height],
+            pixels: if byte {
+                RefPlaneData::U8(vec![0; width * height])
+            } else {
+                RefPlaneData::U16(vec![0; width * height])
+            },
         }
     }
 
@@ -112,37 +101,124 @@ impl Plane {
             self.height = height;
             self.stride = width;
             self.x0 = 0;
-            data.resize(need, 0);
+            data.resize(need);
             true
         } else {
             false
         }
     }
 
-    /// Raw pointer to the first sample.
     #[inline]
-    pub(crate) fn base_ptr(&self) -> *const u16 {
-        self.pixels.as_ptr()
+    pub(crate) fn is_byte(&self) -> bool {
+        matches!(self.pixels, RefPlaneData::U8(_))
     }
 
-    /// Mutable raw pointer to the first sample.
-    #[inline]
-    pub(crate) fn base_ptr_mut(&mut self) -> *mut u16 {
-        self.pixels.as_mut_ptr()
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+    pub(crate) fn byte_ptr(&mut self) -> Option<*mut u8> {
+        match &mut self.pixels {
+            RefPlaneData::U8(samples) => Some(samples.as_mut_ptr()),
+            RefPlaneData::U16(_) => None,
+        }
     }
 
-    /// Mutable slice of the first `self.width` samples in row `y`.
-    ///
-    /// # Safety
-    /// Caller must ensure `y < self.height`.
-    #[inline]
-    pub(crate) unsafe fn row_mut_unchecked(&mut self, y: usize) -> &mut [u16] {
-        debug_assert!(y < self.height, "Plane::row_mut_unchecked out of range");
-        let stride = self.stride;
-        let width = self.width;
-        // SAFETY: caller guarantees `y < self.height`; columns `[0..width]` of row `y` are valid
-        // and exclusively owned by this plane/strip (never overlapping any sibling strip).
-        core::slice::from_raw_parts_mut(self.base_ptr_mut().add(y * stride), width)
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+    pub(crate) fn word_ptr(&mut self) -> Option<*mut u16> {
+        match &mut self.pixels {
+            RefPlaneData::U8(_) => None,
+            RefPlaneData::U16(samples) => Some(samples.as_mut_ptr()),
+        }
+    }
+
+    pub(crate) fn update_row(
+        &mut self,
+        x: usize,
+        y: usize,
+        width: usize,
+        mut update: impl FnMut(usize, u16) -> u16,
+    ) {
+        let start = y * self.stride + (x - self.x0);
+        let interval = start..start + width;
+        match &mut self.pixels {
+            RefPlaneData::U8(samples) => {
+                for (i, sample) in samples[interval].iter_mut().enumerate() {
+                    *sample = update(i, u16::from(*sample)) as u8;
+                }
+            }
+            RefPlaneData::U16(samples) => {
+                for (i, sample) in samples[interval].iter_mut().enumerate() {
+                    *sample = update(i, *sample);
+                }
+            }
+        }
+    }
+
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn with_word_block(
+        &mut self,
+        [x, y]: [usize; 2],
+        [w, h]: [usize; 2],
+        read: bool,
+        scratch: &mut [u16],
+        filter: impl FnOnce(*mut u16, usize, usize, usize) -> bool,
+    ) -> bool {
+        debug_assert!(x >= self.x0 && x - self.x0 + w <= self.width && y + h <= self.height);
+        let x = x - self.x0;
+        match &mut self.pixels {
+            RefPlaneData::U16(samples) => filter(samples.as_mut_ptr(), self.stride, x, y),
+            RefPlaneData::U8(samples) => {
+                let block = &mut scratch[..w * h];
+                if read {
+                    for (row, out) in block.chunks_exact_mut(w).enumerate() {
+                        let start = (y + row) * self.stride + x;
+                        for (out, &sample) in out.iter_mut().zip(&samples[start..start + w]) {
+                            *out = u16::from(sample);
+                        }
+                    }
+                }
+                if !filter(block.as_mut_ptr(), w, 0, 0) {
+                    return false;
+                }
+                for (row, input) in block.chunks_exact(w).enumerate() {
+                    let start = (y + row) * self.stride + x;
+                    // AVX2 is checked by the caller. Both row slices cover w samples.
+                    unsafe {
+                        crate::simd::narrow_u16_to_u8_avx2(
+                            input,
+                            samples[start..start + w].as_mut_ptr(),
+                        );
+                    }
+                }
+                true
+            }
+        }
+    }
+
+    pub(crate) fn copy_byte_block(
+        &mut self,
+        [x, y]: [usize; 2],
+        [w, h]: [usize; 2],
+        source: &[u8],
+        source_stride: usize,
+        average: bool,
+    ) -> bool {
+        let RefPlaneData::U8(samples) = &mut self.pixels else {
+            return false;
+        };
+        let x = x - self.x0;
+        for row in 0..h {
+            let start = (y + row) * self.stride + x;
+            let dst = &mut samples[start..start + w];
+            let src = &source[row * source_stride..][..w];
+            if average {
+                for (dst, &src) in dst.iter_mut().zip(src) {
+                    *dst = ((u16::from(*dst) + u16::from(src) + 1) >> 1) as u8;
+                }
+            } else {
+                dst.copy_from_slice(src);
+            }
+        }
+        true
     }
 
     /// Unchecked pixel read for hot decode/prediction/loop-filter paths.
@@ -156,7 +232,11 @@ impl Plane {
             "Plane::get_unchecked out of range"
         );
         // SAFETY: caller guarantees `(x - self.x0, y)` lies strictly within `[0..width) x [0..height)`.
-        *self.base_ptr().add(y * self.stride + (x - self.x0))
+        let offset = y * self.stride + (x - self.x0);
+        match &self.pixels {
+            RefPlaneData::U8(samples) => u16::from(*samples.get_unchecked(offset)),
+            RefPlaneData::U16(samples) => *samples.get_unchecked(offset),
+        }
     }
 
     /// Unchecked pixel write for hot decode/prediction/loop-filter paths.
@@ -171,66 +251,24 @@ impl Plane {
         );
         let offset = y * self.stride + (x - self.x0);
         // SAFETY: caller guarantees `(x - self.x0, y)` lies strictly within `[0..width) x [0..height)`.
-        *self.base_ptr_mut().add(offset) = v;
-    }
-
-    /// Raw row-major buffer with its row padding.
-    #[inline]
-    pub fn as_slice(&self) -> &[u16] {
-        &self.pixels
-    }
-
-    pub(crate) fn narrow_u8_into(&self, crop_width: usize, crop_height: usize, out: &mut Vec<u8>) {
-        assert_eq!(self.x0, 0, "crop is only meaningful on a whole-frame plane");
-        let data = self.as_slice();
-        assert!(crop_width <= self.stride, "crop_width exceeds plane stride");
-        assert!(
-            crop_height
-                .checked_mul(self.stride)
-                .is_some_and(|n| n <= data.len()),
-            "crop_height * stride exceeds plane backing length"
-        );
-        let total = crop_width
-            .checked_mul(crop_height)
-            .expect("crop dimensions overflow usize");
-        out.clear();
-        out.reserve(total);
-
-        #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
-        if crate::simd::avx2_enabled() {
-            let dst_base = out.spare_capacity_mut().as_mut_ptr() as *mut u8;
-            if crop_width == self.stride {
-                // Single contiguous narrow pass when display width matches plane stride
-                // (e.g. 1920x1080, 1920x800, 1280x720).
-                // SAFETY: `avx2_enabled()` confirmed; `out` has capacity >= `total` == `src.len()`.
-                unsafe {
-                    crate::simd::narrow_u16_to_u8_avx2(&data[..total], dst_base);
-                    out.set_len(total);
-                }
-                return;
-            }
-            for y in 0..crop_height {
-                let row_start = y * self.stride;
-                let src_row = &data[row_start..row_start + crop_width];
-                // SAFETY: `avx2_enabled()` confirmed; row slice fits `out`'s reserved capacity.
-                unsafe {
-                    crate::simd::narrow_u16_to_u8_avx2(src_row, dst_base.add(y * crop_width));
-                }
-            }
-            // SAFETY: all `crop_height * crop_width == total` bytes were written above.
-            unsafe {
-                out.set_len(total);
-            }
-            return;
+        match &mut self.pixels {
+            RefPlaneData::U8(samples) => *samples.get_unchecked_mut(offset) = v as u8,
+            RefPlaneData::U16(samples) => *samples.get_unchecked_mut(offset) = v,
         }
+    }
 
-        for y in 0..crop_height {
-            let row_start = y * self.stride;
-            out.extend(
-                data[row_start..row_start + crop_width]
-                    .iter()
-                    .map(|&v| v as u8),
-            );
+    pub(crate) fn copy_cropped_u8(&self, width: usize, height: usize, out: &mut Vec<u8>) {
+        let RefPlaneData::U8(samples) = &self.pixels else {
+            unreachable!()
+        };
+        out.clear();
+        if self.stride == width {
+            out.extend_from_slice(&samples[..width * height]);
+        } else {
+            out.reserve(width * height);
+            for row in samples.chunks_exact(self.stride).take(height) {
+                out.extend_from_slice(&row[..width]);
+            }
         }
     }
 }
@@ -267,9 +305,32 @@ impl RefSlice<'_> {
 /// 8-bit streams (profiles 0/1) store packed `u8` samples (halving DPB footprint and doubling
 /// cache density during motion compensation); 10/12-bit streams (profiles 2/3) keep `u16`.
 #[derive(Debug, Clone)]
-pub enum RefPlaneData {
+enum RefPlaneData {
     U8(Vec<u8>),
     U16(Vec<u16>),
+}
+
+impl RefPlaneData {
+    fn len(&self) -> usize {
+        match self {
+            Self::U8(data) => data.len(),
+            Self::U16(data) => data.len(),
+        }
+    }
+
+    fn capacity(&self) -> usize {
+        match self {
+            Self::U8(data) => data.capacity(),
+            Self::U16(data) => data.capacity(),
+        }
+    }
+
+    fn resize(&mut self, len: usize) {
+        match self {
+            Self::U8(data) => data.resize(len, 0),
+            Self::U16(data) => data.resize(len, 0),
+        }
+    }
 }
 
 /// One cropped reference plane stored inside [`crate::dpb::RefFrameData`].
@@ -326,7 +387,7 @@ impl RefPlane {
             width: plane.width,
             height: plane.height,
             stride: plane.stride,
-            data: RefPlaneData::U16(plane.pixels),
+            data: plane.pixels,
         }
     }
 
@@ -371,7 +432,7 @@ impl RefPlane {
                 height: self.height,
                 stride: self.stride,
                 x0: 0,
-                pixels: data,
+                pixels: RefPlaneData::U16(data),
             }),
         }
     }

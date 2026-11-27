@@ -294,9 +294,8 @@ pub struct Decoder {
     prev_frame_dims: Option<(u32, u32)>,
     prev_show_frame: Option<bool>,
     /// The previous frame's `Mvs`/`RefFrames` (equivalent to `PrevMvs`/`PrevRefFrames`).
-    /// `Arc`-wrapped so handing a read-only copy to next frame's `TileDecoder` (when
-    /// `UsePrevFrameMvs`) is a refcount bump rather than a deep clone.
-    prev_mi_grid: Option<Arc<MiGrid>>,
+    /// The next tile decode can borrow this grid for temporal prediction.
+    prev_mi_grid: Option<MiGrid>,
     /// Inter frames and intra-only frames (`Profile == 0`) don't resend
     /// `color_config` in the bitstream, so the value is carried over from the
     /// most recent keyframe/intra-only frame (spec §7.2: it's a conformance
@@ -412,12 +411,13 @@ impl Decoder {
         y_h: usize,
         uv_w: usize,
         uv_h: usize,
+        byte: bool,
     ) -> Option<[framebuffer::Plane; 3]> {
         let want: PlaneGeom = ((y_w, y_w * y_h), (uv_w, uv_w * uv_h));
         if let Some(idx) = self
             .plane_pool
             .iter()
-            .position(|p| plane_set_geom(p) == want)
+            .position(|p| p[0].is_byte() == byte && plane_set_geom(p) == want)
         {
             return Some(self.plane_pool.swap_remove(idx));
         }
@@ -426,7 +426,8 @@ impl Decoder {
         let max_uv = max_uv.max(uv_w * uv_h);
         for idx in 0..self.plane_pool.len() {
             let p = &mut self.plane_pool[idx];
-            if p[0].try_reuse_working(y_w, y_h, max_y)
+            if p[0].is_byte() == byte
+                && p[0].try_reuse_working(y_w, y_h, max_y)
                 && p[1].try_reuse_working(uv_w, uv_h, max_uv)
                 && p[2].try_reuse_working(uv_w, uv_h, max_uv)
             {
@@ -591,9 +592,9 @@ impl Decoder {
             let mut bufs = self
                 .take_matching_ref_u8(y_w * y_h, uv_w * uv_h)
                 .unwrap_or_default();
-            planes[0].narrow_u8_into(y_w, y_h, &mut bufs[0]);
-            planes[1].narrow_u8_into(uv_w, uv_h, &mut bufs[1]);
-            planes[2].narrow_u8_into(uv_w, uv_h, &mut bufs[2]);
+            planes[0].copy_cropped_u8(y_w, y_h, &mut bufs[0]);
+            planes[1].copy_cropped_u8(uv_w, uv_h, &mut bufs[1]);
+            planes[2].copy_cropped_u8(uv_w, uv_h, &mut bufs[2]);
             let [y, u, v] = bufs;
             self.recycle_planes(planes, active_geom);
             RefFrameData {
@@ -735,14 +736,9 @@ impl Decoder {
         self.last_frame_type = Some(header.frame_type);
     }
 
-    /// Stores `mi_grid` as `prev_mi_grid` and recycles the replaced allocation when unshared.
     fn store_and_recycle_mi_grid(&mut self, mut mi_grid: MiGrid) {
         mi_grid.clear_sub_mvs();
-        if let Some(old_grid) = self.prev_mi_grid.replace(Arc::new(mi_grid)) {
-            if let Ok(owned) = Arc::try_unwrap(old_grid) {
-                self.mi_grid_pool = Some(owned);
-            }
-        }
+        self.mi_grid_pool = self.prev_mi_grid.replace(mi_grid);
     }
 
     fn decode_one_frame(&mut self, frame_data: &[u8]) -> Result<Option<Picture>, DecodeError> {
@@ -816,21 +812,21 @@ impl Decoder {
             header.frame_is_intra || header.error_resilient_mode,
         );
 
-        let prev_grid = if use_prev_frame_mvs {
-            self.prev_mi_grid.clone()
-        } else {
-            None
-        };
         let y_w = (image_size.sb64_cols * 64) as usize;
         let y_h = (image_size.sb64_rows * 64) as usize;
         let uv_w = y_w >> color_config.subsampling_x;
         let uv_h = y_h >> color_config.subsampling_y;
         let recycled = tile::RecycledBuffers {
-            planes: self.take_matching_planes(y_w, y_h, uv_w, uv_h),
+            planes: self.take_matching_planes(y_w, y_h, uv_w, uv_h, color_config.bit_depth == 8),
             mi_grid: self.mi_grid_pool.take(),
             above_ctx: self.above_ctx_pool.take(),
             scratch: self.tile_scratch_pool.take(),
             counts: self.counts_pool.take(),
+        };
+        let prev_grid = if use_prev_frame_mvs {
+            self.prev_mi_grid.as_ref()
+        } else {
+            None
         };
         let backward_adapt = header.refresh_frame_context
             && !header.error_resilient_mode
@@ -839,7 +835,6 @@ impl Decoder {
             &header,
             color_config,
             &compressed,
-            use_prev_frame_mvs,
             prev_grid,
             resolved_refs,
             Arc::clone(&frame_prev_segment_ids),
@@ -852,23 +847,25 @@ impl Decoder {
         if header.loop_filter.level != 0 {
             tile_decoder.apply_loop_filter(&header.loop_filter);
         }
+        let (planes, mi_grid, above_ctx, scratch, counts) = tile_decoder.into_parts();
         self.commit_prev_segment_ids(
             &header,
             &image_size,
-            tile_decoder.mi_grid(),
+            &mi_grid,
             frame_prev_segment_ids,
             seg_ids_cleared,
         );
         self.apply_frame_context_reset(ctx_reset);
 
-        // Backward adaptation needs the counters before the tile decoder is consumed.
         if backward_adapt {
             let starting_probs = self.frame_contexts.load(ctx_idx);
             let final_probs = refresh_probs(
                 &header,
                 starting_probs,
                 &compressed,
-                tile_decoder.counts(),
+                counts
+                    .as_deref()
+                    .expect("backward adaptation needs syntax counts"),
                 self.last_frame_type,
             );
             self.frame_contexts.save(ctx_idx, final_probs);
@@ -876,11 +873,6 @@ impl Decoder {
 
         self.update_persistent_state(&header, color_config);
 
-        // Last use of tile_decoder: consume it to drop its read-only `Arc`s to DPB slots,
-        // `prev_mi_grid` before refreshing DPB / saving probs /
-        // replacing `self.prev_mi_grid`, so evicted buffers have strong count 1 and recycle
-        // cleanly into our pools.
-        let (planes, mi_grid, above_ctx, scratch, counts) = tile_decoder.into_parts();
         self.above_ctx_pool = Some(above_ctx);
         self.tile_scratch_pool = Some(scratch);
         if let Some(c) = counts {

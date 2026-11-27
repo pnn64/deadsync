@@ -230,7 +230,7 @@ impl TileDecoder<'_> {
                 height: r.height,
             })
         });
-        let uniform_mvs = [[info.mv[0]; 4], [info.mv[1]; 4]];
+        let uniform_mvs = [[info.mv(0); 4], [info.mv(1); 4]];
         let inter_params = InterPredictParams {
             ref_frame,
             block_mvs: block_mvs.unwrap_or(&uniform_mvs),
@@ -263,6 +263,7 @@ impl TileDecoder<'_> {
                         4,
                         block_idx,
                         &inter_params,
+                        &mut self.scratch.word_block,
                     );
                     x += 1;
                 }
@@ -278,6 +279,7 @@ impl TileDecoder<'_> {
                 (num4x4h * 4) as usize,
                 0,
                 &inter_params,
+                &mut self.scratch.word_block,
             );
         }
     }
@@ -376,34 +378,37 @@ impl TileDecoder<'_> {
 
         #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
         if crate::simd::avx2_enabled() {
-            let pw = self.planes[plane].stride();
-            let local_x = start_x - self.planes[plane].x0;
-            // SAFETY: `avx2_enabled()` confirmed; `n0` is 4/8/16/32; `clamped_delta` fits i16
-            // within `[-max_val, max_val]` (`max_val <= 4095`); block lies inside the plane strip.
-            unsafe {
-                crate::simd::reconstruct_add_const_avx2(
-                    self.planes[plane].base_ptr_mut(),
-                    pw,
-                    local_x,
-                    start_y,
-                    clamped_delta as i16,
-                    n0,
-                    max_val as i16,
-                );
+            let dst = &mut self.planes[plane];
+            let stride = dst.stride();
+            let local_x = start_x - dst.x0;
+            macro_rules! add_dc {
+                ($base:expr) => {
+                    // SAFETY: AVX2 is enabled and the block fits in the padded plane.
+                    unsafe {
+                        crate::simd::reconstruct_add_const_avx2(
+                            $base,
+                            stride,
+                            local_x,
+                            start_y,
+                            clamped_delta as i16,
+                            n0,
+                            max_val as i16,
+                        )
+                    }
+                };
+            }
+            if let Some(base) = dst.byte_ptr() {
+                add_dc!(base);
+            } else {
+                add_dc!(dst.word_ptr().unwrap());
             }
             return;
         }
-
-        let local_x = start_x - self.planes[plane].x0;
         let delta = clamped_delta as i32;
-        let max_i32 = max_val as i32;
-        for i in 0..n0 {
-            // SAFETY: `start_y + i < start_y + n0 <= planes[plane].height` (superblock-padded).
-            let row = &mut unsafe { self.planes[plane].row_mut_unchecked(start_y + i) }
-                [local_x..local_x + n0];
-            for px in row {
-                *px = (*px as i32 + delta).clamp(0, max_i32) as u16;
-            }
+        for row in 0..n0 {
+            self.planes[plane].update_row(start_x, start_y + row, n0, |_, sample| {
+                (i32::from(sample) + delta).clamp(0, max_val as i32) as u16
+            });
         }
     }
 
@@ -607,32 +612,36 @@ impl TileDecoder<'_> {
         let seg_eob = n0 * n0;
 
         let _ = max_row;
-        let local_x = start_x - self.planes[plane].x0;
         #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
         if crate::simd::avx2_enabled() {
-            let pw = self.planes[plane].stride();
-            debug_assert!(
-                start_x >= self.planes[plane].x0
-                    && local_x + n0 <= self.planes[plane].width
-                    && start_y + n0 <= self.planes[plane].height,
-                "fused-reconstruction block outside its plane strip"
-            );
-            // SAFETY: avx2_enabled() checked; dequant_buf[..seg_eob] is n0*n0; block is in
-            // bounds of the plane strip; lossless forces TX_4X4; ADST runs with n <= 4;
-            // every row strictly below `max_row` in `dequant_buf` is zero.
-            unsafe {
-                crate::simd::inverse_transform_reconstruct_avx2(
-                    self.planes[plane].base_ptr_mut(),
-                    pw,
-                    local_x,
-                    start_y,
-                    &self.scratch.dequant_buf[..seg_eob],
-                    n,
-                    tx_type,
-                    max_row,
-                    self.lossless,
-                    self.bit_depth,
-                );
+            let dequant = &self.scratch.dequant_buf[..seg_eob];
+            let dst = &mut self.planes[plane];
+            let stride = dst.stride();
+            let local_x = start_x - dst.x0;
+            macro_rules! reconstruct {
+                ($base:expr) => {
+                    // SAFETY: AVX2 is enabled. The coefficients and destination
+                    // cover a complete transform block in the padded plane.
+                    unsafe {
+                        crate::simd::inverse_transform_reconstruct_avx2(
+                            $base,
+                            stride,
+                            local_x,
+                            start_y,
+                            dequant,
+                            n,
+                            tx_type,
+                            max_row,
+                            self.lossless,
+                            self.bit_depth,
+                        )
+                    }
+                };
+            }
+            if let Some(base) = dst.byte_ptr() {
+                reconstruct!(base);
+            } else {
+                reconstruct!(dst.word_ptr().unwrap());
             }
             return;
         }
@@ -645,13 +654,10 @@ impl TileDecoder<'_> {
         );
         let max_val = (1i64 << self.bit_depth) - 1;
         for i in 0..n0 {
-            // SAFETY: `start_y + i < start_y + n0 <= planes[plane].height` (superblock-padded).
-            let row = &mut unsafe { self.planes[plane].row_mut_unchecked(start_y + i) }
-                [local_x..local_x + n0];
-            let dq_row = &self.scratch.dequant_buf[i * n0..(i + 1) * n0];
-            for (px, &dq) in row.iter_mut().zip(dq_row.iter()) {
-                *px = (*px as i64 + dq).clamp(0, max_val) as u16;
-            }
+            let coeff = &self.scratch.dequant_buf[i * n0..][..n0];
+            self.planes[plane].update_row(start_x, start_y + i, n0, |j, sample| {
+                (i64::from(sample) + coeff[j]).clamp(0, max_val) as u16
+            });
         }
     }
 

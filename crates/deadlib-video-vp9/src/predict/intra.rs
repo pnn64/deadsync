@@ -10,6 +10,9 @@ use crate::prob_tables::{
 };
 
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+use super::RefSample;
+
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[inline]
 fn load_clamped_above(plane: &Plane, x: usize, y: usize, max_x: usize, dst: &mut [u16]) {
     for (i, slot) in dst.iter_mut().enumerate() {
@@ -54,9 +57,16 @@ pub fn predict_intra(
 ) {
     #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     if matches!(mode, V_PRED | H_PRED | DC_PRED | TM_PRED) && crate::simd::avx2_enabled() {
-        predict_intra_avx2(
-            plane, x, y, have_left, have_above, tx_size, mode, max_x, max_y, bit_depth,
-        );
+        if let Some(dst) = plane.byte_ptr() {
+            predict_intra_avx2(
+                plane, dst, x, y, have_left, have_above, tx_size, mode, max_x, max_y, bit_depth,
+            );
+        } else {
+            let dst = plane.word_ptr().unwrap();
+            predict_intra_avx2(
+                plane, dst, x, y, have_left, have_above, tx_size, mode, max_x, max_y, bit_depth,
+            );
+        }
         return;
     }
 
@@ -75,42 +85,43 @@ pub fn predict_intra(
     );
 }
 
-/// Runs `f(dst_base, above)` borrowing row `y - 1` strictly within `[local_x..local_x + size]`
-/// when `have_above && x + size - 1 <= max_x`, or via a stack-clamped buffer otherwise.
-/// Uses `plane.base_ptr_mut()` without ever forming an overlapping full-plane `&mut [u16]` slice.
+/// Borrows a contiguous wide row when possible and gathers byte or clamped neighbors otherwise.
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[inline]
 #[allow(clippy::too_many_arguments)]
-fn with_above_row<F: FnOnce(*mut u16, Option<&[u16]>)>(
-    plane: &mut Plane,
+fn with_above_row<T: RefSample>(
+    plane: &Plane,
+    dst: *mut T,
     x: usize,
     y: usize,
     size: usize,
     max_x: usize,
     have_above: bool,
-    f: F,
+    f: impl FnOnce(Option<&[u16]>),
 ) {
     let pw = plane.stride();
     let local_x = x - plane.x0;
-    if have_above && x + size - 1 <= max_x {
-        let base = plane.base_ptr_mut();
+    if have_above && !T::IS_U8 && x + size - 1 <= max_x {
         // SAFETY: `y >= 1` (`have_above`), `local_x + size <= plane.width`, and row `y - 1` is
         // strictly disjoint from destination rows `y..y + size` written by `f` through `base`.
-        let above = unsafe { core::slice::from_raw_parts(base.add((y - 1) * pw + local_x), size) };
-        f(base, Some(above));
+        let above = unsafe {
+            core::slice::from_raw_parts(dst.cast::<u16>().add((y - 1) * pw + local_x), size)
+        };
+        f(Some(above));
     } else if have_above {
         let mut above_buf = [0u16; 32];
         load_clamped_above(plane, x, y, max_x, &mut above_buf[..size]);
-        f(plane.base_ptr_mut(), Some(&above_buf[..size]));
+        f(Some(&above_buf[..size]));
     } else {
-        f(plane.base_ptr_mut(), None);
+        f(None);
     }
 }
 
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[allow(clippy::too_many_arguments)]
-fn predict_intra_avx2(
-    plane: &mut Plane,
+fn predict_intra_avx2<T: RefSample>(
+    plane: &Plane,
+    dst: *mut T,
     x: usize,
     y: usize,
     have_left: bool,
@@ -136,17 +147,10 @@ fn predict_intra_avx2(
             if !have_above {
                 // SAFETY: avx2_enabled() confirmed by caller; block bounds checked above.
                 unsafe {
-                    crate::simd::intra_pred_fill_avx2(
-                        plane.base_ptr_mut(),
-                        pw,
-                        local_x,
-                        y,
-                        base - 1,
-                        size,
-                    );
+                    crate::simd::intra_pred_fill_avx2(dst, pw, local_x, y, base - 1, size);
                 }
             } else {
-                with_above_row(plane, x, y, size, max_x, true, |dst, above| {
+                with_above_row(plane, dst, x, y, size, max_x, true, |above| {
                     // SAFETY: avx2_enabled() confirmed; `above` has len `size` and bounds hold.
                     unsafe {
                         crate::simd::intra_pred_v_avx2(dst, pw, local_x, y, above.unwrap(), size);
@@ -158,28 +162,14 @@ fn predict_intra_avx2(
             if !have_left {
                 // SAFETY: avx2_enabled() confirmed; block bounds checked above.
                 unsafe {
-                    crate::simd::intra_pred_fill_avx2(
-                        plane.base_ptr_mut(),
-                        pw,
-                        local_x,
-                        y,
-                        base + 1,
-                        size,
-                    );
+                    crate::simd::intra_pred_fill_avx2(dst, pw, local_x, y, base + 1, size);
                 }
             } else {
                 let mut left_buf = [0u16; 32];
                 load_clamped_left(plane, x, y, max_y, &mut left_buf[..size]);
                 // SAFETY: avx2_enabled() confirmed; left_buf[..size] and block bounds hold.
                 unsafe {
-                    crate::simd::intra_pred_h_avx2(
-                        plane.base_ptr_mut(),
-                        pw,
-                        local_x,
-                        y,
-                        &left_buf[..size],
-                        size,
-                    );
+                    crate::simd::intra_pred_h_avx2(dst, pw, local_x, y, &left_buf[..size], size);
                 }
             }
         }
@@ -189,7 +179,7 @@ fn predict_intra_avx2(
                 load_clamped_left(plane, x, y, max_y, &mut left_buf[..size]);
                 &left_buf[..size]
             });
-            with_above_row(plane, x, y, size, max_x, have_above, |dst, above_opt| {
+            with_above_row(plane, dst, x, y, size, max_x, have_above, |above_opt| {
                 // SAFETY: avx2_enabled() confirmed; neighbor slices and block bounds hold.
                 unsafe {
                     crate::simd::intra_pred_dc_avx2(
@@ -212,7 +202,7 @@ fn predict_intra_avx2(
                 load_clamped_left(plane, x, y, max_y, &mut left_buf[..size]);
             }
             let fallback_above = [base - 1; 32];
-            with_above_row(plane, x, y, size, max_x, have_above, |dst, above_opt| {
+            with_above_row(plane, dst, x, y, size, max_x, have_above, |above_opt| {
                 let above = above_opt.unwrap_or(&fallback_above[..size]);
                 // SAFETY: avx2_enabled() confirmed; neighbor slices and block bounds hold.
                 unsafe {

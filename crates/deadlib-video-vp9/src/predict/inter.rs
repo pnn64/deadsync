@@ -327,32 +327,61 @@ fn block_inter_predict_into_plane(
     interp_filter: u8,
     bit_depth: u8,
     compound: bool,
+    scratch: &mut [u16],
 ) {
     debug_assert!(w <= MAX_BLOCK_DIM && h <= MAX_BLOCK_DIM);
     debug_assert!(dst_x >= dst.x0 && dst_x - dst.x0 + w <= dst.width);
     debug_assert!(dst_y + h <= dst.height);
     let ref_slice = ref_plane.as_slice_ref();
 
+    if let RefSlice::U8(src) = ref_slice {
+        let (sx, sy) = (x >> 4, y >> 4);
+        if x_step == 16
+            && y_step == 16
+            && (x | y) & 15 == 0
+            && sx >= 0
+            && sy >= 0
+            && sx as usize + w <= ref_plane.width
+            && sy as usize + h <= ref_plane.height
+        {
+            let stride = ref_plane.stride();
+            let start = sy as usize * stride + sx as usize;
+            if dst.copy_byte_block([dst_x, dst_y], [w, h], &src[start..], stride, compound) {
+                return;
+            }
+        }
+    }
+
+    let _ = &scratch;
     #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     if (w == 4 || w.is_multiple_of(8))
         && crate::simd::avx2_enabled()
-        && try_inter_predict_avx2(
-            ref_slice,
-            ref_plane.width,
-            ref_plane.stride(),
-            ref_plane.height,
-            dst,
-            dst_x,
-            dst_y,
-            x,
-            y,
-            x_step,
-            y_step,
-            w,
-            h,
-            interp_filter,
-            bit_depth,
+        && dst.with_word_block(
+            [dst_x, dst_y],
+            [w, h],
             compound,
+            scratch,
+            |base, stride, col, row| {
+                try_inter_predict_avx2(
+                    ref_slice,
+                    ref_plane.width,
+                    ref_plane.stride(),
+                    ref_plane.height,
+                    base,
+                    stride,
+                    col,
+                    row,
+                    x,
+                    y,
+                    x_step,
+                    y_step,
+                    w,
+                    h,
+                    interp_filter,
+                    bit_depth,
+                    compound,
+                )
+            },
         )
     {
         return;
@@ -375,20 +404,15 @@ fn block_inter_predict_into_plane(
         bit_depth,
         &mut pred[..w * h],
     );
-    let local_x = dst_x - dst.x0;
-    for i in 0..h {
-        // SAFETY: `dst_y + i < dst_y + h <= dst.height` (checked by debug_assert above).
-        let dst_row = &mut unsafe { dst.row_mut_unchecked(dst_y + i) }[local_x..local_x + w];
-        let src_row = &pred[i * w..(i + 1) * w];
-        if compound {
-            for (d, &s) in dst_row.iter_mut().zip(src_row.iter()) {
-                *d = round2(*d as i32 + s, 1) as u16;
+    for row in 0..h {
+        let src = &pred[row * w..][..w];
+        dst.update_row(dst_x, dst_y + row, w, |i, sample| {
+            if compound {
+                round2(i32::from(sample) + src[i], 1) as u16
+            } else {
+                src[i] as u16
             }
-        } else {
-            for (d, &s) in dst_row.iter_mut().zip(src_row.iter()) {
-                *d = s as u16;
-            }
-        }
+        });
     }
 }
 
@@ -399,8 +423,9 @@ fn try_inter_predict_avx2(
     ref_width: usize,
     ref_stride: usize,
     ref_height: usize,
-    dst: &mut Plane,
-    dst_x: usize,
+    dst_ptr: *mut u16,
+    dst_stride: usize,
+    local_x: usize,
     dst_y: usize,
     x: i64,
     y: i64,
@@ -413,9 +438,6 @@ fn try_inter_predict_avx2(
     compound: bool,
 ) -> bool {
     let max_val = (1i32 << bit_depth) - 1;
-    let local_x = dst_x - dst.x0;
-    let dst_stride = dst.stride();
-    let dst_ptr = dst.base_ptr_mut();
     let last_x = ref_width as i64 - 1;
     let last_y = ref_height as i64 - 1;
 
@@ -523,6 +545,7 @@ pub fn predict_inter(
     h: usize,
     block_idx: usize,
     p: &InterPredictParams,
+    scratch: &mut [u16],
 ) {
     let is_compound = p.ref_frame[1] > INTRA_FRAME;
     let n_refs = 1 + is_compound as usize;
@@ -547,6 +570,7 @@ pub fn predict_inter(
             p.interp_filter,
             p.bit_depth,
             ref_list == 1,
+            scratch,
         );
     }
 }

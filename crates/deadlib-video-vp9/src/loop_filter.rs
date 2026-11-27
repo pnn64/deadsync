@@ -238,26 +238,35 @@ fn superblock_loop_filter<P: PlaneAccess>(
                 let py0 = (group.y >> sub_y) as usize;
                 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
                 if use_avx2 {
-                    let lf_fn = match pass {
-                        FilterPass::Horizontal => crate::simd::loop_filter_horiz8_uniform_avx2,
-                        FilterPass::Vertical => crate::simd::loop_filter_vert8_uniform_avx2,
-                    };
-                    // SAFETY: `avx2_enabled()` confirmed; active lanes lie within the
-                    // superblock-padded plane, and `filter_size == TX_16X16` guarantees the
-                    // `p7..q7` window is in bounds (same proof as scalar `sample_filtering`).
-                    unsafe {
-                        lf_fn(
-                            plane.lf_base_ptr(),
-                            plane.lf_stride(),
-                            px0,
-                            py0,
-                            group.active_lanes,
-                            spec.filter_size,
-                            limit,
-                            blimit,
-                            thresh,
-                            ctx.bit_depth,
-                        );
+                    macro_rules! filter {
+                        ($ptr:expr) => {{
+                            let filter = match pass {
+                                FilterPass::Horizontal => {
+                                    crate::simd::loop_filter_horiz8_uniform_avx2
+                                }
+                                FilterPass::Vertical => crate::simd::loop_filter_vert8_uniform_avx2,
+                            };
+                            // The edge-group bounds include the filter taps and all lanes.
+                            unsafe {
+                                filter(
+                                    $ptr,
+                                    plane.lf_stride(),
+                                    px0,
+                                    py0,
+                                    group.active_lanes,
+                                    spec.filter_size,
+                                    limit,
+                                    blimit,
+                                    thresh,
+                                    ctx.bit_depth,
+                                )
+                            };
+                        }};
+                    }
+                    if let Some(bytes) = plane.lf_byte_ptr() {
+                        filter!(bytes);
+                    } else {
+                        filter!(plane.lf_base_ptr().unwrap());
                     }
                     i += 8;
                     continue;

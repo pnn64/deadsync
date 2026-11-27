@@ -18,7 +18,7 @@ pub(super) use adst::iadst_simd;
 use adst_hbd::xform_pass_i64;
 pub(super) use dct::{idct_permute_simd, idct_simd};
 
-use crate::transform::TxType;
+use crate::{predict::RefSample, transform::TxType};
 use core::arch::x86_64::*;
 use core::mem::MaybeUninit;
 
@@ -195,8 +195,8 @@ unsafe fn idct_2d_dct<const HBD: bool>(dequant: &[i64], n: u32, max_row: usize, 
 /// `plane_width`); and every row strictly below `max_row` in `dequant` must be zero.
 #[allow(clippy::too_many_arguments)]
 #[target_feature(enable = "avx2")]
-pub unsafe fn inverse_transform_reconstruct_avx2(
-    plane_base: *mut u16,
+pub unsafe fn inverse_transform_reconstruct_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,
@@ -241,7 +241,7 @@ pub unsafe fn inverse_transform_reconstruct_avx2(
             );
         }
     } else if bit_depth == 8 {
-        idct_dct_reconstruct::<false>(
+        idct_dct_reconstruct::<false, T>(
             plane_base,
             plane_width,
             start_x,
@@ -253,7 +253,7 @@ pub unsafe fn inverse_transform_reconstruct_avx2(
         );
     } else {
         let max_val = (1i32 << bit_depth) - 1;
-        idct_dct_reconstruct::<true>(
+        idct_dct_reconstruct::<true, T>(
             plane_base,
             plane_width,
             start_x,
@@ -273,8 +273,8 @@ pub unsafe fn inverse_transform_reconstruct_avx2(
 /// Same contract as [`inverse_transform_dct_dct_reconstruct_eob_avx2`] (with `2 <= n <= 4`);
 /// `tx_type` must not be `DctDct` and the stream must be 8-bit.
 #[target_feature(enable = "avx2")]
-pub unsafe fn inverse_transform_adst_reconstruct_avx2(
-    plane_base: *mut u16,
+unsafe fn inverse_transform_adst_reconstruct_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,
@@ -318,8 +318,8 @@ pub unsafe fn inverse_transform_adst_reconstruct_avx2(
 /// `tx_type != DctDct`); `bit_depth` must be 10 or 12.
 #[allow(clippy::too_many_arguments)]
 #[target_feature(enable = "avx2")]
-pub unsafe fn inverse_transform_adst_reconstruct_hbd_avx2(
-    plane_base: *mut u16,
+unsafe fn inverse_transform_adst_reconstruct_hbd_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,
@@ -370,8 +370,8 @@ pub unsafe fn inverse_transform_adst_reconstruct_hbd_avx2(
 /// `n0 x n0` block at `(start_x, start_y)` is in bounds for `plane_base` (stride `plane_width`).
 #[allow(clippy::too_many_arguments)]
 #[target_feature(enable = "avx2")]
-unsafe fn idct_dct_reconstruct<const HBD: bool>(
-    plane_base: *mut u16,
+unsafe fn idct_dct_reconstruct<const HBD: bool, T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,
@@ -404,8 +404,8 @@ unsafe fn idct_dct_reconstruct<const HBD: bool>(
 /// `-max_val..=max_val` with `max_val <= 4095`; and `start_y..start_y+n0` x `start_x..start_x+n0`
 /// must be in bounds for `plane_base` (stride `plane_width`).
 #[target_feature(enable = "avx2")]
-pub unsafe fn reconstruct_add_const_avx2(
-    plane_base: *mut u16,
+pub unsafe fn reconstruct_add_const_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,
@@ -415,6 +415,19 @@ pub unsafe fn reconstruct_add_const_avx2(
 ) {
     debug_assert!(matches!(n0, 4 | 8 | 16 | 32));
     debug_assert!(start_x + n0 <= plane_width);
+
+    if T::IS_U8 {
+        let base = plane_base.cast::<u8>();
+        let add = _mm_set1_epi8(delta.max(0) as i8);
+        let sub = _mm_set1_epi8((-delta).max(0) as i8);
+        match n0 {
+            4 => add_dc_u8::<4>(base, plane_width, start_x, start_y, add, sub),
+            8 => add_dc_u8::<8>(base, plane_width, start_x, start_y, add, sub),
+            16 => add_dc_u8::<16>(base, plane_width, start_x, start_y, add, sub),
+            _ => add_dc_u8::<32>(base, plane_width, start_x, start_y, add, sub),
+        }
+        return;
+    }
 
     let base = plane_base;
     if n0 <= 8 {
@@ -452,8 +465,59 @@ pub unsafe fn reconstruct_add_const_avx2(
     }
 }
 
+#[target_feature(enable = "avx2")]
+unsafe fn add_dc_u8<const N: usize>(
+    base: *mut u8,
+    stride: usize,
+    x: usize,
+    y: usize,
+    add: __m128i,
+    sub: __m128i,
+) {
+    for i in 0..N {
+        let row = base.add((y + i) * stride + x);
+        if N == 4 {
+            let pred = _mm_cvtsi32_si128(row.cast::<i32>().read_unaligned());
+            let result = _mm_subs_epu8(_mm_adds_epu8(pred, add), sub);
+            row.cast::<i32>().write_unaligned(_mm_cvtsi128_si32(result));
+        } else if N == 8 {
+            let pred = _mm_loadl_epi64(row.cast());
+            let result = _mm_subs_epu8(_mm_adds_epu8(pred, add), sub);
+            _mm_storel_epi64(row.cast(), result);
+        } else {
+            for j in (0..N).step_by(16) {
+                let ptr = row.add(j).cast::<__m128i>();
+                let pred = _mm_loadu_si128(ptr);
+                let result = _mm_subs_epu8(_mm_adds_epu8(pred, add), sub);
+                _mm_storeu_si128(ptr, result);
+            }
+        }
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn add_residual4<T: RefSample>(row: *mut T, resid: __m128i, max: __m128i) {
+    let pred = if T::IS_U8 {
+        _mm_cvtepu8_epi32(_mm_cvtsi32_si128(row.cast::<i32>().read_unaligned()))
+    } else {
+        _mm_cvtepu16_epi32(_mm_loadl_epi64(row.cast()))
+    };
+    let clipped = _mm_min_epi32(
+        _mm_max_epi32(_mm_add_epi32(pred, resid), _mm_setzero_si128()),
+        max,
+    );
+    let packed = _mm_packus_epi32(clipped, clipped);
+    if T::IS_U8 {
+        row.cast::<i32>()
+            .write_unaligned(_mm_cvtsi128_si32(_mm_packus_epi16(packed, packed)));
+    } else {
+        _mm_storel_epi64(row.cast(), packed);
+    }
+}
+
 /// Per-pixel `clip(pred + residual, 0, max_val)` of the n0 x n0 residual block `o` (row-major)
-/// straight into the u16 plane.
+/// straight into the reconstruction plane.
 ///
 /// # Safety
 /// Caller must confirm `avx2_enabled()`, `n0` is `4, 8, 16, or 32`, `o` is valid for `n0 * n0`
@@ -461,8 +525,8 @@ pub unsafe fn reconstruct_add_const_avx2(
 /// `plane_data` (stride `plane_width`).
 #[inline(never)]
 #[target_feature(enable = "avx2")]
-unsafe fn reconstruct_add_clip(
-    plane_base: *mut u16,
+unsafe fn reconstruct_add_clip<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,
@@ -477,14 +541,8 @@ unsafe fn reconstruct_add_clip(
     if n0 == 4 {
         for i in 0..4 {
             let row = base.add((start_y + i) * plane_width + start_x);
-            let pred = _mm_cvtepu16_epi32(_mm_loadl_epi64(row as *const __m128i));
             let resid = _mm_loadu_si128(o.add(i * 4) as *const __m128i);
-            let sum = _mm_add_epi32(pred, resid);
-            let clipped = _mm_min_epi32(
-                _mm_max_epi32(sum, _mm256_castsi256_si128(zero)),
-                _mm256_castsi256_si128(max),
-            );
-            _mm_storel_epi64(row as *mut __m128i, _mm_packus_epi32(clipped, clipped));
+            add_residual4(row, resid, _mm256_castsi256_si128(max));
         }
         return;
     }
@@ -493,7 +551,11 @@ unsafe fn reconstruct_add_clip(
         let mut j = 0usize;
         while j < n0 {
             let row = base.add((start_y + i) * plane_width + start_x + j);
-            let pred = _mm256_cvtepu16_epi32(_mm_loadu_si128(row as *const __m128i));
+            let pred = if T::IS_U8 {
+                _mm256_cvtepu8_epi32(_mm_loadl_epi64(row.cast()))
+            } else {
+                _mm256_cvtepu16_epi32(_mm_loadu_si128(row.cast()))
+            };
             let resid = _mm256_loadu_si256(o.add(i * n0 + j) as *const __m256i);
             let sum = _mm256_add_epi32(pred, resid);
             let clipped = _mm256_min_epi32(_mm256_max_epi32(sum, zero), max);
@@ -501,7 +563,11 @@ unsafe fn reconstruct_add_clip(
                 _mm256_castsi256_si128(clipped),
                 _mm256_extracti128_si256(clipped, 1),
             );
-            _mm_storeu_si128(row as *mut __m128i, packed);
+            if T::IS_U8 {
+                _mm_storel_epi64(row.cast(), _mm_packus_epi16(packed, packed));
+            } else {
+                _mm_storeu_si128(row.cast(), packed);
+            }
             j += 8;
         }
     }
@@ -558,8 +624,8 @@ unsafe fn load_4_i64_as_i32(ptr: *const i64) -> __m128i {
 /// `avx2_enabled()` must hold; `dequant.len()` must be 16; `bit_depth` must be 8, 10, or 12;
 /// and the 4x4 block at `(start_x, start_y)` (stride `plane_width`) must be in bounds.
 #[target_feature(enable = "avx2")]
-pub unsafe fn inverse_transform_wht_reconstruct_avx2(
-    plane_base: *mut u16,
+unsafe fn inverse_transform_wht_reconstruct_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,
@@ -583,13 +649,9 @@ pub unsafe fn inverse_transform_wht_reconstruct_avx2(
     iwht4_simd::<false>(&mut col_t);
 
     let base = plane_base;
-    let zero = _mm_setzero_si128();
     let max = _mm_set1_epi32((1i32 << bit_depth) - 1);
     for (i, &resid) in col_t.iter().enumerate() {
         let row = base.add((start_y + i) * plane_width + start_x);
-        let pred = _mm_cvtepu16_epi32(_mm_loadl_epi64(row as *const __m128i));
-        let sum = _mm_add_epi32(pred, resid);
-        let clipped = _mm_min_epi32(_mm_max_epi32(sum, zero), max);
-        _mm_storel_epi64(row as *mut __m128i, _mm_packus_epi32(clipped, clipped));
+        add_residual4(row, resid, max);
     }
 }

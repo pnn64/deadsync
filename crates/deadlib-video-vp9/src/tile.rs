@@ -232,7 +232,7 @@ fn check_tile_read_bounds(r: &BoolDecoder, tile_bytes: &[u8]) -> Result<(), Tile
 /// (all 4 sub-blocks share [`MiInfo::mv`]).
 pub(super) const NO_SUB_MVS: u32 = u32::MAX;
 
-/// Information held by a single 8x8 mode info unit (spec §2.37 "Mode info"), packed into 24 bytes.
+/// Information held by a single 8x8 mode info unit (spec §2.37 "Mode info"), packed into 16 bytes.
 ///
 /// Bit packing preserves exact value ranges:
 /// - `size_mode`: `mi_size` (0..=12, bits 0..4) | `y_mode` (0..=13, bits 4..8)
@@ -246,7 +246,7 @@ pub(super) const NO_SUB_MVS: u32 = u32::MAX;
 pub struct MiInfo {
     /// `Mvs[ refList ]` (representative MV == `BlockMvs[ refList ][ 3 ]`, spec §6.4.4).
     /// Units are 1/8 pel. `[[0, 0]; 2]` for intra blocks.
-    pub mv: [[i32; 2]; 2],
+    mv: [[i16; 2]; 2],
     extra: u32,
     size_mode: u8,
     ref_tx_interp: u8,
@@ -287,7 +287,7 @@ impl MiInfo {
         ref_frame: [u8; 2],
         mv: [[i32; 2]; 2],
         interp_filter: u8,
-    ) -> Self {
+    ) -> Result<Self, TileError> {
         debug_assert!(
             mi_size < 16
                 && y_mode < 16
@@ -297,8 +297,14 @@ impl MiInfo {
                 && interp_filter < 4
                 && segment_id < 8
         );
-        Self {
-            mv,
+        let compact = |[y, x]: Mv| -> Result<[i16; 2], TileError> {
+            Ok([
+                i16::try_from(y).map_err(|_| TileError::CorruptTile)?,
+                i16::try_from(x).map_err(|_| TileError::CorruptTile)?,
+            ])
+        };
+        Ok(Self {
+            mv: [compact(mv[0])?, compact(mv[1])?],
             extra: NO_SUB_MVS,
             size_mode: mi_size | (y_mode << 4),
             ref_tx_interp: ref_frame[0]
@@ -307,7 +313,12 @@ impl MiInfo {
                 | (interp_filter << 6),
             seg_skip_uv: segment_id | ((skip as u8) << 3),
             _pad: 0,
-        }
+        })
+    }
+
+    #[inline]
+    pub(super) fn mv(&self, list: usize) -> Mv {
+        self.mv[list].map(i32::from)
     }
 
     #[inline]
@@ -394,8 +405,7 @@ impl Default for MiInfo {
 /// arrays into a single compact struct. Its size is `Sb64Cols*8 x Sb64Rows*8`
 /// (allocated to also cover the portion of edge superblocks that extends past the frame).
 ///
-/// Not `Clone`: the previous frame's grid is shared into the next frame's `TileDecoder` via
-/// `Arc<MiGrid>` (see `crate::Decoder::prev_mi_grid`) rather than deep-cloned.
+/// The decoder retains this grid for the next frame's temporal prediction.
 pub struct MiGrid {
     cols: usize,
     rows: usize,
@@ -474,7 +484,7 @@ impl MiGrid {
     #[inline]
     pub(super) fn get_sub_mv(&self, info: &MiInfo, ref_list: usize, idx: usize) -> Mv {
         if idx == 3 || info.extra == NO_SUB_MVS {
-            info.mv[ref_list]
+            info.mv(ref_list)
         } else {
             debug_assert!(
                 (info.extra as usize) < self.sub_mvs.len(),
@@ -546,6 +556,7 @@ impl MiGrid {
 pub(crate) struct TileScratch {
     pub(super) dequant_buf: [i64; 1024],
     pub(super) token_cache_buf: [u8; 1024],
+    pub(super) word_block: [u16; 4096],
 }
 
 impl TileScratch {
@@ -553,6 +564,7 @@ impl TileScratch {
         Box::new(Self {
             dequant_buf: [0i64; 1024],
             token_cache_buf: [0u8; 1024],
+            word_block: [0; 4096],
         })
     }
 }
@@ -677,13 +689,8 @@ pub struct TileDecoder<'p> {
     reference_mode: u8,
     comp_fixed_ref: u8,
     comp_var_ref: [u8; 2],
-    /// `UsePrevFrameMvs` (spec §7.2.6). When true, `Mvs`/`RefFrames` of the previous frame
-    /// are referenced via `prev_mi_grid`.
-    use_prev_frame_mvs: bool,
-    /// `MiGrid` of the most recently decoded frame (equivalent to `PrevMvs`/`PrevRefFrames`).
-    /// Not referenced when `use_prev_frame_mvs == false` (may be `None`). `Arc`-shared with
-    /// the caller's copy (read-only here) to avoid a clone-in every frame.
-    prev_mi_grid: Option<Arc<MiGrid>>,
+    /// Previous mode-info grid when temporal motion-vector prediction is enabled.
+    prev_mi_grid: Option<&'p MiGrid>,
 
     // --- Additional state needed for motion compensation (spec §8.5.2). ---
     /// `FrameWidth`/`FrameHeight` (actual size used for display/scaling calculations, distinct
@@ -710,8 +717,7 @@ impl<'p> TileDecoder<'p> {
         header: &NewFrameHeader,
         color_config: ColorConfig,
         compressed: &'p CompressedHeader,
-        use_prev_frame_mvs: bool,
-        prev_mi_grid: Option<Arc<MiGrid>>,
+        prev_mi_grid: Option<&'p MiGrid>,
         resolved_refs: [Option<Arc<RefFrameData>>; 3],
         prev_segment_ids: Arc<Vec<u8>>,
         collect_counts: bool,
@@ -737,9 +743,9 @@ impl<'p> TileDecoder<'p> {
             })
             .unwrap_or_else(|| {
                 [
-                    Plane::new(y_w, y_h),
-                    Plane::new(uv_w, uv_h),
-                    Plane::new(uv_w, uv_h),
+                    Plane::new(y_w, y_h, color_config.bit_depth == 8),
+                    Plane::new(uv_w, uv_h, color_config.bit_depth == 8),
+                    Plane::new(uv_w, uv_h, color_config.bit_depth == 8),
                 ]
             });
         let mi_grid = recycled
@@ -804,7 +810,6 @@ impl<'p> TileDecoder<'p> {
             reference_mode: compressed.reference_mode,
             comp_fixed_ref: compressed.comp_fixed_ref,
             comp_var_ref: compressed.comp_var_ref,
-            use_prev_frame_mvs,
             prev_mi_grid,
             frame_width: header.width,
             frame_height: header.height,
@@ -840,18 +845,6 @@ impl<'p> TileDecoder<'p> {
         if let Some(counts) = self.counts.as_deref_mut() {
             f(counts);
         }
-    }
-
-    /// The collected syntax element counters (used for probability adaptation, spec §8.4).
-    /// Panics if count collection was disabled for this frame.
-    pub fn counts(&self) -> &Counts {
-        self.counts
-            .as_deref()
-            .expect("counts() called with count collection disabled")
-    }
-
-    pub fn mi_grid(&self) -> &MiGrid {
-        &self.mi_grid
     }
 
     /// Applies the loop filter (spec §8.8, [`crate::loop_filter`]) to the decoded `planes`.

@@ -8,7 +8,28 @@
 //! (skipping `wide16`), plus sliding-sum formulations of `wide8`/`wide16` with zero multiplies.
 //! `loop_filter.rs` owns the dispatch, MI-level parameter derivation, and scalar fallback.
 
+use crate::predict::RefSample;
 use core::arch::x86_64::*;
+
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn load8<T: RefSample>(ptr: *const T) -> __m128i {
+    if T::IS_U8 {
+        _mm_cvtepu8_epi16(_mm_loadl_epi64(ptr.cast()))
+    } else {
+        _mm_loadu_si128(ptr.cast())
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn store8<T: RefSample>(ptr: *mut T, value: __m128i) {
+    if T::IS_U8 {
+        _mm_storel_epi64(ptr.cast(), _mm_packus_epi16(value, value));
+    } else {
+        _mm_storeu_si128(ptr.cast(), value);
+    }
+}
 
 /// Result of running the horizontal kernel on an 8-lane batch, telling [`loop_filter_vert8_core`]
 /// how much of the transposed tap window (if any) needs to be transposed back to the plane.
@@ -32,8 +53,8 @@ enum FilterWriteScope {
 #[inline(never)]
 #[target_feature(enable = "avx2")]
 #[allow(clippy::too_many_arguments)]
-unsafe fn loop_filter_horiz8_core(
-    plane_base: *mut u16,
+unsafe fn loop_filter_horiz8_core<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     x0: usize,
     y0: usize,
@@ -48,7 +69,7 @@ unsafe fn loop_filter_horiz8_core(
     let base = plane_base;
     let load_row = |dy: i64| -> __m256i {
         let row_ptr = base.offset(((y0 as i64 + dy) * plane_width as i64 + x0 as i64) as isize);
-        _mm256_cvtepu16_epi32(_mm_loadu_si128(row_ptr as *const __m128i))
+        _mm256_cvtepu16_epi32(load8(row_ptr))
     };
     let p3 = load_row(-4);
     let p2 = load_row(-3);
@@ -133,7 +154,7 @@ unsafe fn loop_filter_horiz8_core(
         let hi = _mm256_extracti128_si256(v, 1);
         let u16x8 = _mm_packus_epi32(lo, hi);
         let row_ptr = base.offset(((y0 as i64 + dy) * plane_width as i64 + x0 as i64) as isize);
-        _mm_storeu_si128(row_ptr as *mut __m128i, u16x8);
+        store8(row_ptr, u16x8);
     };
 
     let store_narrow_only = || {
@@ -313,8 +334,8 @@ unsafe fn uniform_lane_masks(active_lanes: u32, filter_size: u8) -> (__m256i, __
 /// `y0-8..=y0+7` when `filter_size == 2`) lie within `plane_base` (stride `plane_width`).
 #[target_feature(enable = "avx2")]
 #[allow(clippy::too_many_arguments)]
-pub unsafe fn loop_filter_horiz8_uniform_avx2(
-    plane_base: *mut u16,
+pub unsafe fn loop_filter_horiz8_uniform_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     x0: usize,
     y0: usize,
@@ -382,16 +403,16 @@ unsafe fn transpose8x8_u16(r: &[__m128i; 8]) -> [__m128i; 8] {
 /// Caller must confirm `src` is valid for 8 rows of 8 `u16` reads at `src_stride` and `dst` is
 /// valid for 8 rows of 8 `u16` writes at `dst_stride`.
 #[inline]
-unsafe fn transpose_8x8_block(
-    src: *const u16,
+#[target_feature(enable = "avx2")]
+unsafe fn transpose_8x8_block<S: RefSample, D: RefSample>(
+    src: *const S,
     src_stride: usize,
-    dst: *mut u16,
+    dst: *mut D,
     dst_stride: usize,
 ) {
-    let rows: [__m128i; 8] =
-        core::array::from_fn(|r| _mm_loadu_si128(src.add(r * src_stride) as *const __m128i));
+    let rows: [__m128i; 8] = core::array::from_fn(|r| load8(src.add(r * src_stride)));
     for (r, &v) in transpose8x8_u16(&rows).iter().enumerate() {
-        _mm_storeu_si128(dst.add(r * dst_stride) as *mut __m128i, v);
+        store8(dst.add(r * dst_stride), v);
     }
 }
 
@@ -405,8 +426,8 @@ unsafe fn transpose_8x8_block(
 #[inline(never)]
 #[target_feature(enable = "avx2")]
 #[allow(clippy::too_many_arguments)]
-unsafe fn loop_filter_vert8_core(
-    plane_base: *mut u16,
+unsafe fn loop_filter_vert8_core<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     x0: usize,
     y0: usize,
@@ -489,8 +510,8 @@ unsafe fn loop_filter_vert8_core(
 /// `filter_size == 2`) across rows `y0..=y0+7` lie within `plane_base` (stride `plane_width`).
 #[target_feature(enable = "avx2")]
 #[allow(clippy::too_many_arguments)]
-pub unsafe fn loop_filter_vert8_uniform_avx2(
-    plane_base: *mut u16,
+pub unsafe fn loop_filter_vert8_uniform_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     x0: usize,
     y0: usize,

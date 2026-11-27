@@ -645,7 +645,7 @@ impl TileDecoder<'_> {
                 ref_frame,
                 mv,
                 interp_filter,
-            ),
+            )?,
             block_mvs,
         ))
     }

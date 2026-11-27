@@ -1,22 +1,27 @@
 //! AVX2 SIMD mirrors of `predict::predict_intra`'s high-frequency modes (spec §8.5.1):
 //! `V_PRED`, `H_PRED`, `DC_PRED` (all four neighbor-availability variants), and `TM_PRED`,
 //! across every transform block size (`4x4`, `8x8`, `16x16`, `32x32`) and all VP9 bit depths
-//! (`8`, `10`, `12` — every [`crate::framebuffer::Plane`] is `u16`-backed regardless of bit
-//! depth). `predict.rs` owns the dispatch, neighbor gathering/clamping, and the scalar
-//! fallback (which also handles the six directional modes `D45`..`D207`); this module owns
-//! only the vector kernels, writing directly into the plane's raw `u16` buffer (skipping
-//! the scalar path's 4 KB `i32` scratch array and per-pixel `Plane::set` loop).
+//! (`8`, `10`, `12`). These kernels write into the plane's native sample type.
 
 use core::arch::x86_64::*;
 
-/// Stores 4 or 8 `u16` lanes from `v` into `row`.
+use crate::predict::RefSample;
+
+/// Stores 4 or 8 samples from `v` into `row`.
 ///
 /// # Safety
-/// Caller must confirm `avx2_enabled()` and `row` valid for 4 (if `is_4`) or 8 `u16` writes.
+/// Caller must confirm `avx2_enabled()` and `row` valid for 4 (if `is_4`) or 8 sample writes.
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn store_row_128(row: *mut u16, v: __m128i, is_4: bool) {
-    if is_4 {
+unsafe fn store_row_128<T: RefSample>(row: *mut T, v: __m128i, is_4: bool) {
+    if T::IS_U8 {
+        let bytes = _mm_packus_epi16(v, v);
+        if is_4 {
+            row.cast::<i32>().write_unaligned(_mm_cvtsi128_si32(bytes));
+        } else {
+            _mm_storel_epi64(row.cast(), bytes);
+        }
+    } else if is_4 {
         _mm_storel_epi64(row as *mut __m128i, v);
     } else {
         _mm_storeu_si128(row as *mut __m128i, v);
@@ -37,20 +42,29 @@ unsafe fn load_row_128(src: *const u16, is_4: bool) -> __m128i {
     }
 }
 
-/// Stores 16 (`v0`) or 32 (`v0`, `v1`) `u16` lanes into `row`.
+/// Stores 16 (`v0`) or 32 (`v0`, `v1`) samples into `row`.
 ///
 /// # Safety
-/// Caller must confirm `avx2_enabled()` and `row` valid for 16 (or 32 if `is_32`) `u16` writes.
+/// Caller must confirm `avx2_enabled()` and `row` valid for 16 (or 32 if `is_32`) sample writes.
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn store_row_256(row: *mut u16, v0: __m256i, v1: __m256i, is_32: bool) {
-    _mm256_storeu_si256(row as *mut __m256i, v0);
-    if is_32 {
-        _mm256_storeu_si256(row.add(16) as *mut __m256i, v1);
+unsafe fn store_row_256<T: RefSample>(row: *mut T, v0: __m256i, v1: __m256i, is_32: bool) {
+    for (i, v) in [v0, v1]
+        .into_iter()
+        .take(if is_32 { 2 } else { 1 })
+        .enumerate()
+    {
+        let dst = row.add(i * 16);
+        if T::IS_U8 {
+            let bytes = _mm_packus_epi16(_mm256_castsi256_si128(v), _mm256_extracti128_si256(v, 1));
+            _mm_storeu_si128(dst.cast(), bytes);
+        } else {
+            _mm256_storeu_si256(dst.cast(), v);
+        }
     }
 }
 
-/// Fills an `size x size` block at `(start_x, start_y)` in `plane_data` (row-major `u16`,
+/// Fills a `size x size` block at `(start_x, start_y)` in `plane_data` (row-major samples,
 /// stride `plane_width`) with the constant `val`. Shared by `DC_PRED`, unavailable-above
 /// `V_PRED`, and unavailable-left `H_PRED`.
 ///
@@ -59,8 +73,8 @@ unsafe fn store_row_256(row: *mut u16, v0: __m256i, v1: __m256i, is_32: bool) {
 /// `start_y..start_y + size` x columns `start_x..start_x + size` must be in bounds for
 /// `plane_data`.
 #[target_feature(enable = "avx2")]
-pub unsafe fn intra_pred_fill_avx2(
-    plane_base: *mut u16,
+pub unsafe fn intra_pred_fill_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,
@@ -93,16 +107,15 @@ pub unsafe fn intra_pred_fill_avx2(
 }
 
 /// AVX2 `V_PRED` (vertical prediction, spec §8.5.1): copies `above[0..size]` into every
-/// row of the `size x size` destination block at `(start_x, start_y)`. Bit-depth-agnostic
-/// (`u16` copy; exact for 8/10/12-bit).
+/// row of the `size x size` destination block at `(start_x, start_y)`.
 ///
 /// # Safety
 /// `avx2_enabled()` must hold; `size` must be one of `4, 8, 16, 32`; `above.len() >= size`;
 /// and rows `start_y..start_y + size` x columns `start_x..start_x + size` must be in bounds
 /// for `plane_data`.
 #[target_feature(enable = "avx2")]
-pub unsafe fn intra_pred_v_avx2(
-    plane_base: *mut u16,
+pub unsafe fn intra_pred_v_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,
@@ -142,16 +155,15 @@ pub unsafe fn intra_pred_v_avx2(
 }
 
 /// AVX2 `H_PRED` (horizontal prediction, spec §8.5.1): broadcasts `left[i]` across row `i`
-/// of the `size x size` destination block at `(start_x, start_y)`. Bit-depth-agnostic
-/// (`u16` broadcast; exact for 8/10/12-bit).
+/// of the `size x size` destination block at `(start_x, start_y)`.
 ///
 /// # Safety
 /// `avx2_enabled()` must hold; `size` must be one of `4, 8, 16, 32`; `left.len() >= size`;
 /// and rows `start_y..start_y + size` x columns `start_x..start_x + size` must be in bounds
 /// for `plane_data`.
 #[target_feature(enable = "avx2")]
-pub unsafe fn intra_pred_h_avx2(
-    plane_base: *mut u16,
+pub unsafe fn intra_pred_h_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,
@@ -233,8 +245,8 @@ unsafe fn sum_u16_avx2(samples: &[u16], size: usize) -> i32 {
 /// `plane_data`.
 #[allow(clippy::too_many_arguments)]
 #[target_feature(enable = "avx2")]
-pub unsafe fn intra_pred_dc_avx2(
-    plane_base: *mut u16,
+pub unsafe fn intra_pred_dc_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,
@@ -275,8 +287,8 @@ pub unsafe fn intra_pred_dc_avx2(
 /// `start_x..start_x + size` must be in bounds for `plane_data`.
 #[allow(clippy::too_many_arguments)]
 #[target_feature(enable = "avx2")]
-pub unsafe fn intra_pred_tm_avx2(
-    plane_base: *mut u16,
+pub unsafe fn intra_pred_tm_avx2<T: RefSample>(
+    plane_base: *mut T,
     plane_width: usize,
     start_x: usize,
     start_y: usize,

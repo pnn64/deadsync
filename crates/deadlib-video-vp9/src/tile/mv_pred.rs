@@ -8,7 +8,7 @@
 //! `tile`-submodule alongside them, keeping the pure helpers in a separate top-level module
 //! serves no purpose.
 
-use super::{MiGrid, MiInfo, TileDecoder};
+use super::{MiInfo, TileDecoder};
 use crate::common::INTRA_FRAME;
 use crate::mv_ref_tables::{
     COUNTER_TO_CONTEXT, IDX_N_COLUMN_TO_SUBBLOCK, MODE_2_COUNTER, MV_REF_BLOCKS,
@@ -94,16 +94,6 @@ impl TileDecoder<'_> {
             && c < self.mi_col_end as i32
     }
 
-    /// Borrows `prev_mi_grid` when `use_prev_frame_mvs` is active and a previous grid is present.
-    #[inline]
-    fn prev_mi_grid_if_enabled(&self) -> Option<&MiGrid> {
-        if self.use_prev_frame_mvs {
-            self.prev_mi_grid.as_deref()
-        } else {
-            None
-        }
-    }
-
     /// `if_same_ref_frame_add_mv( candidateR, candidateC, refFrame, usePrev )` (spec §6.5.7).
     #[inline]
     fn add_same_ref_frame_mv(
@@ -114,9 +104,9 @@ impl TileDecoder<'_> {
     ) {
         let rf = info.ref_frame();
         if rf[0] == ref_frame {
-            add_mv_ref_list(ref_list_mv, ref_mv_count, info.mv[0]);
+            add_mv_ref_list(ref_list_mv, ref_mv_count, info.mv(0));
         } else if rf[1] == ref_frame {
-            add_mv_ref_list(ref_list_mv, ref_mv_count, info.mv[1]);
+            add_mv_ref_list(ref_list_mv, ref_mv_count, info.mv(1));
         }
     }
 
@@ -130,8 +120,8 @@ impl TileDecoder<'_> {
         ref_mv_count: &mut usize,
     ) {
         let [frame0, frame1] = info.ref_frame();
-        let mv0 = info.mv[0];
-        let mv1 = info.mv[1];
+        let mv0 = info.mv(0);
+        let mv1 = info.mv(1);
         let mvs_same = mv0 == mv1;
         if frame0 > INTRA_FRAME && frame0 != ref_frame {
             let scaled = scale_mv(mv0, frame0, ref_frame, &self.ref_frame_sign_bias);
@@ -209,7 +199,7 @@ impl TileDecoder<'_> {
         }
 
         if ref_mv_count < 2 {
-            if let Some(prev) = self.prev_mi_grid_if_enabled() {
+            if let Some(prev) = self.prev_mi_grid {
                 // SAFETY: `use_prev_frame_mvs` requires matching frame dimensions, so
                 // `(row, col)` is within `prev`'s whole-frame grid bounds.
                 let cand = unsafe { prev.get_unchecked(row, col) };
@@ -238,7 +228,7 @@ impl TileDecoder<'_> {
         }
 
         if ref_mv_count < 2 {
-            if let Some(prev) = self.prev_mi_grid_if_enabled() {
+            if let Some(prev) = self.prev_mi_grid {
                 // SAFETY: `use_prev_frame_mvs` guarantees matching dimensions for `prev`.
                 let cand = unsafe { prev.get_unchecked(row, col) };
                 self.add_diff_ref_frame_mv(cand, ref_frame, &mut ref_list_mv, &mut ref_mv_count);
