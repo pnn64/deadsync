@@ -1,18 +1,25 @@
 //! Keep a bounded number of retired bytecode buffers in the VM compiler spare.
 use crate::bytecode::{Instruction, InstructionMetadata, ProgramData};
+use crate::memory::fallible::VecExt;
 use std::cell::RefCell;
 
+const MIN_INSTRUCTIONS: usize = 32;
+const MAX_INSTRUCTIONS: usize = 256;
+const MAX_PER_SIZE: usize = 64;
+const MAX_RETAINED_BYTES: usize = 1024 * 1024;
+const BYTES_PER_INSTRUCTION: usize = size_of::<Instruction>() + size_of::<InstructionMetadata>();
+
 type Buffers = (Vec<Instruction>, Vec<InstructionMetadata>);
-type Entries = [[Option<Buffers>; 4]; 16];
+type Entries = [Vec<Buffers>; MAX_INSTRUCTIONS - MIN_INSTRUCTIONS + 1];
 
 thread_local! {
-    static ACTIVE: RefCell<Pool> = const { RefCell::new(Pool { entries: None }) };
+    static ACTIVE: RefCell<Pool> = const { RefCell::new(Pool { entries: None, retained: 0 }) };
 }
 
 #[derive(Default)]
 pub(super) struct Pool {
-    // Four entries per bucket leave room for both duplicates and nearby sizes.
     entries: Option<Box<Entries>>,
+    retained: usize,
 }
 
 struct Scope<'a> {
@@ -31,7 +38,7 @@ impl Drop for Scope<'_> {
 impl Pool {
     pub(super) fn collect<R>(&mut self, collect: impl FnOnce() -> R) -> R {
         if self.entries.is_none() {
-            self.entries = crate::memory::fallible::boxed(Entries::default()).ok();
+            self.entries = crate::memory::fallible::boxed(std::array::from_fn(|_| Vec::new())).ok();
             if self.entries.is_none() {
                 return collect();
             }
@@ -47,15 +54,10 @@ impl Pool {
     }
 
     pub(super) fn take(&mut self, capacity: usize) -> Option<Buffers> {
-        let bucket = &mut self.entries.as_mut()?[capacity % 16];
-        bucket
-            .iter_mut()
-            .find(|slot| {
-                slot.as_ref().is_some_and(|(code, metadata)| {
-                    code.capacity() == capacity && metadata.capacity() == capacity
-                })
-            })?
-            .take()
+        let index = capacity.checked_sub(MIN_INSTRUCTIONS)?;
+        let buffers = self.entries.as_mut()?.get_mut(index)?.pop()?;
+        self.retained -= capacity * BYTES_PER_INSTRUCTION;
+        Some(buffers)
     }
 
     fn recycle(&mut self, data: &mut ProgramData) {
@@ -66,13 +68,16 @@ impl Pool {
             return;
         };
         let capacity = prototype.code.len();
-        if !(32..=256).contains(&capacity) {
+        if !(MIN_INSTRUCTIONS..=MAX_INSTRUCTIONS).contains(&capacity)
+            || prototype.metadata.len() != capacity
+        {
             return;
         }
-        let bucket = &mut entries[capacity % 16];
-        let Some(slot) = bucket.iter_mut().find(|slot| slot.is_none()) else {
+        let bytes = capacity * BYTES_PER_INSTRUCTION;
+        let bucket = &mut entries[capacity - MIN_INSTRUCTIONS];
+        if self.retained + bytes > MAX_RETAINED_BYTES || bucket.len() == MAX_PER_SIZE {
             return;
-        };
+        }
         let Some((code, metadata)) = data.take_reusable_code() else {
             return;
         };
@@ -80,7 +85,9 @@ impl Pool {
         let mut metadata = metadata.into_vec();
         code.clear();
         metadata.clear();
-        *slot = Some((code, metadata));
+        if bucket.try_push((code, metadata)).is_ok() {
+            self.retained += bytes;
+        }
     }
 }
 
