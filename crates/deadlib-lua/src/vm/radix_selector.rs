@@ -356,20 +356,31 @@ impl Plan {
                 Scalar::Shift(shift + width),
             )
         } else {
-            let state = state.value();
-            let radix = radix.value();
-            let index = (numerator / state).floor() % radix + self.offset;
-            let number = if self.state_first {
-                state * radix
-            } else {
-                radix * state
-            };
-            (table.get(Value::Number(index)), Scalar::new(number))
+            self.select_number(table, numerator, state, radix)
         };
         if result == Value::Nil && table.metatable().is_some() {
             return None;
         }
         Some((result, next))
+    }
+
+    #[inline(never)]
+    fn select_number(
+        &self,
+        table: &Table,
+        numerator: f64,
+        state: Scalar,
+        radix: Scalar,
+    ) -> (Value, Scalar) {
+        let state = state.value();
+        let radix = radix.value();
+        let index = (numerator / state).floor() % radix + self.offset;
+        let number = if self.state_first {
+            state * radix
+        } else {
+            radix * state
+        };
+        (table.get(Value::Number(index)), Scalar::new(number))
     }
 }
 
@@ -425,17 +436,10 @@ impl Vm {
             Scalar::new(state),
             &mut widths,
         )?;
-        if !self.tables[slot_index(env.0)].set_string_scalar_cached(
-            plan.state_key,
-            Value::Number(state.value()),
-            state_hint,
-        ) {
-            return None;
-        }
         if first.c != 0 {
             self.registers[call] = result;
         }
-        self.top = call + first.c as usize;
+        let mut top = call + first.c as usize;
         *error_line = plan.line;
 
         let caller = &self.functions[slot_index(window.caller.0)];
@@ -443,8 +447,9 @@ impl Vm {
         let mut pc = window.next;
         let mut writes = 0u32;
         let mut selector_key = None;
-        // The window never allocates, calls user code, or writes a table.
-        // Keep the one scalar update local and publish it before leaving.
+        // The window never allocates or calls user code. The raw numeric read
+        // above proves the state slot is live and every update remains numeric.
+        // Reads within the window use the local state, including aliased tables.
         loop {
             let i = window.code[pc];
             let slot = window.base + usize::from(i.a);
@@ -491,7 +496,7 @@ impl Vm {
                     if i.c != 0 {
                         self.registers[slot] = value;
                     }
-                    self.top = slot + i.c as usize;
+                    top = slot + i.c as usize;
                     state = next;
                     writes += 1;
                 }
@@ -499,15 +504,14 @@ impl Vm {
             }
             pc += 1;
         }
-        if writes != 0 {
-            let globals = &mut self.tables[slot_index(env.0)];
-            assert!(globals.set_string_scalar_cached(
-                plan.state_key,
-                Value::Number(state.value()),
-                state_hint
-            ));
-            globals.advance_fields_version(writes - 1);
-        }
+        self.top = top;
+        let globals = &mut self.tables[slot_index(env.0)];
+        assert!(globals.set_string_scalar_cached(
+            plan.state_key,
+            Value::Number(state.value()),
+            state_hint
+        ));
+        globals.advance_fields_version(writes);
         Some(pc)
     }
 }

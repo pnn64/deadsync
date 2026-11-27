@@ -413,18 +413,19 @@ impl<'a> Compiler<'a> {
             None
         };
         let id = self.prototypes.len() as u32;
+        let instruction_count = f.code.len();
         let mut code = reusable_vec(
-            f.code.len(),
+            instruction_count,
             old_body.as_mut().map(|p| std::mem::take(&mut p.code)),
         )?;
         let mut metadata = reusable_vec(
-            f.code.len(),
+            instruction_count,
             old_body.as_mut().map(|p| std::mem::take(&mut p.metadata)),
         )?;
         let mut previous: Option<Instruction> = None;
         let first_line = f.defined[0].clamp(1, u32::MAX - 63);
         let mut nearby_lines = 0u64;
-        for (pc, emitted) in f.code.iter().enumerate() {
+        fallible::append_reserved_pair(&f.code, &mut code, &mut metadata, |pc, emitted| {
             let mut instruction = emitted.instruction;
             // Active lines include comparisons and branches whose individual
             // hook events are coalesced below.
@@ -488,13 +489,15 @@ impl<'a> Compiler<'a> {
             if instruction.op == Op::Jump && instruction.b == direct::HOOK_JUMP {
                 instruction.b = 0;
             }
-            code.push(instruction);
-            metadata.push(InstructionMetadata {
-                line: emitted.line,
-                hook_line: hook,
-                gc_live: emitted.live,
-            });
-        }
+            Ok((
+                instruction,
+                InstructionMetadata {
+                    line: emitted.line,
+                    hook_line: hook,
+                    gc_live: emitted.live,
+                },
+            ))
+        })?;
         let sort_lines = !f.active_lines.is_empty();
         fallible::reserve(&mut f.active_lines, nearby_lines.count_ones() as usize)?;
         while nearby_lines != 0 {
@@ -656,7 +659,13 @@ impl<'a> Compiler<'a> {
                 let live = f.live[0] & mask;
                 if live != f.live[0] {
                     f.live[0] = live;
-                    f.gc_last = None;
+                    // Truncating a known prefix stays in the same index range
+                    // unless it moves below the first recorded prefix.
+                    f.gc_last = if f.gc_last.is_some() && f.gc_maps.is_empty() {
+                        next.checked_sub(u16::from(f.gc_prefix_start))
+                    } else {
+                        None
+                    };
                 }
                 f.debug_hidden[0] &= mask;
             }
@@ -677,13 +686,28 @@ impl<'a> Compiler<'a> {
     }
     fn live_register(&mut self, register: u16) {
         if register < 256 {
+            let f = &mut self.function;
             let word = usize::from(register) / 64;
             let bit = 1u64 << (register % 64);
-            if self.function.live[word] & bit == 0 {
-                self.function.live[word] |= bit;
-                self.function.gc_last = None;
+            if f.live[word] & bit == 0 {
+                f.live[word] |= bit;
+                f.gc_last = match f.gc_last {
+                    Some(index)
+                        if word == 0
+                            && f.gc_maps.is_empty()
+                            && register == u16::from(f.gc_prefix_start) + index =>
+                    {
+                        let next = index + 1;
+                        debug_assert!(next <= u16::from(f.gc_prefix_len));
+                        if next == u16::from(f.gc_prefix_len) {
+                            f.gc_prefix_len += 1;
+                        }
+                        Some(next)
+                    }
+                    _ => None,
+                };
             }
-            self.function.debug_hidden[word] &= !bit;
+            f.debug_hidden[word] &= !bit;
         }
     }
     #[inline]

@@ -63,6 +63,15 @@ env.stride = 4
 local first, middle, second, last = read_between(source)
 assert(first == 42 and middle == 12 and second == 11 and last == 36)
 
+local function discard_first_result(source)
+    choose(9, source)
+    return stride, choose(9, source), stride
+end
+setfenv(discard_first_result, env)
+env.stride = 4
+local before, chosen, after = discard_first_result(source)
+assert(before == 12 and chosen == 11 and after == 36 and env.stride == 36)
+
 local function alias(index, source)
     local width = source.stride
     local key = calc.remainder(calc.round(index / stride), width) + 0.5
