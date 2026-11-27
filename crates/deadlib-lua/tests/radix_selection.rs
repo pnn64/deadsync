@@ -1,6 +1,41 @@
 use deadlib_lua::{Value, Vm, compile};
 
 #[test]
+fn binary_radix_selection_preserves_fractional_and_large_quotients() {
+    let program = compile(
+        br#"
+local function choose(source, number)
+    local width = source.width
+    local index = math.fmod(math.floor(number / state), width) + 1
+    state = state * width
+    return source[index]
+end
+local source = {11, 22, width = 2}
+for again = 1, 30 do
+    state = 1
+    local first, second = choose(source, 5.5), choose(source, 5.5)
+    assert(first == 22 and second == 11 and state == 4)
+
+    state = 2147483648
+    local high, next = choose(source, 4294967295.75), choose(source, 4294967295.75)
+    assert(high == 22 and next == 11 and state == 8589934592)
+
+    state = 1
+    assert(choose(source, -0.0) == 11 and state == 2)
+    assert(choose(source, 4294967296.0) == 11 and state == 4)
+end
+return 42
+"#,
+    )
+    .unwrap();
+    for instructions in [None, Some(u64::MAX)] {
+        let mut vm = Vm::new();
+        vm.set_instruction_limit(instructions);
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+    }
+}
+
+#[test]
 fn selection_observes_environment_changes_and_lookup_order() {
     let program = compile(
         br#"

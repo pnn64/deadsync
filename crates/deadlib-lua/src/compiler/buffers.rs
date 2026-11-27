@@ -1,5 +1,5 @@
-//! Keep a bounded number of retired bytecode buffers in the VM compiler spare.
-use crate::bytecode::{Instruction, InstructionMetadata, ProgramData};
+//! Keep a bounded amount of retired prototype storage in the VM compiler spare.
+use crate::bytecode::{ProgramData, RecycledPrototype};
 use crate::memory::fallible::VecExt;
 use std::cell::RefCell;
 
@@ -7,10 +7,7 @@ const MIN_INSTRUCTIONS: usize = 32;
 const MAX_INSTRUCTIONS: usize = 256;
 const MAX_PER_SIZE: usize = 64;
 const MAX_RETAINED_BYTES: usize = 1024 * 1024;
-const BYTES_PER_INSTRUCTION: usize = size_of::<Instruction>() + size_of::<InstructionMetadata>();
-
-type Buffers = (Vec<Instruction>, Vec<InstructionMetadata>);
-type Entries = [Vec<Buffers>; MAX_INSTRUCTIONS - MIN_INSTRUCTIONS + 1];
+type Entries = [Vec<RecycledPrototype>; MAX_INSTRUCTIONS - MIN_INSTRUCTIONS + 1];
 
 thread_local! {
     static ACTIVE: RefCell<Pool> = const { RefCell::new(Pool { entries: None, retained: 0 }) };
@@ -53,10 +50,10 @@ impl Pool {
         collect()
     }
 
-    pub(super) fn take(&mut self, capacity: usize) -> Option<Buffers> {
+    pub(super) fn take(&mut self, capacity: usize) -> Option<RecycledPrototype> {
         let index = capacity.checked_sub(MIN_INSTRUCTIONS)?;
         let buffers = self.entries.as_mut()?.get_mut(index)?.pop()?;
-        self.retained -= capacity * BYTES_PER_INSTRUCTION;
+        self.retained -= buffers.bytes;
         Some(buffers)
     }
 
@@ -73,19 +70,16 @@ impl Pool {
         {
             return;
         }
-        let bytes = capacity * BYTES_PER_INSTRUCTION;
         let bucket = &mut entries[capacity - MIN_INSTRUCTIONS];
-        if self.retained + bytes > MAX_RETAINED_BYTES || bucket.len() == MAX_PER_SIZE {
+        if bucket.len() == MAX_PER_SIZE {
             return;
         }
-        let Some((code, metadata)) = data.take_reusable_code() else {
+        let Some(recycled) = data.take_reusable_prototype(MAX_RETAINED_BYTES - self.retained)
+        else {
             return;
         };
-        let mut code = code.into_vec();
-        let mut metadata = metadata.into_vec();
-        code.clear();
-        metadata.clear();
-        if bucket.try_push((code, metadata)).is_ok() {
+        let bytes = recycled.bytes;
+        if bucket.try_push(recycled).is_ok() {
             self.retained += bytes;
         }
     }
@@ -105,6 +99,7 @@ fn recycles_buffers_only_after_the_last_program_owner_drops() {
     let count = prototype.code.len();
     let code_address = prototype.code.as_ptr();
     let metadata_address = prototype.metadata.as_ptr();
+    let constants_address = prototype.original_constants.as_ptr();
     assert!((32..=256).contains(&count));
     let retained = program.clone();
 
@@ -113,8 +108,10 @@ fn recycles_buffers_only_after_the_last_program_owner_drops() {
     assert!(pool.take(count).is_none());
     pool.collect(|| drop(retained));
 
-    let (code, metadata) = pool.take(count).unwrap();
-    assert!(code.is_empty() && metadata.is_empty());
-    assert_eq!(code.as_ptr(), code_address);
-    assert_eq!(metadata.as_ptr(), metadata_address);
+    let (slot, body) = pool.take(count).unwrap().into_parts();
+    assert!(slot.is_empty());
+    assert_eq!(slot.capacity(), 1);
+    assert_eq!(body.code.as_ptr(), code_address);
+    assert_eq!(body.metadata.as_ptr(), metadata_address);
+    assert_eq!(body.original_constants.as_ptr(), constants_address);
 }

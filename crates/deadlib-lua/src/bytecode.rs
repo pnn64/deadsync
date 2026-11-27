@@ -681,6 +681,21 @@ pub(crate) struct ProgramData {
     host_owners: AtomicUsize,
 }
 
+pub(crate) struct RecycledPrototype {
+    slot: Vec<Prototype>,
+    pub bytes: usize,
+}
+
+impl RecycledPrototype {
+    pub(crate) fn into_parts(mut self) -> (Vec<Prototype>, PrototypeBody) {
+        let prototype = self.slot.pop().expect("one retired prototype");
+        let PrototypeStorage::Owned(body) = prototype.storage else {
+            unreachable!("retired prototype owns its payload");
+        };
+        (self.slot, body)
+    }
+}
+
 impl Drop for ProgramData {
     fn drop(&mut self) {
         if self.prototypes.len() == 1 {
@@ -702,19 +717,24 @@ impl Clone for ProgramData {
 }
 
 impl ProgramData {
-    pub(crate) fn take_reusable_code(
-        &mut self,
-    ) -> Option<(Box<[Instruction]>, Box<[InstructionMetadata]>)> {
-        let [prototype] = &mut *self.prototypes else {
+    pub(crate) fn take_reusable_prototype(&mut self, room: usize) -> Option<RecycledPrototype> {
+        let [prototype] = &*self.prototypes else {
             return None;
         };
-        let PrototypeStorage::Owned(body) = &mut prototype.storage else {
+        if !matches!(prototype.storage, PrototypeStorage::Owned(_))
+            || prototype.debug.native.is_some()
+            || !prototype.bindings.is_empty()
+            || !prototype.upvalues.is_empty()
+            || !self.sources.is_empty()
+        {
             return None;
-        };
-        Some((
-            std::mem::take(&mut body.code),
-            std::mem::take(&mut body.metadata),
-        ))
+        }
+        let bytes = self.heap_bytes() - self.name.len();
+        if bytes > room {
+            return None;
+        }
+        let slot = std::mem::take(&mut self.prototypes).into_vec();
+        Some(RecycledPrototype { slot, bytes })
     }
 
     pub(crate) fn new(

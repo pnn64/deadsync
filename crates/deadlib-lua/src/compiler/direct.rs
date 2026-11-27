@@ -141,7 +141,6 @@ impl Frontend<'_> {
         self.compiler.line = self.previous_line;
         self.compiler.function.debug_stack = self.compiler.function.max;
         self.compiler.emit(Op::Return, 0, 0, 0)?;
-        self.compiler.prototypes = fallible::with_capacity(1)?;
         self.compiler.finish_with_buffers(Some(pool))
     }
 

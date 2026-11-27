@@ -262,12 +262,49 @@ impl Vm {
             _ => None,
         })
     }
+
+    #[inline(never)]
+    fn concat_short_strings(
+        &mut self,
+        result: usize,
+        first: usize,
+        last: usize,
+    ) -> Result<bool, Error> {
+        let memory = self.registers.memory();
+        if memory.allocator().is_some() || memory.budget_usage().is_some() {
+            return Ok(false);
+        }
+        let mut bytes = [0u8; 128];
+        let mut count = 0;
+        for value in &self.registers[first..=last] {
+            let Value::String(id) = *value else {
+                return Ok(false);
+            };
+            let string = &self.strings.bytes[slot_index(id.0)];
+            let end = count + string.len();
+            let Some(destination) = bytes.get_mut(count..end) else {
+                return Ok(false);
+            };
+            destination.copy_from_slice(string);
+            count = end;
+        }
+        let joined = self.try_intern(&bytes[..count])?;
+        self.registers[first] = joined;
+        self.registers[result] = joined;
+        Ok(true)
+    }
+
     pub(super) fn concat_range(
         &mut self,
         result: usize,
         first: usize,
         mut last: usize,
     ) -> Result<(), Error> {
+        if (2..=23).contains(&last.saturating_sub(first))
+            && self.concat_short_strings(result, first, last)?
+        {
+            return Ok(());
+        }
         while last > first {
             // Coercions modify their original slots, in the native VM's order.
             let left_ok = matches!(

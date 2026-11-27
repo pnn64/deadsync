@@ -4,6 +4,8 @@ use crate::memory::bytes::ByteOutput;
 use crate::memory::compilation::Workspace;
 use crate::memory::fallible::{self, SliceExt, VecExt};
 
+mod bindings;
+pub(super) use bindings::BindingPool;
 mod constructor_templates;
 mod eof;
 mod literal_tables;
@@ -67,11 +69,16 @@ pub(super) struct Spare {
     recent_sources: [Option<(SourceKey, u64)>; 8],
     next_source: usize,
     constant_strings: [Option<(ShortConstant, StringId)>; 32],
+    pub(super) bindings: BindingPool,
 }
 
 impl Spare {
-    pub(super) fn collect_with_code_pool<R>(&mut self, collect: impl FnOnce() -> R) -> R {
-        self.compiler.collect_with_code_pool(collect)
+    pub(super) fn collect_with_load_buffers<R>(
+        &mut self,
+        collect: impl FnOnce(&mut BindingPool) -> R,
+    ) -> R {
+        let bindings = &mut self.bindings;
+        self.compiler.collect_with_code_pool(|| collect(bindings))
     }
 }
 
@@ -286,6 +293,27 @@ impl Vm {
             spare.next_source = (spare.next_source + 1) % spare.recent_sources.len();
         }
         Ok(function)
+    }
+
+    pub(super) fn load_string_result(
+        &mut self,
+        source: StringId,
+        name: StringId,
+        depth: usize,
+        binary: bool,
+    ) -> Result<(Value, Option<Value>), Error> {
+        match self.load_string_program(source, name, depth, binary) {
+            Ok(function) => Ok((Value::Function(function), None)),
+            Err(error) => {
+                let value = if error.kind() == ErrorKind::Memory {
+                    Value::String(self.memory_error)
+                } else {
+                    let message = message(&self.strings.bytes[slot_index(name.0)], &error, binary)?;
+                    self.try_intern(&message)?
+                };
+                Ok((Value::Nil, Some(value)))
+            }
+        }
     }
 }
 

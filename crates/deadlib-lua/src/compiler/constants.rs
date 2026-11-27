@@ -77,9 +77,18 @@ impl Constants {
     }
 
     /// Publish the exact-size pools, keeping their work buffers for reuse.
+    #[cfg(test)]
     pub fn finish(&mut self) -> Result<PackedConstants, Error> {
-        let strings = self.strings.try_boxed()?;
-        let mut exact = crate::memory::fallible::with_capacity(self.values.len())?;
+        self.finish_reusing(None)
+    }
+
+    pub fn finish_reusing(
+        &mut self,
+        old: Option<PackedConstants>,
+    ) -> Result<PackedConstants, Error> {
+        let (values, bytes) = old.map_or((None, None), |p| (Some(p.values), Some(p.strings)));
+        let strings = super::copy_boxed(&self.strings, bytes)?;
+        let mut exact = super::reusable_vec(self.values.len(), values)?;
         exact.append(&mut self.values);
         self.clear();
         Ok(PackedConstants {

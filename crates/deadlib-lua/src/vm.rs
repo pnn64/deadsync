@@ -170,7 +170,9 @@ impl Strings {
                 let index = (entry & index_mask) as usize - 1;
                 let candidate = &self.bytes[index];
                 if candidate.hash == hash && candidate.as_ref() == bytes {
-                    return Ok(StringId(self.bytes.key(index).expect("live interned string")));
+                    return Ok(StringId(
+                        self.bytes.key(index).expect("live interned string"),
+                    ));
                 }
             }
             slot = (slot + 1) & mask;
@@ -359,7 +361,9 @@ impl Strings {
             }
             Err(vacant) => self.try_add(
                 ByteString {
-                    storage: StringStorage::Packed(block.clone().project(|data| &data[start..=end])),
+                    storage: StringStorage::Packed(
+                        block.clone().project(|data| &data[start..=end]),
+                    ),
                     hash,
                 },
                 vacant,
@@ -1502,12 +1506,26 @@ impl Vm {
     fn bind_new_program(&mut self, program: &Program) -> Result<FunctionId, Error> {
         let memory = self.programs.memory().clone();
         let budget = memory.reserve_external(|| program.heap_bytes())?;
-        let mut constants = Buffer::new_in(memory.clone());
-        let mut upvalue_names = Buffer::new_in(memory.clone());
+        let (mut constants, mut upvalue_names, mut reused) =
+            if let Some(buffers) = self.compile_spare.bindings.take(&program.data, &memory) {
+                (
+                    buffers.constants,
+                    buffers.upvalue_names,
+                    Some(buffers.values),
+                )
+            } else {
+                (
+                    Buffer::new_in(memory.clone()),
+                    Buffer::new_in(memory.clone()),
+                    None,
+                )
+            };
         constants.try_reserve_exact(program.data.prototypes.len())?;
         upvalue_names.try_reserve_exact(program.data.prototypes.len())?;
         for (index, prototype) in program.data.prototypes.iter().enumerate() {
-            let mut values = Buffer::new_in(memory.clone());
+            let mut values = reused
+                .take()
+                .unwrap_or_else(|| Buffer::new_in(memory.clone()));
             if !prototype
                 .shared_owner()
                 .is_some_and(|owner| owner as usize != index)
@@ -2428,7 +2446,11 @@ impl Vm {
                         }
                         let reduced = if i.b == 0 && i.c == 0 {
                             self.elide_fresh_dense_fill(
-                                base, pc, prototype, program_index, proto_index,
+                                base,
+                                pc,
+                                prototype,
+                                program_index,
+                                proto_index,
                             )
                         } else if i.c == 0 && i.b >= table_literals::MIN_ARRAY_HINT {
                             self.copy_table_literal(
@@ -2816,14 +2838,20 @@ impl Vm {
                             && let Value::Function(callee) = self.registers[a]
                             && let Some(projection) = return_argument_cache.get(self, callee)
                             && self.try_return_argument(
-                                projection, a, i.b, i.c, checkpoint_ready, error_line,
+                                projection,
+                                a,
+                                i.b,
+                                i.c,
+                                checkpoint_ready,
+                                error_line,
                             )
                         {
                             numeric_checkpoint_ready = self.open_upvalues.is_empty();
                             continue;
                         }
                         if i.op == Op::Call && i.b != OPEN_ARGS {
-                            if i.b >= 2 && i.c <= 1
+                            if i.b >= 2
+                                && i.c <= 1
                                 && let Value::Function(callee) = self.registers[a]
                                 && let Some(next) = self.try_radix_selection(
                                     &mut radix_cache,
@@ -2844,6 +2872,15 @@ impl Vm {
                                 continue;
                             }
                             let completed = match self.registers[a] {
+                                Value::Native(LOAD_STRING)
+                                    if i.b == 1 && matches!(i.c, 1 | OPEN) =>
+                                {
+                                    let completed = self.try_inline_source_load(a, i.c)?;
+                                    if completed && !self.sort_gc_ready() {
+                                        continue 'frames;
+                                    }
+                                    completed
+                                }
                                 Value::Native(0) if i.b == 1 && i.c <= 1 => {
                                     self.try_inline_assert(a, i.c == 1, checkpoint_ready)
                                 }
@@ -2881,7 +2918,9 @@ impl Vm {
                                             .get(pc + 3)
                                             .is_some_and(|next| next.op == Op::GetTable) =>
                                 {
-                                    if let Some(next) = self.try_run_coroutine_feedback_cycle(pc - 1) {
+                                    if let Some(next) =
+                                        self.try_run_coroutine_feedback_cycle(pc - 1)
+                                    {
                                         pc = next;
                                         true
                                     } else {

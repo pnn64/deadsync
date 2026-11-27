@@ -350,7 +350,7 @@ impl<T> Arena<T> {
         &mut self,
         cursor: &mut usize,
         budget: usize,
-        mut before_remove: impl FnMut(&Self, usize),
+        mut before_remove: impl FnMut(&mut Self, usize),
     ) -> u64 {
         let end = cursor.saturating_sub(budget);
         let mut upper = *cursor;

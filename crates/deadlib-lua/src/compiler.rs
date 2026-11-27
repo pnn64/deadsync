@@ -231,9 +231,25 @@ fn recycle<'b>(mut tasks: Vec<Task<'_>>) -> Vec<Task<'b>> {
 }
 
 /// Move a buffer's values into an exact-size box, keeping the buffer's capacity.
-fn drain_boxed<T>(values: &mut Vec<T>) -> Result<Box<[T]>, Error> {
-    let mut exact = fallible::with_capacity(values.len())?;
+fn drain_boxed<T>(values: &mut Vec<T>, old: Option<Box<[T]>>) -> Result<Box<[T]>, Error> {
+    let mut exact = reusable_vec(values.len(), old)?;
     exact.append(values);
+    exact.try_into_boxed_slice()
+}
+
+fn reusable_vec<T>(capacity: usize, old: Option<Box<[T]>>) -> Result<Vec<T>, Error> {
+    if let Some(previous) = old.filter(|buffer| buffer.len() == capacity) {
+        let mut buffer = previous.into_vec();
+        buffer.clear();
+        Ok(buffer)
+    } else {
+        fallible::with_capacity(capacity)
+    }
+}
+
+fn copy_boxed<T: Copy>(values: &[T], old: Option<Box<[T]>>) -> Result<Box<[T]>, Error> {
+    let mut exact = reusable_vec(values.len(), old)?;
+    exact.extend_from_slice(values);
     exact.try_into_boxed_slice()
 }
 
@@ -384,16 +400,27 @@ impl<'a> Compiler<'a> {
             )?);
             upvalues.push(value);
         }
-        let id = self.prototypes.len() as u32;
-        let (mut code, mut metadata) = if let Some(saved) = pool.and_then(|p| p.take(f.code.len()))
-        {
-            saved
+        let mut old_body = if let Some(pool) = pool {
+            if let Some(saved) = pool.take(f.code.len()) {
+                let (slot, body) = saved.into_parts();
+                self.prototypes = slot;
+                Some(body)
+            } else {
+                self.prototypes = fallible::with_capacity(1)?;
+                None
+            }
         } else {
-            (
-                fallible::with_capacity(f.code.len())?,
-                fallible::with_capacity(f.code.len())?,
-            )
+            None
         };
+        let id = self.prototypes.len() as u32;
+        let mut code = reusable_vec(
+            f.code.len(),
+            old_body.as_mut().map(|p| std::mem::take(&mut p.code)),
+        )?;
+        let mut metadata = reusable_vec(
+            f.code.len(),
+            old_body.as_mut().map(|p| std::mem::take(&mut p.metadata)),
+        )?;
         let mut previous: Option<Instruction> = None;
         let first_line = f.defined[0].clamp(1, u32::MAX - 63);
         let mut nearby_lines = 0u64;
@@ -479,9 +506,20 @@ impl<'a> Compiler<'a> {
             f.active_lines.sort_unstable();
             f.active_lines.dedup();
         }
-        let debug_locals = drain_boxed(&mut f.debug_locals)?;
-        let debug_calls = drain_boxed(&mut f.debug_calls)?;
-        let constants = f.constants.finish()?;
+        let mut debug = old_body.as_mut().map(|p| std::mem::take(&mut p.debug));
+        let debug_locals = drain_boxed(
+            &mut f.debug_locals,
+            debug.as_mut().map(|d| std::mem::take(&mut d.locals)),
+        )?;
+        let debug_calls = drain_boxed(
+            &mut f.debug_calls,
+            debug.as_mut().map(|d| std::mem::take(&mut d.calls)),
+        )?;
+        let old_constants = old_body.as_mut().map(|p| constants::PackedConstants {
+            values: std::mem::take(&mut p.original_constants),
+            strings: std::mem::take(&mut p.constant_strings),
+        });
+        let constants = f.constants.finish_reusing(old_constants)?;
         self.prototypes.try_push(Prototype::new(
             PrototypeBody {
                 code: code.try_into_boxed_slice()?,
@@ -504,17 +542,20 @@ impl<'a> Compiler<'a> {
                 debug: DebugInfo {
                     stack: f.debug_stack,
                     native: None,
-                    names: f.debug_names.try_boxed()?,
+                    names: copy_boxed(
+                        &f.debug_names,
+                        debug.as_mut().map(|d| std::mem::take(&mut d.names)),
+                    )?,
                     upvalues: names.try_into_boxed_slice()?,
                     locals: debug_locals,
                     calls: debug_calls,
-                    temporaries: f.debug_temporaries.try_boxed()?,
+                    temporaries: copy_boxed(&f.debug_temporaries, debug.map(|d| d.temporaries))?,
                 },
                 ..PrototypeBody::default()
             },
             metadata.try_into_boxed_slice()?,
             f.defined,
-            f.active_lines.try_boxed()?,
+            copy_boxed(&f.active_lines, old_body.map(|p| p.active_lines))?,
         ))?;
         f.reset();
         Ok(id)

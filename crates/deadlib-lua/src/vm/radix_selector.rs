@@ -66,6 +66,7 @@ struct Plan {
     state_key: StringId,
     state_first: bool,
     offset: f64,
+    integer_offset: Option<u32>,
     registers: usize,
     line: u32,
 }
@@ -215,6 +216,7 @@ impl Plan {
         {
             return None;
         }
+        let integer_offset = offset as u32;
         Some(Self {
             receiver: usize::from(table),
             numerator: usize::from(numerator),
@@ -225,9 +227,38 @@ impl Plan {
             state_key,
             state_first,
             offset,
+            integer_offset: (integer_offset != 0 && f64::from(integer_offset) == offset)
+                .then_some(integer_offset),
             registers,
             line,
         })
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Scalar {
+    Number(f64),
+    Shift(u32),
+}
+
+impl Scalar {
+    #[inline]
+    fn new(value: f64) -> Self {
+        const FRACTION: u64 = (1 << 52) - 1;
+        let exponent_bits = value.to_bits().wrapping_sub(1.0f64.to_bits());
+        if exponent_bits & FRACTION == 0 && exponent_bits < 32 << 52 {
+            Self::Shift((exponent_bits >> 52) as u32)
+        } else {
+            Self::Number(value)
+        }
+    }
+
+    #[inline]
+    fn value(self) -> f64 {
+        match self {
+            Self::Number(value) => value,
+            Self::Shift(shift) => f64::from_bits(1.0f64.to_bits() + (u64::from(shift) << 52)),
+        }
     }
 }
 
@@ -267,6 +298,29 @@ pub(super) struct Window<'a> {
     pub next: usize,
 }
 
+struct Widths<'a> {
+    hint: &'a mut u32,
+    entries: [Option<(TableId, Scalar)>; 4],
+}
+
+impl Widths<'_> {
+    #[inline]
+    fn get(&mut self, receiver: TableId, table: &Table, key: StringId) -> Option<Scalar> {
+        let entry = &mut self.entries[slot_index(receiver.0) % 4];
+        if let Some((id, width)) = *entry
+            && id == receiver
+        {
+            return Some(width);
+        }
+        let Value::Number(width) = table.get_string_cached(key, self.hint) else {
+            return None;
+        };
+        let width = Scalar::new(width);
+        *entry = Some((receiver, width));
+        Some(width)
+    }
+}
+
 impl Plan {
     #[inline]
     fn select(
@@ -274,9 +328,9 @@ impl Plan {
         tables: &Arena<Table>,
         args: &[Value],
         env: TableId,
-        state: f64,
-        radix_hint: &mut u32,
-    ) -> Option<(Value, f64)> {
+        state: Scalar,
+        widths: &mut Widths<'_>,
+    ) -> Option<(Value, Scalar)> {
         let (&Value::Table(receiver), &Value::Number(numerator)) =
             (args.get(self.receiver)?, args.get(self.numerator)?)
         else {
@@ -286,22 +340,36 @@ impl Plan {
         let radix = if receiver == env && self.radix_key == self.state_key {
             state
         } else {
-            let Value::Number(radix) = table.get_string_cached(self.radix_key, radix_hint) else {
-                return None;
-            };
-            radix
+            widths.get(receiver, table, self.radix_key)?
         };
-        let index = (numerator / state).floor() % radix + self.offset;
-        let result = table.get(Value::Number(index));
+        let (result, next) = if let (Some(offset), Scalar::Shift(shift), Scalar::Shift(width)) =
+            (self.integer_offset, state, radix)
+            && shift < 32
+            && width < 32
+            && (0.0..4_294_967_296.0).contains(&numerator)
+        {
+            // Truncating a nonnegative numerator before dividing by a power
+            // of two preserves the floored quotient, including fractions.
+            let digit = ((numerator as u32) >> shift) & ((1u32 << width) - 1);
+            (
+                table.get_integer(i64::from(offset) + i64::from(digit)),
+                Scalar::Shift(shift + width),
+            )
+        } else {
+            let state = state.value();
+            let radix = radix.value();
+            let index = (numerator / state).floor() % radix + self.offset;
+            let number = if self.state_first {
+                state * radix
+            } else {
+                radix * state
+            };
+            (table.get(Value::Number(index)), Scalar::new(number))
+        };
         if result == Value::Nil && table.metatable().is_some() {
             return None;
         }
-        let number = if self.state_first {
-            state * radix
-        } else {
-            radix * state
-        };
-        Some((result, number))
+        Some((result, next))
     }
 }
 
@@ -346,16 +414,20 @@ impl Vm {
         {
             return None;
         }
+        let mut widths = Widths {
+            hint: radix_hint,
+            entries: [None; 4],
+        };
         let (result, mut state) = plan.select(
             &self.tables,
             &self.registers[call + 1..call + 1 + argc],
             env,
-            state,
-            radix_hint,
+            Scalar::new(state),
+            &mut widths,
         )?;
         if !self.tables[slot_index(env.0)].set_string_scalar_cached(
             plan.state_key,
-            Value::Number(state),
+            Value::Number(state.value()),
             state_hint,
         ) {
             return None;
@@ -370,6 +442,7 @@ impl Vm {
         let constants = self.programs[caller.program].bound_constants(caller.prototype);
         let mut pc = window.next;
         let mut writes = 0u32;
+        let mut selector_key = None;
         // The window never allocates, calls user code, or writes a table.
         // Keep the one scalar update local and publish it before leaving.
         loop {
@@ -386,10 +459,18 @@ impl Vm {
                         break;
                     };
                     let value = if window.env == env && key == plan.state_key {
-                        Value::Number(state)
+                        Value::Number(state.value())
+                    } else if selector_key == Some(key) {
+                        Value::Function(function)
                     } else {
-                        self.tables[slot_index(window.env.0)]
-                            .get_string_cached(key, &mut window.hints[pc % simple::FIELD_HINTS][0])
+                        let value = self.tables[slot_index(window.env.0)]
+                            .get_string_cached(key, &mut window.hints[pc % simple::FIELD_HINTS][0]);
+                        if value == Value::Function(function) {
+                            // The selector's state field is the only value that
+                            // can change before this window exits.
+                            selector_key = Some(key);
+                        }
+                        value
                     };
                     if value == Value::Nil {
                         break;
@@ -403,7 +484,7 @@ impl Vm {
                 {
                     let args = &self.registers[slot + 1..slot + 1 + usize::from(i.b)];
                     let Some((value, next)) =
-                        plan.select(&self.tables, args, env, state, radix_hint)
+                        plan.select(&self.tables, args, env, state, &mut widths)
                     else {
                         break;
                     };
@@ -422,7 +503,7 @@ impl Vm {
             let globals = &mut self.tables[slot_index(env.0)];
             assert!(globals.set_string_scalar_cached(
                 plan.state_key,
-                Value::Number(state),
+                Value::Number(state.value()),
                 state_hint
             ));
             globals.advance_fields_version(writes - 1);

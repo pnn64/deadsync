@@ -2004,15 +2004,18 @@ impl Vm {
                     let memory = self.registers.memory();
                     let recycle = memory.allocator().is_none() && memory.budget_usage().is_none();
                     let programs = &mut self.programs;
-                    let mut collect = || {
+                    let mut collect = |mut bindings: Option<&mut loads::BindingPool>| {
                         programs.sweep_with(&mut cursor, budget, |programs, index| {
                             *bytes -= program_bytes(&programs[index]);
+                            if let Some(pool) = &mut bindings {
+                                pool.recycle(&mut programs[index]);
+                            }
                         })
                     };
                     if recycle {
-                        self.compile_spare.collect_with_code_pool(collect)
+                        self.compile_spare.collect_with_load_buffers(|pool| collect(Some(pool)))
                     } else {
-                        collect()
+                        collect(None)
                     }
                 }
                 6 => {

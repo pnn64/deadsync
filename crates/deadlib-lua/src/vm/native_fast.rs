@@ -2,9 +2,47 @@
 use super::*;
 impl Vm {
     #[inline(never)]
+    pub(super) fn try_inline_source_load(
+        &mut self,
+        call: usize,
+        wanted: u32,
+    ) -> Result<bool, Error> {
+        let Value::String(source) = self.registers[call + 1] else {
+            return Ok(false);
+        };
+        if self.frames.len() == self.frames.capacity()
+            || self.frames.len() + 1 >= usize::from(self.call_slots)
+            || !self.registers.memory().uses_global_allocator()
+            || !self.loads.is_empty()
+            || !self.sort_fast_context()
+            || self.strings.bytes[slot_index(source.0)].first() == Some(&27)
+        {
+            return Ok(false);
+        }
+        // This immediate builtin contributes no C boundary of its own.
+        let depth = usize::from(self.native_calls_for(self.thread, self.frames.len()));
+        let (value, failure) = self
+            .load_string_result(source, source, depth, false)
+            .map_err(|error| self.attach_error_value(error, 0))?;
+        self.registers[call] = value;
+        self.top = call + 1;
+        if let Some(failure) = failure {
+            self.registers[call + 1] = failure;
+            if wanted == OPEN {
+                self.top += 1;
+            }
+        }
+        Ok(true)
+    }
+
+    #[inline(never)]
     pub(super) fn try_inline_allocating_substring(&mut self, call: usize) -> Result<bool, Error> {
-        let [_, Value::String(source), Value::Number(first), Value::Number(last)] =
-            self.registers[call..call + 4]
+        let [
+            _,
+            Value::String(source),
+            Value::Number(first),
+            Value::Number(last),
+        ] = self.registers[call..call + 4]
         else {
             return Ok(false);
         };
@@ -28,8 +66,12 @@ impl Vm {
 
     #[inline(never)]
     pub(super) fn try_inline_substring(&mut self, call: usize, checkpoint_ready: bool) -> bool {
-        let [_, Value::String(source), Value::Number(first), Value::Number(last)] =
-            self.registers[call..call + 4]
+        let [
+            _,
+            Value::String(source),
+            Value::Number(first),
+            Value::Number(last),
+        ] = self.registers[call..call + 4]
         else {
             return false;
         };

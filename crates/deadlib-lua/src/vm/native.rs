@@ -1166,26 +1166,15 @@ impl Vm {
                 };
                 let binary = self.strings.bytes[slot_index(source.0)].first() == Some(&27);
                 let depth = usize::from(self.native_calls_for(self.thread, self.frames.len()));
-                match self.load_string_program(source, name, depth, binary) {
-                    Ok(function) => Value::Function(function),
-                    Err(error) => {
-                        let value = if error.kind() == ErrorKind::Memory {
-                            Value::String(self.memory_error)
-                        } else {
-                            let message = loads::message(
-                                &self.strings.bytes[slot_index(name.0)],
-                                &error,
-                                binary,
-                            )?;
-                            self.try_intern(&message)?
-                        };
-                        self.reserve_registers(base + 2)?;
-                        self.resize_registers(self.registers.len().max(base + 2));
-                        self.registers[base] = Value::Nil;
-                        self.registers[base + 1] = value;
-                        return Ok(2);
-                    }
+                let (value, failure) = self.load_string_result(source, name, depth, binary)?;
+                if let Some(failure) = failure {
+                    self.reserve_registers(base + 2)?;
+                    self.resize_registers(self.registers.len().max(base + 2));
+                    self.registers[base] = value;
+                    self.registers[base + 1] = failure;
+                    return Ok(2);
                 }
+                value
             }
             GET_META | DEBUG_GET_META => {
                 if count == 0 {
