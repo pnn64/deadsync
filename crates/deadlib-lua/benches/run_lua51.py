@@ -23,6 +23,7 @@ FILES = [
 ]
 RETURNS = {"locals.lua": 5, "events.lua": 12, "attrib.lua": 27, "verybig.lua": 10}
 PGO_TRAINING = [name for name in FILES if name not in ("constructs.lua", "files.lua")]
+PGO_DYNAMIC = "independent_chunks.lua"
 PGO_ITERATIONS = 3
 
 
@@ -117,13 +118,17 @@ def profiled_build(
     raw.mkdir()
     instrumented, instrument_command = build(f"-Cprofile-generate={raw}", directory / "generate")
     training_env = dict(environment, LLVM_PROFILE_FILE=str(raw / "fixture-%p-%m.profraw"))
-    jobs = [(name, trial) for trial in range(PGO_ITERATIONS) for name in PGO_TRAINING]
+    training_files = [*PGO_TRAINING, PGO_DYNAMIC]
+    jobs = [(name, trial) for trial in range(PGO_ITERATIONS) for name in training_files]
     random.Random(51051).shuffle(jobs)
     for name, trial in jobs:
-        row = run_sample(instrumented, source, directory / "training", name, trial,
+        training_source = source.parent / "pgo" if name == PGO_DYNAMIC else source
+        row = run_sample(instrumented, training_source, directory / "training", name, trial,
                          training_env, timeout)
         if row["status"] != "pass":
             raise SystemExit(f"PGO training failed on {name} (sample {trial})\n{row['stderr']}")
+        if name == PGO_DYNAMIC and row["stdout"].splitlines() != ["compiled 8192 independent chunks"]:
+            raise SystemExit(f"PGO training produced unexpected output on {name} (sample {trial})")
     profiles = sorted(raw.glob("fixture-*.profraw"))
     if len(profiles) != len(jobs):
         raise SystemExit(f"PGO expected {len(jobs)} fixture profiles, found {len(profiles)}")
@@ -132,7 +137,7 @@ def profiled_build(
                    cwd=root, check=True)
     binary, build_command = build(f"-Cprofile-use={merged}", directory / "optimized")
     return binary, build_command, dict(
-        training_files=PGO_TRAINING, training_samples=PGO_ITERATIONS, rustc=version.strip(),
+        training_files=training_files, training_samples=PGO_ITERATIONS, rustc=version.strip(),
         instrument_command=instrument_command, profile=str(merged), profile_sha256=sha256(merged),
     )
 
@@ -145,7 +150,7 @@ def main() -> None:
     parser.add_argument("--cpu", type=int, help="Pin benchmark children to one logical processor")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--pgo", action="store_true",
-                        help="Train on the portable suite with constructs.lua held out")
+                        help="Train on the portable suite and short generated chunks with constructs.lua held out")
     args = parser.parse_args()
     if args.samples < 1 or args.timeout <= 0 or (args.cpu is not None and args.cpu < 0):
         parser.error("samples and timeout must be positive; CPU must be nonnegative")
@@ -164,6 +169,8 @@ def main() -> None:
     paths = sorted((crate / "src").rglob("*.rs"))
     paths += [crate / "Cargo.toml", crate / "build.rs", crate / "examples/official_suite.rs",
               Path(__file__).resolve()]
+    if args.pgo:
+        paths.append(bench / "pgo" / PGO_DYNAMIC)
     hashes = {p.relative_to(root).as_posix(): sha256(p) for p in paths}
     command = ["cargo", "build", "--release", "--locked", "-p", "deadlib-lua",
                "--example", "official_suite", "-j2"]
