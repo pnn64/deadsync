@@ -613,15 +613,23 @@ impl<'a> Compiler<'a> {
             self.function.debug_hidden[word] &= !bit;
         }
     }
+    #[inline]
     fn live_map(&mut self) -> Result<u16, Error> {
         // Register changes invalidate the current map at the point of mutation.
         if let Some(index) = self.function.gc_last {
             return Ok(index);
         }
+        self.find_live_map()
+    }
+
+    fn find_live_map(&mut self) -> Result<u16, Error> {
         let mask = self.function.live;
+        // The high register words cannot have been set in any map of a
+        // function that fits in one word.
+        let narrow = self.function.max <= 64;
         if self.function.gc_maps.is_empty() {
             let low = mask[0];
-            if low & low.wrapping_add(1) == 0 && mask[1..] == [0; 3] {
+            if low & low.wrapping_add(1) == 0 && (narrow || mask[1..] == [0; 3]) {
                 let count = low.trailing_ones() as u8;
                 let f = &mut self.function;
                 if f.gc_prefix_len == 0 {
@@ -641,14 +649,16 @@ impl<'a> Compiler<'a> {
         }
         // Small functions need only a few maps. Their dense vector avoids both
         // hashing and an additional allocation until a larger index is useful.
-        let present = if self.function.gc_maps.len() <= 16 {
-            self.function
-                .gc_maps
-                .iter()
-                .position(|m| *m == mask)
-                .map(|i| i as u16)
-        } else {
+        let maps = &self.function.gc_maps;
+        let present = if maps.len() > 16 {
             self.function.gc_index.get(&mask).copied()
+        } else {
+            let index = if narrow {
+                maps.iter().position(|m| m[0] == mask[0])
+            } else {
+                maps.iter().position(|m| *m == mask)
+            };
+            index.map(|i| i as u16)
         };
         if let Some(index) = present {
             self.function.gc_last = Some(index);
