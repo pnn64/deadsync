@@ -3,44 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Simply Love gameplay layouts</title>
-  <style>
-    body { background: #181818; color: #eee; font: 16px sans-serif; }
-    img { max-width: 100%; height: auto; }
-    a { color: #8cf; }
-    .filters {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-      padding: 12px;
-      margin: 16px 0;
-      background: #282828;
-      border-radius: 8px;
-    }
-    .filter-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-    .filter-tab {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      background: #383838;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .filters fieldset { border: 0; padding: 0; margin: 0; }
-    .filters legend { margin-bottom: 6px; font-weight: bold; }
-    .pair { display: flex; gap: 12px; align-items: flex-start; }
-    .pair figure { flex: 1; min-width: 0; margin: 24px 0; }
-    section[hidden] { display: none; }
-    figure[hidden] { display: none; }
-  </style>
+  <title>Simply Love Exports · Gameplay</title>
+  <link rel="stylesheet" href="gameplay.css">
 </head>
 <body>
-  <h1>Simply Love gameplay layouts</h1>
-  <p>
-    Real gameplay rendering with synthetic sample data. Click an image for full resolution.
-    Aspect-dependent visibility rules are preserved.
-  </p>
+  <header class="page-header">
+    <div class="brand">
+      <h1>Simply Love Exports</h1>
+      <p>Gameplay</p>
+    </div>
+    <nav class="gallery-nav" aria-label="Export galleries">
+      <a href="../menu-exports/index.html">Menus</a>
+      <a href="../gameplay-exports/index.html" aria-current="page">Gameplay</a>
+    </nav>
+  </header>
+  <main>
   <div class="filters" id="gallery-filters">
     <fieldset>
       <legend>Layout</legend>
@@ -94,6 +71,7 @@
     {% endfor %}
   </section>
   {% endfor %}
+  </main>
 
   <script>
     (() => {

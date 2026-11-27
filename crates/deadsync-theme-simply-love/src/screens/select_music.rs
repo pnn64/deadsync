@@ -2277,6 +2277,12 @@ fn select_wheel_steps(state: &mut State, song: &SongData) {
     }
 }
 
+pub fn select_preferred_steps(state: &mut State) {
+    if let Some(song) = focused_song(state).cloned() {
+        select_wheel_steps(state, &song);
+    }
+}
+
 fn rebuild_displayed_entries(state: &mut State) {
     fill_displayed_entries(
         &mut state.entries,

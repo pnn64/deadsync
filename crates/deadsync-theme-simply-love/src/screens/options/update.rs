@@ -248,6 +248,10 @@ fn open_submenu_now(state: &mut State, kind: SubmenuKind) {
     clear_render_cache(state);
 }
 
+pub fn open_submenu(state: &mut State, kind: SubmenuKind) {
+    open_submenu_now(state, kind);
+}
+
 pub fn update(
     state: &mut State,
     dt: f32,

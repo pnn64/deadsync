@@ -3,13 +3,14 @@ name = "deadsync-theme-simply-love"
 version.workspace = true
 edition = "2024"
 license = "GPL-3.0"
+autoexamples = false
 
 [features]
 test-support = ["deadsync-song-lua/test-support"]
 
 [[example]]
-name = "export_gameplay"
-path = "examples/gameplay/export_gameplay.rs"
+name = "export_screenshot"
+path = "examples/export_screenshot.rs"
 harness = false
 test = false
 

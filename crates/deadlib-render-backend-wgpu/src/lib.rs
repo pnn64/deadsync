@@ -19,12 +19,13 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicU32, AtomicU64, Ordering},
-        mpsc,
     },
     time::Instant,
 };
 use wgpu::util::DeviceExt;
 use winit::window::Window;
+
+mod screenshot;
 
 const WGPU_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const WGPU_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
@@ -478,7 +479,7 @@ pub struct State {
     present_done: Arc<PresentCompletionCell>,
     last_completed_present_id: u32,
     screenshot_requested: bool,
-    captured_frame: Option<RgbaImage>,
+    screenshot_offline: screenshot::OfflineScreenshot,
 }
 
 #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
@@ -617,7 +618,7 @@ fn init(
         wgpu::Limits::default()
     };
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("wgpu render device"),
+        label: Some("deadsync wgpu device"),
         required_features,
         required_limits,
         memory_hints: wgpu::MemoryHints::Performance,
@@ -915,7 +916,7 @@ fn init(
         present_done,
         last_completed_present_id: 0,
         screenshot_requested: false,
-        captured_frame: None,
+        screenshot_offline: screenshot::OfflineScreenshot::new(),
     })
 }
 
@@ -1921,15 +1922,21 @@ fn ensure_cached_tmesh(
 }
 
 #[inline(always)]
-pub const fn request_screenshot(state: &mut State) {
+pub fn request_screenshot(state: &mut State) {
+    request_screenshot_with_mode(state, false);
+}
+
+pub fn request_screenshot_offline(state: &mut State) {
+    request_screenshot_with_mode(state, true);
+}
+
+fn request_screenshot_with_mode(state: &mut State, offscreen: bool) {
     state.screenshot_requested = true;
+    state.screenshot_offline.request(offscreen);
 }
 
 pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
-    state
-        .captured_frame
-        .take()
-        .ok_or_else(|| std::io::Error::other("No captured screenshot frame available").into())
+    Ok(state.screenshot_offline.capture_frame(&state.device)?)
 }
 
 pub fn draw(
@@ -2027,28 +2034,42 @@ pub fn draw(
         .backend_upload_us
         .saturating_add(elapsed_us_since(backend_upload_started));
 
+    let capture_requested = std::mem::take(&mut state.screenshot_requested);
+    let screenshot_target =
+        state
+            .screenshot_offline
+            .take_target(capture_requested, &state.device, &state.config);
+    let offscreen_capture = screenshot_target.is_some();
     let acquire_started = Instant::now();
-    let (surface_frame, suboptimal) = match state.surface.get_current_texture() {
-        wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
-        wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (frame, true),
-        wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
-            stats.acquire_us = elapsed_us_since(acquire_started);
-            reconfigure_surface(state);
-            return Ok(stats);
-        }
-        wgpu::CurrentSurfaceTexture::Timeout
-        | wgpu::CurrentSurfaceTexture::Occluded
-        | wgpu::CurrentSurfaceTexture::Validation => {
-            stats.acquire_us = elapsed_us_since(acquire_started);
-            return Ok(stats);
+    let (surface_frame, suboptimal) = if offscreen_capture {
+        (None, false)
+    } else {
+        match state.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame) => (Some(frame), false),
+            wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (Some(frame), true),
+            wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
+                stats.acquire_us = elapsed_us_since(acquire_started);
+                reconfigure_surface(state);
+                return Ok(stats);
+            }
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded
+            | wgpu::CurrentSurfaceTexture::Validation => {
+                stats.acquire_us = elapsed_us_since(acquire_started);
+                return Ok(stats);
+            }
         }
     };
-    stats.acquire_us = elapsed_us_since(acquire_started);
+    stats.acquire_us = if offscreen_capture {
+        0
+    } else {
+        elapsed_us_since(acquire_started)
+    };
     let waited_for_image = stats.acquire_us >= WGPU_IMAGE_WAIT_THRESHOLD_US;
     let backend_setup_started = Instant::now();
-    let view = surface_frame
-        .texture
-        .create_view(&wgpu::TextureViewDescriptor::default());
+    let output = screenshot::render_target(screenshot_target.as_ref(), surface_frame.as_ref());
+    let output_texture = output.texture();
+    let view = output.view();
     let mut encoder = state
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -2064,7 +2085,7 @@ pub fn draw(
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("wgpu render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
+                view,
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
@@ -2108,156 +2129,55 @@ pub fn draw(
         );
     }
 
-    let screenshot_readback = if state.screenshot_requested {
-        state.screenshot_requested = false;
-        if state.config.usage.contains(wgpu::TextureUsages::COPY_SRC) {
-            let format = state.config.format;
-            debug!(
-                "wgpu screenshot: surface format={:?} size={}x{}",
-                format, state.config.width, state.config.height
-            );
-            let width = state.config.width.max(1);
-            let height = state.config.height.max(1);
-            let bytes_per_row = 4 * width;
-            let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-            let padded_bytes_per_row = bytes_per_row.div_ceil(align) * align;
-            let readback_size = u64::from(padded_bytes_per_row) * u64::from(height);
-            let readback_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("wgpu screenshot readback"),
-                size: readback_size,
-                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                mapped_at_creation: false,
-            });
-            encoder.copy_texture_to_buffer(
-                wgpu::TexelCopyTextureInfo {
-                    texture: &surface_frame.texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                wgpu::TexelCopyBufferInfo {
-                    buffer: &readback_buffer,
-                    layout: wgpu::TexelCopyBufferLayout {
-                        offset: 0,
-                        bytes_per_row: Some(padded_bytes_per_row),
-                        rows_per_image: Some(height),
-                    },
-                },
-                wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-            );
-            Some((
-                readback_buffer,
-                width as usize,
-                height as usize,
-                padded_bytes_per_row as usize,
-                state.config.format,
-            ))
-        } else {
-            state.captured_frame = None;
-            warn!(
-                "{} (wgpu) surface does not support COPY_SRC; screenshot unavailable.",
-                state.api.name()
-            );
-            None
-        }
-    } else {
-        None
-    };
+    let screenshot_readback = state.screenshot_offline.encode_readback(
+        &state.device,
+        &state.config,
+        &mut encoder,
+        output_texture,
+        capture_requested,
+    );
     stats.backend_record_us = stats
         .backend_record_us
         .saturating_add(elapsed_us_since(backend_record_started));
 
-    let submitted_present_id = next_present_id(state);
     let submit_started = Instant::now();
     let submission_index = state.queue.submit(Some(encoder.finish()));
     stats.submit_us = stats
         .submit_us
         .saturating_add(elapsed_us_since(submit_started));
-    let present_done = Arc::clone(&state.present_done);
-    state.queue.on_submitted_work_done(move || {
-        present_done.publish(submitted_present_id, current_host_nanos());
-    });
-    let present_started = Instant::now();
-    state.queue.present(surface_frame);
-    stats.present_us = elapsed_us_since(present_started);
+    let submitted_present_id = if let Some(surface_frame) = surface_frame {
+        let submitted_present_id = next_present_id(state);
+        let present_done = Arc::clone(&state.present_done);
+        state.queue.on_submitted_work_done(move || {
+            present_done.publish(submitted_present_id, current_host_nanos());
+        });
+        let present_started = Instant::now();
+        state.queue.present(surface_frame);
+        stats.present_us = elapsed_us_since(present_started);
+        submitted_present_id
+    } else {
+        state.last_completed_present_id
+    };
     let mut back_pressure_waited = false;
     if apply_present_back_pressure && screenshot_readback.is_none() {
         // Uncapped wgpu submission can otherwise keep the CPU hot by queuing
         // work continuously; wait for this frame to retire before proceeding.
         let wait_started = Instant::now();
         let _ = state.device.poll(wgpu::PollType::Wait {
-            submission_index: Some(submission_index),
+            submission_index: Some(submission_index.clone()),
             timeout: None,
         });
         let wait_us = elapsed_us_since(wait_started);
         stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
         back_pressure_waited = wait_us >= WGPU_BACK_PRESSURE_THRESHOLD_US;
     }
-    let mut queue_idle_waited = false;
-    if let Some((readback_buffer, width, height, padded_row_bytes, format)) = screenshot_readback {
-        let slice = readback_buffer.slice(..);
-        let (tx, rx) = mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |res| {
-            let _ = tx.send(res);
-        });
-        let wait_started = Instant::now();
-        let _ = state.device.poll(wgpu::PollType::Wait {
-            submission_index: None,
-            timeout: None,
-        });
-        let wait_us = elapsed_us_since(wait_started);
-        stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
-        queue_idle_waited = wait_us != 0;
-        if rx.recv().is_ok_and(|res| res.is_ok()) {
-            match slice.get_mapped_range() {
-                Ok(data) => {
-                    let row_bytes = width * 4;
-                    let mut rgba = vec![0u8; row_bytes * height];
-                    let swap_rb = matches!(
-                        format,
-                        wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
-                    );
-                    for y in 0..height {
-                        let src = y * padded_row_bytes;
-                        // Surface readback rows are already top-to-bottom for this path.
-                        let dst = y * row_bytes;
-                        if swap_rb {
-                            let mut x = 0usize;
-                            while x < width {
-                                let s = src + x * 4;
-                                let d = dst + x * 4;
-                                rgba[d] = data[s + 2];
-                                rgba[d + 1] = data[s + 1];
-                                rgba[d + 2] = data[s];
-                                rgba[d + 3] = data[s + 3];
-                                x += 1;
-                            }
-                        } else {
-                            rgba[dst..dst + row_bytes].copy_from_slice(&data[src..src + row_bytes]);
-                        }
-                    }
-                    drop(data);
-                    readback_buffer.unmap();
-                    if let Some(img) = RgbaImage::from_raw(width as u32, height as u32, rgba) {
-                        state.captured_frame = Some(img);
-                    }
-                }
-                Err(err) => {
-                    readback_buffer.unmap();
-                    state.captured_frame = None;
-                    warn!("wgpu screenshot readback failed: {err}");
-                }
-            }
-        } else {
-            readback_buffer.unmap();
-            state.captured_frame = None;
-            warn!("wgpu screenshot readback failed: map_async returned error");
-        }
-    }
+    let (screenshot_wait_us, queue_idle_waited) = state.screenshot_offline.submit_readback(
+        &state.device,
+        screenshot_readback,
+        submission_index.clone(),
+        offscreen_capture,
+    );
+    stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(screenshot_wait_us);
     let completion = state
         .present_done
         .load_since(&mut state.last_completed_present_id);
@@ -2900,26 +2820,30 @@ fn reconfigure_surface(state: &mut State) {
 }
 
 fn pick_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
+    pick_format_from_formats(&caps.formats)
+}
+
+fn pick_format_from_formats(formats: &[wgpu::TextureFormat]) -> wgpu::TextureFormat {
     // Prefer 8-bit non-sRGB formats for consistent colors and correct screenshot
     // readback. The screenshot path assumes 4 bytes/pixel RGBA or BGRA; formats
     // like Rgb10a2 or Rgba16Float would produce garbled captures.
     const PREFERRED: &[wgpu::TextureFormat] = &[
-        wgpu::TextureFormat::Bgra8Unorm,
         wgpu::TextureFormat::Rgba8Unorm,
-        wgpu::TextureFormat::Bgra8UnormSrgb,
+        wgpu::TextureFormat::Bgra8Unorm,
         wgpu::TextureFormat::Rgba8UnormSrgb,
+        wgpu::TextureFormat::Bgra8UnormSrgb,
     ];
     for &pref in PREFERRED {
-        if caps.formats.contains(&pref) {
+        if formats.contains(&pref) {
             return pref;
         }
     }
     // Fall back to the first non-sRGB, then the first format overall.
-    caps.formats
+    formats
         .iter()
         .copied()
         .find(|f| !f.is_srgb())
-        .unwrap_or_else(|| caps.formats[0])
+        .unwrap_or_else(|| formats[0])
 }
 
 #[inline(always)]
@@ -3748,6 +3672,27 @@ mod pipeline_state_tests;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn rgba_is_preferred_when_surface_supports_it() {
+        let formats = [
+            wgpu::TextureFormat::Bgra8Unorm,
+            wgpu::TextureFormat::Rgba8Unorm,
+        ];
+        assert_eq!(
+            super::pick_format_from_formats(&formats),
+            wgpu::TextureFormat::Rgba8Unorm
+        );
+    }
+
+    #[test]
+    fn falls_back_when_rgba_is_unsupported() {
+        let formats = [wgpu::TextureFormat::Bgra8Unorm];
+        assert_eq!(
+            super::pick_format_from_formats(&formats),
+            wgpu::TextureFormat::Bgra8Unorm
+        );
+    }
+
     #[cfg(all(
         target_os = "windows",
         not(target_pointer_width = "32"),
