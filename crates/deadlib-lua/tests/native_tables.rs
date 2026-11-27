@@ -569,3 +569,43 @@ return k, v, calls
         [Value::Number(3.0), Value::Number(33.0), Value::Number(1.0)]
     );
 }
+
+#[test]
+fn table_search_preserves_native_fallbacks_and_false_keys() {
+    let mut vm = Vm::new();
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+local absent = {}
+scan_next, scan_table, scan_assert = next, {alpha = 42, beta = false}, assert
+local function search(name)
+    local n, v
+    while 1 do
+        n, v = scan_next(scan_table, n)
+        if not n then return absent end
+        scan_assert(v ~= nil)
+        if n == name then return v end
+    end
+end
+assert(search('alpha') == 42 and search('beta') == false)
+assert(search('gamma') == absent and search(nil) == absent)
+scan_table[false] = 'end of scan'
+assert(search(false) == absent)
+scan_table[false] = nil
+local original_next = scan_next
+scan_next = function(t, key) return nil end
+assert(search('alpha') == absent)
+scan_next = original_next
+local calls = 0
+scan_assert = function(value)
+    assert(value)
+    calls = calls + 1
+end
+assert(search('alpha') == 42 and calls > 0)
+return true
+"#,
+        ),
+        [Value::Boolean(true)]
+    );
+}

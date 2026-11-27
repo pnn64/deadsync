@@ -36,6 +36,7 @@ mod simple;
 mod standalone;
 mod strings;
 mod table_literals;
+mod table_search;
 mod tables;
 mod threads;
 mod traces;
@@ -2206,6 +2207,20 @@ impl Vm {
             let prototype = &data.prototypes[proto_index];
             let mut pc = frame.pc();
             let base = frame.base;
+            if pc == 0
+                && prototype.code.len() == 20
+                && prototype.params == 1
+                && !prototype.vararg
+                && let Some((return_pc, value)) = self.try_table_search(function, prototype, base)
+            {
+                self.frames[frame_index].pc = (return_pc + 1) as u32;
+                *error_line = prototype.instruction_line(return_pc);
+                self.registers[base] = value;
+                if let Some(count) = self.return_frame(frame, base, 1)? {
+                    return Ok(count);
+                }
+                continue 'frames;
+            }
             // Simple instructions and successful numeric leaf calls cannot
             // allocate or change frame observers. Any other dispatch ends
             // this interval, and a new frame always starts with a GC poll.
