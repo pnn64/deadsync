@@ -33,6 +33,61 @@ pub(super) enum LocalName {
 fn c_bytes(bytes: &[u8]) -> &[u8] {
     &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
 }
+
+const INFO_FUNC: u8 = 1 << 0;
+const INFO_LINE: u8 = 1 << 1;
+const INFO_NAME: u8 = 1 << 2;
+const INFO_SOURCE: u8 = 1 << 3;
+const INFO_UPVALUES: u8 = 1 << 4;
+const INFO_ACTIVE_LINES: u8 = 1 << 5;
+const INFO_INVALID: u8 = 1 << 6;
+const INFO_DEFAULT: u8 = INFO_FUNC | INFO_LINE | INFO_NAME | INFO_SOURCE | INFO_UPVALUES;
+
+fn info_flags(bytes: &[u8]) -> u8 {
+    let mut flags = 0;
+    for &byte in bytes {
+        flags |= match byte {
+            0 => break,
+            b'f' => INFO_FUNC,
+            b'l' => INFO_LINE,
+            b'n' => INFO_NAME,
+            b'S' => INFO_SOURCE,
+            b'u' => INFO_UPVALUES,
+            b'L' => INFO_ACTIVE_LINES,
+            _ => INFO_INVALID,
+        };
+    }
+    flags
+}
+
+fn frame_name<'a>(
+    frames: &[Frame],
+    functions: &Arena<Closure>,
+    programs: &'a Arena<LoadedProgram>,
+    index: usize,
+) -> Option<(&'a [u8], &'static [u8])> {
+    if matches!(frames[index].function, FrameKind::Lua(_)) && frames[index].tail_calls != 0 {
+        return None;
+    }
+    let caller = frames.get(index.checked_sub(1)?)?;
+    let FrameKind::Lua(id) = caller.function else {
+        return None;
+    };
+    let closure = &functions[slot_index(id.0)];
+    let proto = &programs[closure.program].data.prototypes[closure.prototype];
+    let pc = caller.pc.saturating_sub(1);
+    let call = proto
+        .debug
+        .calls
+        .binary_search_by_key(&pc, |c| c.pc)
+        .ok()
+        .map(|i| &proto.debug.calls[i])?;
+    if call.kind.bytes().is_empty() {
+        return None;
+    }
+    Some((c_bytes(proto.call_name(call)), call.kind.bytes()))
+}
+
 pub(super) fn integer(value: f64) -> i32 {
     lua_integer(value) as i32
 }
@@ -80,27 +135,12 @@ impl Vm {
         thread: ThreadId,
         index: usize,
     ) -> Option<(&[u8], &'static [u8])> {
-        let frames = self.debug_frames(thread);
-        if matches!(frames[index].function, FrameKind::Lua(_)) && frames[index].tail_calls != 0 {
-            return None;
-        }
-        let caller = frames.get(index.checked_sub(1)?)?;
-        let FrameKind::Lua(id) = caller.function else {
-            return None;
-        };
-        let closure = &self.functions[slot_index(id.0)];
-        let proto = &self.programs[closure.program].data.prototypes[closure.prototype];
-        let pc = caller.pc.saturating_sub(1);
-        let call = proto
-            .debug
-            .calls
-            .binary_search_by_key(&pc, |c| c.pc)
-            .ok()
-            .map(|i| &proto.debug.calls[i])?;
-        if call.kind.bytes().is_empty() {
-            return None;
-        }
-        Some((c_bytes(proto.call_name(call)), call.kind.bytes()))
+        frame_name(
+            self.debug_frames(thread),
+            &self.functions,
+            &self.programs,
+            index,
+        )
     }
     pub(super) fn debug_nups(&self, id: u64) -> usize {
         match id {
@@ -110,11 +150,21 @@ impl Vm {
             _ => 0,
         }
     }
-    fn debug_field(&mut self, table: TableId, name: &[u8], value: Value) -> Result<(), Error> {
-        let key = self.intern(name);
+    fn debug_field(
+        &mut self,
+        table: TableId,
+        name: &'static [u8],
+        value: Value,
+    ) -> Result<(), Error> {
+        let key = self.intern_static(name)?;
         self.raw_set(table, key, value)
     }
-    fn debug_string(&mut self, table: TableId, name: &[u8], bytes: &[u8]) -> Result<(), Error> {
+    fn debug_string(
+        &mut self,
+        table: TableId,
+        name: &'static [u8],
+        bytes: &[u8],
+    ) -> Result<(), Error> {
         let value = self.intern(bytes);
         self.debug_field(table, name, value)
     }
@@ -136,10 +186,10 @@ impl Vm {
         };
         // The options are checked before looking up a level or checking a target.
         let options = match self.argument(base, count, arg + 1) {
-            Value::Nil => b"flnSu".to_vec(),
+            Value::Nil => INFO_DEFAULT,
             _ => {
                 let id = self.string_argument(base, count, arg + 1)?;
-                c_bytes(&self.strings.bytes[slot_index(id.0)]).to_vec()
+                info_flags(&self.strings.bytes[slot_index(id.0)])
             }
         };
         let target = self.argument(base, count, arg);
@@ -163,10 +213,12 @@ impl Vm {
         } else {
             return Err(self.argument_error(arg, b"function or level expected"));
         };
-        if !tail && options.iter().any(|b| !b"flnSuL".contains(b)) {
+        if !tail && options & INFO_INVALID != 0 {
             return Err(self.argument_error(arg + 1, b"invalid option"));
         }
-        let code = if let Value::Function(id) = function {
+        let code = if options & (INFO_SOURCE | INFO_LINE | INFO_ACTIVE_LINES) != 0
+            && let Value::Function(id) = function
+        {
             let closure = &self.functions[slot_index(id.0)];
             Some((
                 self.programs[closure.program].data.clone(),
@@ -176,7 +228,7 @@ impl Vm {
             None
         };
         let table = self.new_table();
-        if options.contains(&b'S') {
+        if options & INFO_SOURCE != 0 {
             let (source, what, defined) = if let Some((data, p)) = &code {
                 let proto = &data.prototypes[*p];
                 (
@@ -199,7 +251,7 @@ impl Vm {
             self.debug_field(table, b"linedefined", Value::Number(defined[0] as f64))?;
             self.debug_field(table, b"lastlinedefined", Value::Number(defined[1] as f64))?;
         }
-        if options.contains(&b'l') {
+        if options & INFO_LINE != 0 {
             let line = match (&code, frame) {
                 (Some((data, p)), Some(i)) => {
                     let proto = &data.prototypes[*p];
@@ -213,7 +265,7 @@ impl Vm {
             };
             self.debug_field(table, b"currentline", Value::Number(line as f64))?;
         }
-        if options.contains(&b'u') {
+        if options & INFO_UPVALUES != 0 {
             let n = match function {
                 Value::Function(id) => self.functions[slot_index(id.0)].upvalues.len(),
                 Value::Native(id) => self.debug_nups(id),
@@ -221,10 +273,21 @@ impl Vm {
             };
             self.debug_field(table, b"nups", Value::Number(n as f64))?;
         }
-        if options.contains(&b'n') {
-            let name = frame.and_then(|i| self.debug_name(thread, i));
+        if options & INFO_NAME != 0 {
+            let name = frame.and_then(|i| {
+                let frames = if thread == self.thread {
+                    &self.frames
+                } else {
+                    &self.threads[slot_index(thread.0)].frames
+                };
+                frame_name(frames, &self.functions, &self.programs, i)
+            });
             if let Some((name, kind)) = name {
-                self.debug_string(table, b"name", &name)?;
+                let name = self
+                    .strings
+                    .try_intern(name)
+                    .map_err(|_| self.memory_failure())?;
+                self.debug_field(table, b"name", Value::String(name))?;
                 self.debug_string(table, b"namewhat", kind)?;
             } else {
                 if tail {
@@ -233,10 +296,10 @@ impl Vm {
                 self.debug_string(table, b"namewhat", b"")?;
             }
         }
-        if options.contains(&b'f') {
+        if options & INFO_FUNC != 0 {
             self.debug_field(table, b"func", function)?;
         }
-        if options.contains(&b'L')
+        if options & INFO_ACTIVE_LINES != 0
             && let Some((data, p)) = &code
         {
             let lines = self.new_table();
