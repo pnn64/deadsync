@@ -523,7 +523,6 @@ pub(crate) unsafe fn block_inter_predict_scaled_u16_avx2(
     debug_assert!(x_step >= 0 && y_step >= 0);
 
     let dst = dst_base.add(dst_y * dst_width + dst_x);
-    let last_x = ref_width as i64 - 1;
     let last_y = ref_height as i64 - 1;
     let filters = &SUBPEL_FILTERS[interp_filter as usize];
 
@@ -534,19 +533,35 @@ pub(crate) unsafe fn block_inter_predict_scaled_u16_avx2(
 
         let fill_clamped_row = |ref_y: usize, col_start: i64, len: usize, out: *mut u16| {
             let row_off = ref_y * ref_stride;
-            if col_start >= 0 && col_start + (len as i64) - 1 <= last_x {
-                if let RefSlice::U16(s) = ref_data {
-                    core::ptr::copy_nonoverlapping(
-                        s.as_ptr().add(row_off + col_start as usize),
-                        out,
-                        len,
-                    );
-                    return;
+            let first = col_start.clamp(0, ref_width as i64) as usize;
+            let left = (-col_start).clamp(0, len as i64) as usize;
+            let middle = (len - left).min(ref_width - first);
+            if left != 0 {
+                let sample = ref_data.get_i32(row_off) as u16;
+                for i in 0..left {
+                    out.add(i).write(sample);
                 }
             }
-            for i in 0..len {
-                let sx = (col_start + i as i64).clamp(0, last_x) as usize;
-                *out.add(i) = ref_data.get_i32(row_off + sx) as u16;
+            match ref_data {
+                RefSlice::U16(s) => {
+                    core::ptr::copy_nonoverlapping(
+                        s.as_ptr().add(row_off + first),
+                        out.add(left),
+                        middle,
+                    );
+                }
+                RefSlice::U8(s) => {
+                    let input = &s[row_off + first..][..middle];
+                    for (i, &sample) in input.iter().enumerate() {
+                        out.add(left + i).write(u16::from(sample));
+                    }
+                }
+            }
+            if left + middle < len {
+                let sample = ref_data.get_i32(row_off + ref_width - 1) as u16;
+                for i in left + middle..len {
+                    out.add(i).write(sample);
+                }
             }
         };
 

@@ -194,28 +194,48 @@ impl Plane {
         }
     }
 
-    pub(crate) fn copy_byte_block(
+    pub(crate) fn predict_integer_bytes(
         &mut self,
         [x, y]: [usize; 2],
         [w, h]: [usize; 2],
-        source: &[u8],
-        source_stride: usize,
+        reference: &RefPlane,
+        [src_x, src_y]: [i64; 2],
         average: bool,
     ) -> bool {
-        let RefPlaneData::U8(samples) = &mut self.pixels else {
+        let (RefPlaneData::U8(samples), RefSlice::U8(source)) =
+            (&mut self.pixels, reference.as_slice_ref())
+        else {
             return false;
         };
+
         let x = x - self.x0;
+        let left = (-src_x).clamp(0, w as i64) as usize;
+        let first = src_x.clamp(0, reference.width as i64) as usize;
+        let copied = (w - left).min(reference.width - first);
+        let last_y = reference.height as i64 - 1;
+        let source_stride = reference.stride();
         for row in 0..h {
             let start = (y + row) * self.stride + x;
             let dst = &mut samples[start..start + w];
-            let src = &source[row * source_stride..][..w];
+            let offset = (src_y + row as i64).clamp(0, last_y) as usize * source_stride;
+            let src = &source[offset..][..reference.width];
+            let (dst_left, remaining) = dst.split_at_mut(left);
+            let (dst_center, dst_right) = remaining.split_at_mut(copied);
+            let src_center = &src[first..first + copied];
             if average {
-                for (dst, &src) in dst.iter_mut().zip(src) {
-                    *dst = ((u16::from(*dst) + u16::from(src) + 1) >> 1) as u8;
+                let predicted = core::iter::repeat_n(src[0], left)
+                    .chain(src_center.iter().copied())
+                    .chain(core::iter::repeat_n(
+                        src[reference.width - 1],
+                        dst_right.len(),
+                    ));
+                for (dst, src) in dst.iter_mut().zip(predicted) {
+                    *dst = (u16::from(*dst) + u16::from(src)).div_ceil(2) as u8;
                 }
             } else {
-                dst.copy_from_slice(src);
+                dst_left.fill(src[0]);
+                dst_center.copy_from_slice(src_center);
+                dst_right.fill(src[reference.width - 1]);
             }
         }
         true
@@ -457,5 +477,23 @@ impl RefPlane {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn integer_prediction_repeats_visible_edges_and_averages() {
+        let reference = RefPlane::from_u8_cropped(3, 2, vec![10, 20, 30, 40, 50, 60]);
+        let mut dst = Plane::new(8, 4, true);
+        assert!(dst.predict_integer_bytes([1, 1], [5, 2], &reference, [-1, -1], false));
+        assert!(dst.predict_integer_bytes([1, 2], [5, 1], &reference, [9, 9], true));
+        let RefPlaneData::U8(samples) = dst.pixels else {
+            unreachable!()
+        };
+        assert_eq!(&samples[8..16], &[0, 10, 10, 20, 30, 30, 0, 0]);
+        assert_eq!(&samples[16..24], &[0, 35, 35, 40, 45, 45, 0, 0]);
     }
 }

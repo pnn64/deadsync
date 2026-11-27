@@ -334,22 +334,18 @@ fn block_inter_predict_into_plane(
     debug_assert!(dst_y + h <= dst.height);
     let ref_slice = ref_plane.as_slice_ref();
 
-    if let RefSlice::U8(src) = ref_slice {
-        let (sx, sy) = (x >> 4, y >> 4);
-        if x_step == 16
-            && y_step == 16
-            && (x | y) & 15 == 0
-            && sx >= 0
-            && sy >= 0
-            && sx as usize + w <= ref_plane.width
-            && sy as usize + h <= ref_plane.height
-        {
-            let stride = ref_plane.stride();
-            let start = sy as usize * stride + sx as usize;
-            if dst.copy_byte_block([dst_x, dst_y], [w, h], &src[start..], stride, compound) {
-                return;
-            }
-        }
+    if x_step == 16
+        && y_step == 16
+        && (x | y) & 15 == 0
+        && dst.predict_integer_bytes(
+            [dst_x, dst_y],
+            [w, h],
+            ref_plane,
+            [x >> 4, y >> 4],
+            compound,
+        )
+    {
+        return;
     }
 
     let _ = &scratch;
