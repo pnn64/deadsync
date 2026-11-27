@@ -531,8 +531,9 @@ pub fn apply_sao_picture<P: Pixel>(state: &mut PictureState<P>, sps: &Sps, threa
         std::mem::take(&mut state.v_plane),
     ];
     let strides = [state.y_stride, state.uv_stride, state.uv_stride];
-    let bands = crate::parallel::split_units(pic_h_in_ctbs, threads);
-    let starts: Vec<[usize; 3]> = bands
+    let bands: crate::small_list::SmallList<_, 1> =
+        crate::parallel::split_units(pic_h_in_ctbs, threads).collect();
+    let starts: crate::small_list::SmallList<[usize; 3], 1> = bands
         .iter()
         .map(|r| [r.start * ctb_size, r.start * ctb_c_h, r.start * ctb_c_h])
         .collect();

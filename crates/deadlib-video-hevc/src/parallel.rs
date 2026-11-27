@@ -18,12 +18,9 @@ pub(crate) type Band<'a, P> = [(&'a mut [P], usize); 3];
 
 /// Split `units` (rows of some fixed height) into at most `threads`
 /// contiguous, near-equal ranges.
-pub(crate) fn split_units(units: usize, threads: usize) -> Vec<Range<usize>> {
-    let n = threads.clamp(1, units.max(1));
-    (0..n)
-        .map(|i| units * i / n..units * (i + 1) / n)
-        .filter(|r| !r.is_empty())
-        .collect()
+pub(crate) fn split_units(units: usize, threads: usize) -> impl Iterator<Item = Range<usize>> {
+    let n = threads.max(1).min(units);
+    (0..n).map(move |i| units * i / n..units * (i + 1) / n)
 }
 
 /// Run `work(i, band)` for every band `i`. `starts[i]` gives the first row
@@ -204,7 +201,7 @@ mod tests {
     fn split_units_covers_everything_once() {
         for units in 0..40 {
             for threads in 1..12 {
-                let r = split_units(units, threads);
+                let r: Vec<_> = split_units(units, threads).collect();
                 assert!(r.len() <= threads.max(1));
                 let flat: Vec<usize> = r.into_iter().flatten().collect();
                 assert_eq!(flat, (0..units).collect::<Vec<_>>());

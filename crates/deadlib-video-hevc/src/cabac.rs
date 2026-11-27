@@ -21,12 +21,23 @@ const CABAC_BITS: u32 = 16;
 /// Mask for the buffered region of `low`.
 const CABAC_MASK: u32 = (1 << CABAC_BITS) - 1;
 
-/// Renormalisation shift: how far `range` (9 bits, non-zero) must move
-/// left to reach 256. One count-leading-zeros instead of a table lookup on
-/// the per-bin dependency chain.
+const fn build_norm_shifts() -> [u8; 512] {
+    let mut shifts = [0; 512];
+    let mut range = 0;
+    while range < shifts.len() {
+        shifts[range] = ((range as u32).leading_zeros() - 23) as u8;
+        range += 1;
+    }
+    shifts
+}
+
+static NORM_SHIFTS: [u8; 512] = build_norm_shifts();
+
+/// Left shift needed to normalize the nine-bit range back to 256 or more.
 #[inline]
 fn norm_shift(range: u32) -> u32 {
-    range.leading_zeros() - 23
+    debug_assert!(range < 512);
+    NORM_SHIFTS[(range & 511) as usize] as u32
 }
 
 /// HEVC CABAC binary arithmetic decoder.
@@ -329,7 +340,7 @@ impl CabacContexts {
 mod tests {
     use super::*;
 
-    /// `norm_shift` (leading zeros) equals the shift that brings each
+    /// `norm_shift` equals the shift that brings each
     /// possible range back to at least 256.
     #[test]
     fn norm_shift_matches_reference_loop() {

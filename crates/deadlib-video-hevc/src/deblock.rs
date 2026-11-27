@@ -506,11 +506,11 @@ pub fn deblock_picture<P: Pixel>(
     let strides = [state.y_stride, state.uv_stride, state.uv_stride];
     let cshift_h = state.chroma_shift_h as usize;
     let st: &PictureState<P> = state;
-    let bands: Vec<(usize, usize)> = crate::parallel::split_units(pic_h.div_ceil(16), threads)
-        .into_iter()
-        .map(|r| (r.start * 16, (r.end * 16).min(pic_h)))
-        .collect();
-    let starts = |margin: usize| -> Vec<[usize; 3]> {
+    let bands: crate::small_list::SmallList<_, 1> =
+        crate::parallel::split_units(pic_h.div_ceil(16), threads)
+            .map(|r| (r.start * 16, (r.end * 16).min(pic_h)))
+            .collect();
+    let starts = |margin: usize| -> crate::small_list::SmallList<[usize; 3], 1> {
         bands
             .iter()
             .enumerate()
