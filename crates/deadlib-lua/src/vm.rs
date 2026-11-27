@@ -254,6 +254,26 @@ impl Strings {
             }
         }
     }
+    fn try_intern_owned(&mut self, mut bytes: Buffer<u8>) -> Result<StringId, Error> {
+        let hash = Self::hash(&bytes);
+        match self.probe(&bytes, hash) {
+            Ok(id) => {
+                self.bytes.preserve_new_reference(id.0);
+                Ok(id)
+            }
+            Err(vacant) => {
+                debug_assert!(bytes.capacity() > bytes.len());
+                bytes.push(0);
+                self.try_add(
+                    ByteString {
+                        storage: StringStorage::Owned(bytes),
+                        hash,
+                    },
+                    vacant,
+                )
+            }
+        }
+    }
     fn substring(
         &mut self,
         id: StringId,
@@ -658,6 +678,7 @@ pub struct Vm {
     substitutions: Buffer<strings::Substitution>,
     sorts: Buffer<tables::Sort>,
     buffers: Buffer<Buffer<u8>>,
+    plain_format: Option<(StringId, Option<strings::PlainFormat>)>,
     threads: Arena<threads::Thread>,
     main: ThreadId,
     initial_globals: TableId,
@@ -796,6 +817,7 @@ impl Vm {
             substitutions: Buffer::new_in(memory.clone()),
             sorts: Buffer::new_in(memory.clone()),
             buffers: Buffer::new_in(memory.clone()),
+            plain_format: None,
             threads,
             thread: main,
             main,

@@ -22,6 +22,37 @@ pub(super) const STR_MATCH: u64 = 73;
 pub(super) const STR_GMATCH: u64 = 74;
 pub(super) const STR_GSUB: u64 = 75;
 pub(super) const STR_FORMAT: u64 = 76;
+
+const FORMAT_ARGUMENTS: usize = 16;
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct PlainFormat {
+    ends: [u16; FORMAT_ARGUMENTS],
+    fields: usize,
+}
+
+impl PlainFormat {
+    fn scan(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() > u16::MAX as usize {
+            return None;
+        }
+        let mut plan = Self {
+            ends: [0; FORMAT_ARGUMENTS],
+            fields: 0,
+        };
+        let mut start = 0;
+        while let Some(offset) = find_byte(&bytes[start..], b'%') {
+            let at = start + offset;
+            if bytes.get(at + 1) != Some(&b's') {
+                return None;
+            }
+            *plan.ends.get_mut(plan.fields)? = at as u16;
+            plan.fields += 1;
+            start = at + 2;
+        }
+        (plan.fields >= 2).then_some(plan)
+    }
+}
 pub(super) const STR_DUMP: u64 = 77;
 pub(super) const STR_GFIND_REMOVED: u64 = 78;
 pub(super) const ITERATOR_FIRST: u64 = 1u64 << 32;
@@ -1297,10 +1328,65 @@ impl Vm {
         result.map_err(|error| self.pattern_error(error))
     }
     fn string_format(&mut self, base: usize, count: usize) -> Result<usize, Error> {
+        if self.registers.memory().allocator().is_none()
+            && self.registers.memory().budget_usage().is_none()
+            && self.try_plain_string_format(base, count)?
+        {
+            return Ok(1);
+        }
         let mut scratch = crate::format::Scratch::new(self.registers.memory().clone());
         let result = self.string_format_inner(base, count, &mut scratch);
         self.gc_note_control(scratch.allocated);
         result
+    }
+
+    fn try_plain_string_format(&mut self, base: usize, count: usize) -> Result<bool, Error> {
+        let Value::String(id) = self.argument(base, count, 0) else {
+            return Ok(false);
+        };
+        let format = &self.strings.bytes[slot_index(id.0)];
+        let plan = match self.plain_format {
+            Some((cached, plan)) if cached == id => plan,
+            _ => {
+                let plan = PlainFormat::scan(format);
+                self.plain_format = Some((id, plan));
+                plan
+            }
+        };
+        let Some(plan) = plan.filter(|plan| plan.fields < count) else {
+            return Ok(false);
+        };
+        let mut arguments = [None; FORMAT_ARGUMENTS];
+        let mut total = format.len() - 2 * plan.fields;
+        let values = &self.registers[base + 2..base + 2 + plan.fields];
+        for (input, &value) in arguments.iter_mut().zip(values) {
+            let Value::String(id) = value else {
+                return Ok(false);
+            };
+            let bytes = crate::format::plain_string_argument(&self.strings.bytes[slot_index(id.0)]);
+            let Some(size) = total.checked_add(bytes.len()) else {
+                return Ok(false);
+            };
+            total = size;
+            *input = Some(bytes);
+        }
+        let Some(capacity) = total.checked_add(1) else {
+            return Ok(false);
+        };
+        let mut output = Buffer::new_in(self.registers.memory().clone());
+        output
+            .try_reserve_exact(capacity)
+            .map_err(|_| self.memory_failure())?;
+        let mut start = 0;
+        for (&end, argument) in plan.ends[..plan.fields].iter().zip(arguments) {
+            let end = usize::from(end);
+            output.extend_from_slice(&format[start..end]);
+            output.extend_from_slice(argument.expect("validated format argument"));
+            start = end + 2;
+        }
+        output.extend_from_slice(&format[start..]);
+        self.registers[base] = Value::String(self.strings.try_intern_owned(output)?);
+        Ok(true)
     }
     fn string_format_inner(
         &mut self,

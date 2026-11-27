@@ -80,6 +80,33 @@ fn plain_s_in_multi_argument_formats_preserves_coercion_and_other_specifiers() {
 }
 
 #[test]
+fn cached_plain_fields_handle_binary_literals_and_argument_lengths() {
+    let actual = string_results(
+        br#"
+        local format = 'a\0<%s>%s<b>'
+        local short = string.rep('x', 98) .. '\0'
+        local long = short .. 'z'
+        local first = string.format(format, short, long)
+        local second = string.format(format, long, short)
+        local repeat_first = string.format(format, short, long, 'extra')
+        assert(first == repeat_first)
+        return first, second, string.format(format, 35, 'end')
+    "#,
+    );
+    let mut first = b"a\0<".to_vec();
+    first.extend_from_slice(&[b'x'; 98]);
+    first.push(b'>');
+    first.extend_from_slice(&[b'x'; 98]);
+    first.extend_from_slice(b"\0z<b>");
+    let mut second = b"a\0<".to_vec();
+    second.extend_from_slice(&[b'x'; 98]);
+    second.extend_from_slice(b"\0z>");
+    second.extend_from_slice(&[b'x'; 98]);
+    second.extend_from_slice(b"<b>");
+    assert_eq!(actual, [first, second, b"a\0<35>end<b>".to_vec()]);
+}
+
+#[test]
 fn plain_s_preserves_bad_argument_errors_and_subsequent_calls() {
     assert_eq!(
         string_results(

@@ -131,11 +131,7 @@ impl Spec {
         {
             return None;
         }
-        if bytes.len() >= 100 {
-            return Some(bytes);
-        }
-        let len = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-        Some(&bytes[..len])
+        Some(plain_string_argument(bytes))
     }
     pub fn string(&self, bytes: &[u8], memory: &mut Scratch) -> Result<Buffer<u8>, Error> {
         if self.precision.is_none() && bytes.len() >= 100 {
@@ -319,6 +315,14 @@ impl Spec {
         text.len = exponent_start + exponent_len;
         text
     }
+}
+
+pub(crate) fn plain_string_argument(bytes: &[u8]) -> &[u8] {
+    if bytes.len() >= 100 {
+        return bytes;
+    }
+    let len = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    &bytes[..len]
 }
 
 fn trimmed_fraction(bytes: &[u8]) -> usize {
