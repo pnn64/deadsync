@@ -57,7 +57,7 @@ impl Vm {
             .saturating_add(
                 self.programs
                     .iter()
-                    .filter(|p| p.owner.load(std::sync::atomic::Ordering::Acquire) != 0)
+                    .filter(|p| p.data.has_host_owner())
                     .count(),
             )
     }

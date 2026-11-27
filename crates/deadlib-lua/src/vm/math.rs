@@ -5,7 +5,21 @@ use std::cell::Cell;
 pub(super) const MATH_FIRST: u64 = 32;
 pub(super) const MATH_MIN: u64 = 43;
 pub(super) const MATH_MAX: u64 = 44;
+pub(super) const MATH_FMOD: u64 = 45;
 pub(super) const MATH_LAST: u64 = 59;
+
+#[inline]
+pub(super) fn numeric_primitive(id: u64, args: &[Value]) -> Option<Value> {
+    let number = match (id, args) {
+        (32, [Value::Number(x)]) => x.abs(),
+        (33, [Value::Number(x)]) => x.floor(),
+        (34, [Value::Number(x)]) => x.ceil(),
+        (35, [Value::Number(x)]) => x.sqrt(),
+        (MATH_FMOD, [Value::Number(x), Value::Number(y)]) => x % y,
+        _ => return None,
+    };
+    Some(Value::Number(number))
+}
 
 #[inline]
 pub(super) fn numeric_extremum(first: Value, second: Value, minimum: bool) -> Option<Value> {

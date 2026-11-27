@@ -1745,7 +1745,7 @@ impl Vm {
         work.extend(
             self.programs
                 .iter()
-                .filter(|p| p.owner.load(std::sync::atomic::Ordering::Acquire) != 0)
+                .filter(|p| p.data.has_host_owner())
                 .map(|p| Trace::Value(Value::Function(p.entry))),
         );
     }

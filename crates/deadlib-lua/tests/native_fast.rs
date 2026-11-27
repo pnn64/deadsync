@@ -217,6 +217,40 @@ return 42
 }
 
 #[test]
+fn scalar_math_keeps_numeric_results_and_observable_calls() {
+    check_both(
+        br#"
+local abs,floor,ceil,sqrt,mod=math.abs,math.floor,math.ceil,math.sqrt,math.mod
+local negzero=-1/math.huge
+local a,b,c=abs(-7),floor(-7.5),ceil(-7.5)
+local d,e=sqrt(9),mod(-7,3)
+assert(a==7 and b==-8 and c==-7 and d==3 and e==-1)
+local signed=mod(negzero,3)
+assert(1/signed==-math.huge and 1/abs(negzero)==math.huge)
+local nan=sqrt(-1)
+assert(nan~=nan)
+local implicit=floor('4.5')
+local ignored=mod(8,3,'extra argument')
+local open,count=select('#',floor(18.75)),select('#',mod(8,3))
+assert(implicit==4 and ignored==2 and open==1 and count==1)
+assert(not pcall(floor,{}) and not pcall(mod,1))
+local calls,returns=0,0
+debug.sethook(function(event)
+  local f=debug.getinfo(2,'f').func
+  if f==floor or f==mod then
+    if event=='call' then calls=calls+1 elseif event=='return' then returns=returns+1 end
+  end
+end,'cr')
+local observed=floor(7.5)
+local remainder=mod(7,4)
+debug.sethook()
+assert(observed==7 and remainder==3 and calls==2 and returns==2)
+return 42
+"#,
+    );
+}
+
+#[test]
 fn literal_substitution_batches_match_stepped_substitution() {
     // Literal replacements batch matches until the first buffer flush. A
     // configured budget keeps one native step per match, so both modes must

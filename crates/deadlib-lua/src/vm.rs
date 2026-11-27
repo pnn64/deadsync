@@ -448,7 +448,6 @@ impl StaticStrings {
 #[derive(Debug)]
 struct LoadedProgram {
     data: crate::memory::Shared<ProgramData>,
-    owner: crate::memory::Shared<std::sync::atomic::AtomicUsize>,
     _budget: crate::memory::Reservation,
     constants: Buffer<Buffer<Value>>,
     upvalue_names: Buffer<Buffer<StringId>>,
@@ -1517,7 +1516,6 @@ impl Vm {
         }
         let loaded = LoadedProgram {
             data: program.data.clone(),
-            owner: program.lifetime.clone(),
             _budget: budget,
             constants,
             upvalue_names,
@@ -2264,6 +2262,18 @@ impl Vm {
                                 };
                                 cx.registers[slot] = value;
                             }
+                            (Value::Native(id @ 32..=35), 1)
+                            | (Value::Native(id @ math::MATH_FMOD), 2)
+                                if call.c <= 1 =>
+                            {
+                                let Some(value) = math::numeric_primitive(
+                                    id,
+                                    &cx.registers[slot + 1..slot + 1 + usize::from(call.b)],
+                                ) else {
+                                    break;
+                                };
+                                cx.registers[slot] = value;
+                            }
                             _ => break,
                         }
                         self.top = slot + call.c as usize;
@@ -2757,6 +2767,14 @@ impl Vm {
                                 Value::Native(0) if i.b == 1 && i.c <= 1 => {
                                     self.try_inline_assert(a, i.c == 1, checkpoint_ready)
                                 }
+                                Value::Native(id @ (32..=35 | math::MATH_FMOD)) if i.c <= 1 => self
+                                    .try_inline_numeric_primitive(
+                                        id,
+                                        a,
+                                        usize::from(i.b),
+                                        c,
+                                        checkpoint_ready,
+                                    ),
                                 Value::Native(id @ (math::MATH_MIN | math::MATH_MAX))
                                     if i.b == 2 && i.c <= 1 =>
                                 {

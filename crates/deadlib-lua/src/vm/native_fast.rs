@@ -102,6 +102,31 @@ impl Vm {
         true
     }
 
+    pub(super) fn try_inline_numeric_primitive(
+        &mut self,
+        id: u64,
+        call: usize,
+        count: usize,
+        wanted: usize,
+        checkpoint_ready: bool,
+    ) -> bool {
+        if self.frames.len() == self.frames.capacity()
+            || self.frames.len() + 1 >= usize::from(self.call_slots)
+        {
+            return false;
+        }
+        let Some(value) = math::numeric_primitive(id, &self.registers[call + 1..call + 1 + count])
+        else {
+            return false;
+        };
+        if !checkpoint_ready && !(self.sort_fast_context() && self.sort_gc_ready()) {
+            return false;
+        }
+        self.registers[call] = value;
+        self.top = call + wanted;
+        true
+    }
+
     #[inline(never)]
     pub(super) fn try_fast_native(&mut self, id: u64, call: usize, count: usize) -> Option<usize> {
         if !self.sort_fast_context() {

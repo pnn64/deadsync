@@ -1,5 +1,4 @@
 use super::*;
-use crate::memory::Shared;
 use crate::{Value, Vm, bytecode::Constant};
 use std::sync::Arc;
 
@@ -118,7 +117,7 @@ fn source_cache_round_trips_complete_metadata_and_number_bits() {
         b"local trace={};debug.sethook(function(e,l)trace[#trace+1]=e..':'..l end,'l');local a=1;if a<4 then a=a+3 end;debug.sethook();local function f(...)return arg.n,arg[1]end;return a,f(12,nil),table.concat(trace,'|')",
     ] {
         let mut program=crate::compile_named(source,b"@cache-source.lua").unwrap();
-        let data=Shared::make_mut(&mut program.data);
+        let data=program.data_mut();
         let entry=data.entry as usize;
         for bits in [0x8000_0000_0000_0000,0x7ff8_0000_0000_1234,0xfff0_0000_0000_0000,1] {
             let p=&mut data.prototypes[entry];
@@ -194,7 +193,7 @@ fn retained_native_export_ranges_and_tree_edges_are_checked() {
     let good = crate::compile(&source).unwrap();
     for change in 0..7 {
         let mut bad = good.clone();
-        let data = Shared::make_mut(&mut bad.data);
+        let data = bad.data_mut();
         let p = &mut data.prototypes[0];
         let constants = p.constants().len();
         let names = p.debug.upvalues.len();
@@ -363,7 +362,7 @@ fn cache_bytecode_verification_and_decode_budgets_are_enforced() {
     }
     for change in 0..4 {
         let mut bad = good.clone();
-        let data = Shared::make_mut(&mut bad.data);
+        let data = bad.data_mut();
         let p = &mut data.prototypes[data.entry as usize];
         match change {
             0 => p.code[0].c = u32::MAX,

@@ -671,15 +671,48 @@ impl Prototype {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct ProgramData {
     pub prototypes: Box<[Prototype]>,
     pub entry: u32,
     pub name: Box<[u8]>,
     pub sources: Box<[Box<[u8]>]>,
+    // A VM retains the shared code without holding a host handle.
+    host_owners: AtomicUsize,
+}
+
+#[cfg(test)]
+impl Clone for ProgramData {
+    fn clone(&self) -> Self {
+        Self::new(
+            self.prototypes.clone(),
+            self.entry,
+            self.name.clone(),
+            self.sources.clone(),
+        )
+    }
 }
 
 impl ProgramData {
+    pub(crate) fn new(
+        prototypes: Box<[Prototype]>,
+        entry: u32,
+        name: Box<[u8]>,
+        sources: Box<[Box<[u8]>]>,
+    ) -> Self {
+        Self {
+            prototypes,
+            entry,
+            name,
+            sources,
+            host_owners: AtomicUsize::new(1),
+        }
+    }
+
+    pub(crate) fn has_host_owner(&self) -> bool {
+        self.host_owners.load(Ordering::Acquire) != 0
+    }
+
     /// Sizes of all owned boxed payloads, excluding the containing shared block.
     pub(crate) fn heap_bytes(&self) -> usize {
         let mut bytes = self.name.len()
@@ -753,32 +786,27 @@ impl ProgramData {
 #[derive(Debug)]
 pub struct Program {
     pub(crate) data: Shared<ProgramData>,
-    // Counts host Program instances separately from runtime code owners. VMs
-    // retain this counter without incrementing it, so the last host drop still
-    // makes their entry bindings collectible while escaped closures keep code.
-    pub(crate) lifetime: Shared<AtomicUsize>,
 }
 
 impl Clone for Program {
     fn clone(&self) -> Self {
-        if self.lifetime.fetch_add(1, Ordering::Relaxed) >= isize::MAX as usize {
+        if self.data.host_owners.fetch_add(1, Ordering::Relaxed) >= isize::MAX as usize {
             std::process::abort();
         }
         Self {
             data: self.data.clone(),
-            lifetime: self.lifetime.clone(),
         }
     }
 }
 impl Drop for Program {
     fn drop(&mut self) {
-        self.lifetime.fetch_sub(1, Ordering::Release);
+        self.data.host_owners.fetch_sub(1, Ordering::Release);
     }
 }
 
 impl Program {
     pub(crate) fn heap_bytes(&self) -> usize {
-        self.data.heap_bytes() + self.lifetime.heap_bytes() + ProgramData::heap_bytes(&self.data)
+        self.data.heap_bytes() + ProgramData::heap_bytes(&self.data)
     }
 
     /// Return the number of register instructions.
@@ -796,19 +824,26 @@ impl Program {
         entry: u32,
         name: &[u8],
     ) -> Result<Self, Error> {
-        Self::try_from_data(ProgramData {
-            prototypes: prototypes.try_into_boxed_slice()?,
+        Self::try_from_data(ProgramData::new(
+            prototypes.try_into_boxed_slice()?,
             entry,
-            name: name.try_boxed()?,
-            sources: Box::default(),
-        })
+            name.try_boxed()?,
+            Box::default(),
+        ))
     }
 
     pub(crate) fn try_from_data(data: ProgramData) -> Result<Self, Error> {
         Ok(Self {
             data: Shared::try_new_in(data, Memory::default())?,
-            lifetime: Shared::try_new_in(AtomicUsize::new(1), Memory::default())?,
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn data_mut(&mut self) -> &mut ProgramData {
+        let previous = self.data.clone();
+        let data = Shared::make_mut(&mut self.data);
+        previous.host_owners.fetch_sub(1, Ordering::Release);
+        data
     }
 
     /// Publish the same verified instructions and metadata with one numeric
@@ -1357,7 +1392,7 @@ mod tests {
             second.metadata.as_ref()
         ));
 
-        let data = Shared::make_mut(&mut program.data);
+        let data = program.data_mut();
         data.prototypes[1].line_bias = 0;
         assert_eq!(program.verify().unwrap_err().kind(), ErrorKind::Bytecode);
     }
@@ -1367,7 +1402,7 @@ mod tests {
         let good = crate::compile(b"local x=1; if x<3 then x=x+1 end;return x==2").unwrap();
         for corrupt in 0..4 {
             let mut p = good.clone();
-            let data = Shared::make_mut(&mut p.data);
+            let data = p.data_mut();
             let proto = &mut data.prototypes[data.entry as usize];
             let boolean = proto.code.iter().position(|i| i.op == Op::Bool).unwrap();
             match corrupt {
@@ -1392,7 +1427,7 @@ mod tests {
         let good = crate::compile(b"local x = 1; while x < 3 do x = x + 1 end; return x").unwrap();
         for pc in 0..good.instruction_count() {
             let mut p = good.clone();
-            let data = Shared::make_mut(&mut p.data);
+            let data = p.data_mut();
             let prototype = &mut data.prototypes[data.entry as usize];
             prototype.code[pc] = Instruction {
                 op: Op::Jump,
@@ -1401,7 +1436,7 @@ mod tests {
                 c: u32::MAX,
             };
             assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
-            let data = Shared::make_mut(&mut p.data);
+            let data = p.data_mut();
             data.prototypes[data.entry as usize].code[pc] = Instruction {
                 op: Op::Load,
                 a: 0,
@@ -1409,7 +1444,7 @@ mod tests {
                 c: u32::MAX,
             };
             assert!(p.verify().is_err());
-            let data = Shared::make_mut(&mut p.data);
+            let data = p.data_mut();
             data.prototypes[data.entry as usize].code[pc] = Instruction {
                 op: Op::Move,
                 a: 0,
@@ -1425,7 +1460,7 @@ mod tests {
         let good = crate::compile(b"local a,b,c=2,3,false;return not((a<b)or c)").unwrap();
         for corrupt in 0..7 {
             let mut p = good.clone();
-            let data = Shared::make_mut(&mut p.data);
+            let data = p.data_mut();
             let proto = &mut data.prototypes[data.entry as usize];
             let branch = proto
                 .code
@@ -1468,7 +1503,7 @@ mod tests {
         );
         for corrupt in 0..5 {
             let mut bad = good.clone();
-            let data = Shared::make_mut(&mut bad.data);
+            let data = bad.data_mut();
             let p = &mut data.prototypes[data.entry as usize];
             let count = p.constants().len() as u32;
             match corrupt {
@@ -1497,7 +1532,7 @@ mod tests {
         let good = crate::compile(b"local t={};return t").unwrap();
         for corrupt in 0..3 {
             let mut p = good.clone();
-            let data = Shared::make_mut(&mut p.data);
+            let data = p.data_mut();
             let prototype = &mut data.prototypes[data.entry as usize];
             match corrupt {
                 0 => prototype.metadata = Box::new([]),
@@ -1514,7 +1549,7 @@ mod tests {
             crate::compile(b"local x=1;local function f()return x end;f();return f()").unwrap();
         for corrupt in 0..12 {
             let mut p = good.clone();
-            let data = Shared::make_mut(&mut p.data);
+            let data = p.data_mut();
             let proto = &mut data.prototypes[data.entry as usize];
             match corrupt {
                 0 => proto.debug.locals[0].start = u32::MAX,

@@ -598,13 +598,8 @@ pub(super) fn decode(
             return None;
         }
     }
-    let program = Program::try_from_data(ProgramData {
-        prototypes,
-        entry,
-        name: program_name,
-        sources,
-    })
-    .ok()?;
+    let program =
+        Program::try_from_data(ProgramData::new(prototypes, entry, program_name, sources)).ok()?;
     program.verify().ok()?;
     Some(program)
 }
