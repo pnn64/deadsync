@@ -383,7 +383,7 @@ fn block_inter_predict_into_plane(
         return;
     }
 
-    // Scalar fallback (non-x86_64 or `VP9DEC_NO_SIMD=1`).
+    // Scalar fallback for unsupported geometries or CPUs without AVX2.
     let mut pred = [0i32; MAX_BLOCK_DIM * MAX_BLOCK_DIM];
     block_inter_predict_scalar_ref(
         ref_slice,

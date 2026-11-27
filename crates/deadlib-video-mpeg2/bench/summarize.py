@@ -47,8 +47,18 @@ def main():
             alloc_rows = allocations[clip, engine]
             assert cycle_rows.keys() == set(range(cycle_runs))
             assert alloc_rows.keys() == set(range(allocation_runs))
-            assert all(row["frames"] == frames for row in [*cycle_rows.values(), *alloc_rows.values()])
+            assert all(row["frames"] == frames for row in alloc_rows.values())
+            frame_totals = {row["frames"] for row in cycle_rows.values()}
+            assert len(frame_totals) == 1
+            cycle_frames = frame_totals.pop()
+            assert cycle_frames >= frames and cycle_frames % frames == 0
+            assert cycle_frames == cycles[clip, "deadlib"][0]["frames"]
+            decodes = cycle_frames // frames
+            if decodes != 1:
+                assert codec == "vp9" and clip == "indexed"
             readings = [row["cycles"] for row in cycle_rows.values()]
+            if decodes != 1:
+                readings = [reading / decodes for reading in readings]
             mid = median(readings)
             counts = {(row["allocations"], row["reallocations"], row["requested_bytes"])
                       for row in alloc_rows.values()}

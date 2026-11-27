@@ -318,11 +318,11 @@ pub struct Decoder {
     prev_segment_ids_dims: Option<(u32, u32)>,
     /// `LastFrameType` (spec §7.2). Not updated on `show_existing_frame` frames.
     last_frame_type: Option<FrameType>,
-    /// Recycled whole-frame `[Plane; 3]` working buffers (and evicted 10/12-bit DPB planes),
-    /// at most one per active resolution geometry.
+    /// Recycled working planes and evicted 10/12-bit reference planes, bounded by
+    /// `MAX_POOLED_PLANE_SETS`.
     plane_pool: Vec<[framebuffer::Plane; 3]>,
-    /// Recycled cropped `[Vec<u8>; 3]` buffers from evicted 8-bit DPB slots (at most one per
-    /// active resolution geometry).
+    /// Recycled cropped byte planes from evicted 8-bit references, bounded by
+    /// `MAX_POOLED_PLANE_SETS`.
     ref_u8_pool: Vec<[Vec<u8>; 3]>,
     /// Recycled `MiGrid` allocation from the replaced `prev_mi_grid`.
     mi_grid_pool: Option<MiGrid>,

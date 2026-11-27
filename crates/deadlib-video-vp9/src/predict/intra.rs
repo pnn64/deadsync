@@ -39,8 +39,7 @@ fn load_clamped_left(plane: &Plane, x: usize, y: usize, max_y: usize, dst: &mut 
 /// referenced within the plane).
 ///
 /// Dispatches `V_PRED`, `H_PRED`, `DC_PRED`, and `TM_PRED` to AVX2 when available; falls back
-/// to `predict_intra_scalar` for the six directional modes, `VP9DEC_NO_SIMD=1`, and
-/// non-x86_64 targets.
+/// to `predict_intra_scalar` for the six directional modes and on CPUs without AVX2.
 #[allow(clippy::too_many_arguments)]
 pub fn predict_intra(
     plane: &mut Plane,
@@ -224,9 +223,7 @@ fn predict_intra_avx2<T: RefSample>(
     }
 }
 
-/// Scalar body of [`predict_intra`] (spec §8.5.1 verbatim): the always-kept fallback for
-/// directional modes, `VP9DEC_NO_SIMD=1`, and non-x86_64, and the bit-exactness oracle
-/// `tests/unit/simd.rs` pins the intra AVX2 kernels against (hence `pub(crate)`).
+/// Scalar fallback for the six directional modes and for CPUs without AVX2 (spec §8.5.1).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn predict_intra_scalar(
     plane: &mut Plane,

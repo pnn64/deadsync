@@ -331,6 +331,14 @@ fn main() {
         let expected = Engine::Rust.decode(&bytes, length, None);
         assert_eq!(expected, Engine::Ffmpeg.decode(&bytes, length, None));
         assert!(expected.frames > 0);
+        // A full nine-frame VP9 decode is too short for a stable cycle sample.
+        // Include decoder creation and release in each repetition for both engines.
+        #[cfg(not(allocations))]
+        let decodes = if cfg!(vp9) && clip == "indexed" {
+            256
+        } else {
+            1
+        };
         for round in 0..rounds {
             let order = if (index + round) % 2 == 0 {
                 [Engine::Rust, Engine::Ffmpeg]
@@ -341,13 +349,21 @@ fn main() {
                 let label = engine.name();
                 #[cfg(not(allocations))]
                 {
+                    let mut result = Output::default();
                     let start = read_cycles();
-                    let result = engine.decode(&bytes, length, None);
+                    for _ in 0..decodes {
+                        let decoded = engine.decode(&bytes, length, None);
+                        result.frames += decoded.frames;
+                        result.luma_pixels += decoded.luma_pixels;
+                    }
                     let cycles = read_cycles() - start;
-                    assert_eq!(result, expected);
+                    assert_eq!(result.frames, expected.frames * decodes as u64);
+                    assert_eq!(result.luma_pixels, expected.luma_pixels * decodes as u64);
                     println!(
-                        "{clip},{round},{label},{},{},{length},{cycles}",
-                        result.frames, result.luma_pixels
+                        "{clip},{round},{label},{},{},{},{cycles}",
+                        result.frames,
+                        result.luma_pixels,
+                        length * decodes
                     );
                 }
                 #[cfg(allocations)]

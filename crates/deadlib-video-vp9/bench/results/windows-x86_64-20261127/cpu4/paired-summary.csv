@@ -1,0 +1,4 @@
+clip,rounds,median_cycle_ratio,min_cycle_ratio,max_cycle_ratio,median_throughput_ratio
+Countdown,9,0.700485,0.690822,0.719117,1.427582
+Film,9,0.739867,0.72342,0.755753,1.351595
+indexed,9,0.996077,0.905383,1.021231,1.003938
