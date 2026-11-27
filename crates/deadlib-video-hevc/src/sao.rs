@@ -450,7 +450,6 @@ unsafe fn edge_offset_u8_ssse3<P: Pixel>(
     let end = out.len() / 16 * 16;
     let bias = _mm_set1_epi8(i8::MIN);
     let two = _mm_set1_epi8(2);
-    let zero = _mm_setzero_si128();
     let table = _mm_setr_epi8(m2, m1, 0, p1, p2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     for x in (0..end).step_by(16) {
         let c = unsafe { _mm_loadu_si128(cur.as_ptr().add(x).cast()) };
@@ -461,10 +460,7 @@ unsafe fn edge_offset_u8_ssse3<P: Pixel>(
         let cb = _mm_sub_epi8(_mm_cmpgt_epi8(b, biased_c), _mm_cmpgt_epi8(biased_c, b));
         let category = _mm_add_epi8(_mm_add_epi8(ca, cb), two);
         let offset = _mm_shuffle_epi8(table, category);
-        let negative = _mm_cmpgt_epi8(zero, offset);
-        let add = _mm_andnot_si128(negative, offset);
-        let sub = _mm_and_si128(negative, _mm_abs_epi8(offset));
-        let filtered = _mm_subs_epu8(_mm_adds_epu8(c, add), sub);
+        let filtered = _mm_xor_si128(_mm_adds_epi8(biased_c, offset), bias);
         unsafe { _mm_storeu_si128(out.as_mut_ptr().add(x).cast(), filtered) };
     }
     end

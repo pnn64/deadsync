@@ -228,7 +228,7 @@ fn mc_block<P: Pixel, const N: usize>(
     bit_depth: u8,
     tmp: &mut [i16],
     edge: &mut [P],
-    sink: &mut impl RowSink,
+    sink: &mut impl RowSink<P>,
 ) {
     let (x_int, y_int, x_frac, y_frac) = pos;
     let (before, after) = ((N / 2 - 1) as i32, (N / 2) as i32);
@@ -274,18 +274,14 @@ fn interp_block<P: Pixel, const N: usize>(
     vf: Option<&[i16; N]>,
     bit_depth: u8,
     tmp: &mut [i16],
-    sink: &mut impl RowSink,
+    sink: &mut impl RowSink<P>,
 ) {
     let shift1 = (bit_depth as u32).saturating_sub(8);
     match (hf, vf) {
         (None, None) => {
             let shift3 = crate::pixel::mc_shift(bit_depth) as u32;
             for j in 0..h {
-                let s = &src[org + j * src_stride..][..w];
-                for (o, &p) in sink.row(j, w).iter_mut().zip(s) {
-                    *o = (p.to_i32() << shift3) as i16;
-                }
-                sink.done(j);
+                sink.integer_row(j, &src[org + j * src_stride..][..w], shift3);
             }
         }
         (Some(f), None) => {
@@ -458,7 +454,83 @@ unsafe fn filter_byte_rows_ssse3<P: Pixel, const N: usize>(
 #[inline(always)]
 fn filter_h<P: Pixel, const N: usize>(out: &mut [i16], src: &[P], f: &[i16; N], shift: u32) {
     let w = out.len();
+    #[cfg(target_arch = "x86_64")]
+    if P::BITS == 8 && shift == 0 && w >= 4 && std::arch::is_x86_feature_detected!("ssse3") {
+        let src = &src[..w + N - 1];
+        // The byte plane contains the full filter window for every output.
+        let processed = unsafe { filter_horizontal_bytes_ssse3(out, src, f) };
+        for i in processed..w {
+            out[i] = (0..N).map(|k| f[k] * src[i + k].to_i32() as i16).sum();
+        }
+        return;
+    }
     filter_px(out, f, shift, |k| &src[k..k + w]);
+}
+
+/// Shuffle overlapping input windows into pairs of taps for PMADDUBSW.
+#[cfg(target_arch = "x86_64")]
+const fn horizontal_shuffle<const N: usize>(first_len: usize) -> [[u8; 16]; N] {
+    let mut masks = [[0x80; 16]; N];
+    let mut tap = 0;
+    while tap < N {
+        let mut i = 0;
+        while i < 16 {
+            let source = tap + i / 2 + i % 2;
+            masks[tap][i] = if source < first_len {
+                source as u8
+            } else {
+                (source + 8 - (N - 1)) as u8
+            };
+            i += 1;
+        }
+        tap += 2;
+    }
+    masks
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "ssse3")]
+unsafe fn filter_horizontal_bytes_ssse3<P: Pixel, const N: usize>(
+    out: &mut [i16],
+    src: &[P],
+    taps: &[i16; N],
+) -> usize {
+    use core::arch::x86_64::*;
+    let coeffs: [__m128i; N] = core::array::from_fn(|i| {
+        let pair = [taps[i] as u8, taps.get(i + 1).copied().unwrap_or(0) as u8];
+        _mm_set1_epi16(i16::from_le_bytes(pair))
+    });
+    let filter = |lo, hi, masks: &[[u8; 16]; N]| {
+        let window = _mm_unpacklo_epi64(lo, hi);
+        let mut sum = _mm_setzero_si128();
+        for tap in (0..N).step_by(2) {
+            let mask = unsafe { _mm_loadu_si128(masks[tap].as_ptr().cast()) };
+            let samples = _mm_shuffle_epi8(window, mask);
+            sum = _mm_add_epi16(sum, _mm_maddubs_epi16(samples, coeffs[tap]));
+        }
+        sum
+    };
+    let wide = out.len() / 8 * 8;
+    for x in (0..wide).step_by(8) {
+        let ptr = unsafe { src.as_ptr().add(x) };
+        let lo = unsafe { _mm_loadl_epi64(ptr.cast()) };
+        let hi = unsafe { _mm_loadl_epi64(ptr.add(N - 1).cast()) };
+        let value = filter(lo, hi, &const { horizontal_shuffle::<N>(8) });
+        unsafe { _mm_storeu_si128(out.as_mut_ptr().add(x).cast(), value) };
+    }
+    if out.len() - wide >= 4 {
+        let ptr = unsafe { src.as_ptr().add(wide) };
+        let lo = if N == 8 {
+            unsafe { _mm_loadl_epi64(ptr.cast()) }
+        } else {
+            _mm_cvtsi32_si128(unsafe { ptr.cast::<i32>().read_unaligned() })
+        };
+        let hi = _mm_cvtsi32_si128(unsafe { ptr.add(N - 1).cast::<i32>().read_unaligned() });
+        let value = filter(lo, hi, &const { horizontal_shuffle::<N>(N) });
+        unsafe { _mm_storel_epi64(out.as_mut_ptr().add(wide).cast(), value) };
+        return wide + 4;
+    }
+    wide
 }
 
 /// Vertical N-tap filter over pixel rows starting at `src[base]`:
@@ -490,11 +562,18 @@ fn filter_v_i16<const N: usize>(
 ) {
     let w = out.len();
     let rows: [&[i16]; N] = std::array::from_fn(|k| &src[base + k * stride..][..w]);
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+    let first_chunk = {
+        // All N source rows and the output cover each complete eight-sample chunk.
+        unsafe { filter_word_rows_sse2(out, rows, f, shift) }
+    };
+    #[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]
+    let first_chunk = 0;
     // Tap-major over fixed 8-lane chunks: the i32 accumulators stay in
     // registers (no per-row array to initialise) and each tap is one
     // widening multiply-add across the chunk.
     let chunks = w / 8;
-    for c in 0..chunks {
+    for c in first_chunk..chunks {
         let mut acc = [0i32; 8];
         for (k, row) in rows.iter().enumerate() {
             let coef = f[k] as i32;
@@ -518,11 +597,51 @@ fn filter_v_i16<const N: usize>(
     }
 }
 
+/// Paired word taps use PMADDWD to accumulate the second filter pass.
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+#[inline]
+#[target_feature(enable = "sse2")]
+unsafe fn filter_word_rows_sse2<const N: usize>(
+    out: &mut [i16],
+    rows: [&[i16]; N],
+    taps: &[i16; N],
+    shift: u32,
+) -> usize {
+    use core::arch::x86_64::*;
+    let chunks = out.len() / 8;
+    let shift = _mm_cvtsi32_si128(shift as i32);
+    for x in (0..chunks * 8).step_by(8) {
+        let mut lo = _mm_setzero_si128();
+        let mut hi = _mm_setzero_si128();
+        for i in (0..N).step_by(2) {
+            let weights =
+                _mm_set1_epi32((taps[i] as u16 as u32 | ((taps[i + 1] as u32) << 16)) as i32);
+            let a = unsafe { _mm_loadu_si128(rows[i].as_ptr().add(x).cast()) };
+            let b = unsafe { _mm_loadu_si128(rows[i + 1].as_ptr().add(x).cast()) };
+            lo = _mm_add_epi32(lo, _mm_madd_epi16(_mm_unpacklo_epi16(a, b), weights));
+            hi = _mm_add_epi32(hi, _mm_madd_epi16(_mm_unpackhi_epi16(a, b), weights));
+        }
+        // The scalar path truncates to the low 16 bits after the shift.
+        let narrow = |v| _mm_srai_epi32::<16>(_mm_slli_epi32::<16>(_mm_sra_epi32(v, shift)));
+        let result = _mm_packs_epi32(narrow(lo), narrow(hi));
+        unsafe { _mm_storeu_si128(out.as_mut_ptr().add(x).cast(), result) };
+    }
+    chunks
+}
+
 /// Destination for the rows `interp_block` produces. `row(j, w)` gives the
 /// buffer to write row `j` into; `done(j)` is called once it is complete.
-trait RowSink {
+trait RowSink<P: Pixel> {
     fn row(&mut self, j: usize, w: usize) -> &mut [i16];
     fn done(&mut self, j: usize);
+
+    #[inline(always)]
+    fn integer_row(&mut self, j: usize, src: &[P], shift: u32) {
+        for (out, &pixel) in self.row(j, src.len()).iter_mut().zip(src) {
+            *out = (pixel.to_i32() << shift) as i16;
+        }
+        self.done(j);
+    }
 }
 
 /// Writes 14-bit intermediates straight into a block of i16s
@@ -532,7 +651,7 @@ struct I16Sink<'a> {
     stride: usize,
 }
 
-impl RowSink for I16Sink<'_> {
+impl<P: Pixel> RowSink<P> for I16Sink<'_> {
     #[inline(always)]
     fn row(&mut self, j: usize, w: usize) -> &mut [i16] {
         &mut self.dst[j * self.stride..][..w]
@@ -570,7 +689,7 @@ impl<'a, P: Pixel> PixelSink<'a, P> {
     }
 }
 
-impl<P: Pixel> RowSink for PixelSink<'_, P> {
+impl<P: Pixel> RowSink<P> for PixelSink<'_, P> {
     #[inline(always)]
     fn row(&mut self, _j: usize, w: usize) -> &mut [i16] {
         self.w = w;
@@ -581,9 +700,26 @@ impl<P: Pixel> RowSink for PixelSink<'_, P> {
         let start = j * self.stride;
         let (offset, shift, bd) = (self.offset, self.shift, self.bit_depth);
         if let Some(d) = self.dst.get_mut(start..start + self.w) {
-            for (o, &v) in d.iter_mut().zip(&self.buf[..self.w]) {
+            #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+            let processed = if P::BITS == 8 && offset == 32 && shift == 6 {
+                // The row has self.w byte pixels and as many intermediate samples.
+                unsafe { finish_byte_prediction_sse2::<P, 6>(d, &self.buf, None) }
+            } else {
+                0
+            };
+            #[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]
+            let processed = 0;
+            for (o, &v) in d[processed..].iter_mut().zip(&self.buf[processed..self.w]) {
                 *o = P::from_i32_clamped((v as i32 + offset) >> shift, bd);
             }
+        }
+    }
+
+    #[inline(always)]
+    fn integer_row(&mut self, j: usize, src: &[P], _shift: u32) {
+        let start = j * self.stride;
+        if let Some(dst) = self.dst.get_mut(start..start + src.len()) {
+            dst.copy_from_slice(src);
         }
     }
 }
@@ -603,11 +739,65 @@ fn bi_average_row<P: Pixel>(
     shift: u32,
     bit_depth: u8,
 ) {
-    let max = ((1i32 << bit_depth) - 1) as i16;
-    for ((o, &x), &y) in dst.iter_mut().zip(a).zip(b) {
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+    let processed = if P::BITS == 8 && offset == 64 && shift == 7 {
+        let n = dst.len().min(a.len()).min(b.len());
+        // All three slices cover n samples, with u8 output pixels.
+        unsafe { finish_byte_prediction_sse2::<P, 7>(&mut dst[..n], a, Some(b)) }
+    } else {
+        0
+    };
+    #[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]
+    let processed = 0;
+    for ((o, &x), &y) in dst[processed..]
+        .iter_mut()
+        .zip(&a[processed..])
+        .zip(&b[processed..])
+    {
         let v = x.saturating_add(y).saturating_add(offset) >> shift;
-        *o = P::from_i32_clamped(v.clamp(0, max) as i32, bit_depth);
+        *o = P::from_i32_clamped(v as i32, bit_depth);
     }
+}
+
+/// Round 14-bit intermediates to byte pixels and clip with PACKUSWB.
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+#[inline]
+#[target_feature(enable = "sse2")]
+unsafe fn finish_byte_prediction_sse2<P: Pixel, const SHIFT: i32>(
+    dst: &mut [P],
+    a: &[i16],
+    b: Option<&[i16]>,
+) -> usize {
+    use core::arch::x86_64::*;
+    let offset = _mm_set1_epi16(1 << (SHIFT - 1));
+    let end = dst.len() / 4 * 4;
+    let mut x = 0;
+    while x < end {
+        let wide = x + 8 <= end;
+        let load = |src: &[i16]| {
+            let ptr = unsafe { src.as_ptr().add(x).cast() };
+            if wide {
+                unsafe { _mm_loadu_si128(ptr) }
+            } else {
+                unsafe { _mm_loadl_epi64(ptr) }
+            }
+        };
+        let mut samples = load(a);
+        if let Some(b) = b {
+            samples = _mm_adds_epi16(samples, load(b));
+        }
+        let rounded = _mm_srai_epi16::<SHIFT>(_mm_adds_epi16(samples, offset));
+        let packed = _mm_packus_epi16(rounded, rounded);
+        let ptr = unsafe { dst.as_mut_ptr().add(x) };
+        if wide {
+            unsafe { _mm_storel_epi64(ptr.cast(), packed) };
+            x += 8;
+        } else {
+            unsafe { ptr.cast::<i32>().write_unaligned(_mm_cvtsi128_si32(packed)) };
+            x += 4;
+        }
+    }
+    end
 }
 
 /// Luma rows of a reference that motion compensation of a block at
@@ -653,10 +843,8 @@ pub(crate) const MC_EDGE_LEN: usize = MC_EDGE_STRIDE * (MAX_PB_SIZE + 7);
 ///
 /// When the window lies entirely inside the picture (the common case) the
 /// source is the reference plane itself, so the filter loops read memory
-/// directly with no per-tap clamping. Otherwise the window is copied into
-/// `edge` through `ref_sample`, which applies the spec 8.5.3.2.1 boundary
-/// clamp, and the filters read the padded copy. Either way every tap sees
-/// exactly the value `ref_sample` would return.
+/// directly. Otherwise the window is copied into `edge` with its border
+/// pixels extended as specified in 8.5.3.2.1.
 #[allow(clippy::too_many_arguments)]
 #[inline]
 fn ref_window<'a, P: Pixel>(
@@ -685,25 +873,55 @@ fn ref_window<'a, P: Pixel>(
             wy0 as usize * ref_stride + wx0 as usize,
         );
     }
+    extend_ref_window(
+        ref_plane, ref_stride, ref_w, ref_h, wx0, wy0, ww, wh, edge, bit_depth,
+    );
+    (edge, MC_EDGE_STRIDE, 0)
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(never)]
+fn extend_ref_window<P: Pixel>(
+    ref_plane: &[P],
+    ref_stride: usize,
+    ref_w: i32,
+    ref_h: i32,
+    wx0: i32,
+    wy0: i32,
+    ww: usize,
+    wh: usize,
+    edge: &mut [P],
+    bit_depth: u8,
+) {
     debug_assert!(ww <= MC_EDGE_STRIDE && wh * MC_EDGE_STRIDE <= edge.len());
-    for r in 0..wh {
-        for c in 0..ww {
-            // `ref_sample` returns an in-range sample (or 0), so this
-            // conversion never actually clamps.
-            edge[r * MC_EDGE_STRIDE + c] = P::from_i32_clamped(
-                ref_sample(
-                    ref_plane,
-                    ref_stride,
-                    wx0 + c as i32,
-                    wy0 + r as i32,
-                    ref_w,
-                    ref_h,
-                ),
-                bit_depth,
-            );
+    if ww > 0 && wh > 0 {
+        let (rows, _) = edge[..wh * MC_EDGE_STRIDE].as_chunks_mut::<MC_EDGE_STRIDE>();
+        if ref_w <= 0 || ref_h <= 0 {
+            for dst in rows {
+                dst[..ww].fill(P::zero());
+            }
+        } else {
+            let x0 = wx0.clamp(0, ref_w - 1);
+            let x1 = (wx0 + (ww - 1) as i32).clamp(0, ref_w - 1);
+            let copied = (x1 - x0 + 1) as usize;
+            let left = ((x0 - wx0).max(0) as usize).min(ww - 1);
+            for (r, dst) in rows.iter_mut().enumerate() {
+                let y = wy0 + r as i32;
+                let start = y.clamp(0, ref_h - 1) as usize * ref_stride + x0 as usize;
+                if let Some(src) = ref_plane.get(start..start + copied) {
+                    dst[..left].fill(src[0]);
+                    dst[left..left + copied].copy_from_slice(src);
+                    dst[left + copied..ww].fill(src[copied - 1]);
+                } else {
+                    for (c, out) in dst[..ww].iter_mut().enumerate() {
+                        let sample =
+                            ref_sample(ref_plane, ref_stride, wx0 + c as i32, y, ref_w, ref_h);
+                        *out = P::from_i32_clamped(sample, bit_depth);
+                    }
+                }
+            }
         }
     }
-    (edge, MC_EDGE_STRIDE, 0)
 }
 
 /// Uni-directional luma motion compensation (8-tap filter).
@@ -1555,6 +1773,58 @@ pub fn motion_compensation_cu<P: Pixel>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn reference_window_extends_rows_like_sample_clamping() {
+        use super::{MC_EDGE_LEN, ref_sample, ref_window};
+
+        let plane: Vec<u16> = (0..15).map(|i| 67 * i).collect();
+        let mut edge = vec![0; MC_EDGE_LEN];
+        for y in -8..=5 {
+            for x in -9..=7 {
+                let (src, stride, start) = ref_window(&plane, 5, 5, 3, x, y, 7, 6, &mut edge, 10);
+                for row in 0..6 {
+                    for col in 0..7 {
+                        let expected = ref_sample(&plane, 5, x + col as i32, y + row as i32, 5, 3);
+                        assert_eq!(src[start + row * stride + col] as i32, expected);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn motion_filters_match_scalar_at_right_edge() {
+        fn check<const N: usize>(phases: &[[i16; N]]) {
+            for width in [2, 4, 6, 8, 12, 16, 24, 32, 48, 64] {
+                let bytes: Vec<_> = (0..width + N - 1)
+                    .map(|i| ((i * i + 197 * i + 11) & 255) as u8)
+                    .collect();
+                let words: Vec<_> = (0..width * N)
+                    .map(|i| (i as u16).wrapping_mul(5173) as i16)
+                    .collect();
+                let mut out = vec![0; width];
+                for taps in phases.iter().skip(1) {
+                    super::filter_h(&mut out, &bytes, taps, 0);
+                    for i in 0..width {
+                        let expected: i32 = (0..N)
+                            .map(|k| i32::from(taps[k]) * i32::from(bytes[i + k]))
+                            .sum();
+                        assert_eq!(out[i], expected as i16, "horizontal width {width}");
+                    }
+                    super::filter_v_i16(&mut out, &words, 0, width, taps, 6);
+                    for i in 0..width {
+                        let expected: i32 = (0..N)
+                            .map(|k| i32::from(taps[k]) * i32::from(words[k * width + i]))
+                            .sum();
+                        assert_eq!(out[i], (expected >> 6) as i16, "vertical width {width}");
+                    }
+                }
+            }
+        }
+        check(&super::QPEL_FILTER);
+        check(&super::EPEL_FILTER);
+    }
+
     /// The saturating i16 bi-prediction average equals the exact i32
     /// formula after clipping, for every bit depth up to 12 and inputs
     /// spanning (and beyond) the 14-bit intermediate range, including sums
@@ -1573,6 +1843,11 @@ mod tests {
                 for (i, &y) in samples.iter().enumerate() {
                     let exact = ((x as i32 + y as i32 + offset) >> shift).clamp(0, max);
                     assert_eq!(out[i] as i32, exact, "bd {bd} x {x} y {y}");
+                }
+                if bd == 8 {
+                    let mut bytes = vec![0u8; samples.len()];
+                    super::bi_average_row(&mut bytes, &a, &samples, offset as i16, shift, bd);
+                    assert!(bytes.iter().copied().map(u16::from).eq(out));
                 }
             }
         }
