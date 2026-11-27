@@ -180,7 +180,9 @@ pub(crate) struct Scanner {
     closed: ClosedTokens,
 }
 
+mod direct;
 mod replay;
+pub(crate) use direct::{DirectScanner, DirectToken};
 pub(crate) use replay::ClosedTokens;
 
 impl Default for Scanner {

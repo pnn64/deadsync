@@ -219,7 +219,7 @@ impl Default for Token {
 }
 
 mod scanner;
-pub(crate) use scanner::{ClosedTokens, Scanner, keyword};
+pub(crate) use scanner::{ClosedTokens, DirectScanner, DirectToken, Scanner, keyword};
 
 pub(crate) fn short_decimal_integer(bytes: &[u8]) -> Option<f64> {
     // Every decimal integer with at most 15 digits is exactly representable

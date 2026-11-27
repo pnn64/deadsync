@@ -1,6 +1,6 @@
 //! Direct bytecode emission for small closed source chunks.
 use super::*;
-use crate::lexer::{Scanner, Token};
+use crate::lexer::{DirectScanner, DirectToken};
 
 const MAX_DEPTH: u8 = 48;
 // Leave headroom below the Lua 5.1 logical register limit. The direct emitter
@@ -19,6 +19,22 @@ pub(crate) fn compile_direct(
     name: &[u8],
     spare: &mut Spare,
 ) -> Result<Option<Program>, Error> {
+    if source.len() > u32::MAX as usize {
+        return Ok(None);
+    }
+    let mut scanner = DirectScanner::default();
+    let mut token = DirectToken::default();
+    match scanner.next(source, &mut token) {
+        Ok(()) => {}
+        Err(error) if error.kind() == ErrorKind::Memory => return Err(error),
+        Err(_) => return Ok(None),
+    }
+    if !matches!(
+        token.kind,
+        Kind::Local | Kind::Name | Kind::If | Kind::While | Kind::Repeat | Kind::Do | Kind::Eof
+    ) {
+        return Ok(None);
+    }
     let ast = Ast::default();
     let mut function = match spare.functions.pop() {
         Some(function) => function,
@@ -46,8 +62,8 @@ pub(crate) fn compile_direct(
             boolean: boolean::Boolean::default(),
             line: 1,
         },
-        scanner: Scanner::default(),
-        token: Token::default(),
+        scanner,
+        token,
         previous_line: 1,
         last_label: None,
         nil_run: None,
@@ -105,8 +121,8 @@ impl From<Value> for Expression {
 
 struct Frontend<'a> {
     compiler: Compiler<'a>,
-    scanner: Scanner,
-    token: Token,
+    scanner: DirectScanner,
+    token: DirectToken,
     previous_line: u32,
     last_label: Option<usize>,
     nil_run: Option<(usize, u8, u8)>,
@@ -114,7 +130,6 @@ struct Frontend<'a> {
 
 impl Frontend<'_> {
     fn compile(&mut self) -> Result<u32, Error> {
-        self.advance()?;
         self.block(0)?;
         let function = &self.compiler.function;
         if self.token.kind != Kind::Eof
@@ -139,8 +154,7 @@ impl Frontend<'_> {
 
     fn advance(&mut self) -> Result<(), Error> {
         self.previous_line = self.token.end_line;
-        self.scanner
-            .next_closed(self.compiler.source, &mut self.token)
+        self.scanner.next(self.compiler.source, &mut self.token)
     }
 
     fn take(&mut self, kind: Kind) -> Result<bool, Error> {
@@ -162,7 +176,7 @@ impl Frontend<'_> {
         if self.token.kind != Kind::Name {
             return Err(self.unsupported());
         }
-        let name = std::mem::take(&mut self.token.text);
+        let name = self.scanner.take_text(self.token);
         self.advance()?;
         Ok(name)
     }
@@ -532,10 +546,13 @@ impl Frontend<'_> {
             Kind::Nil => self.compiler.constant(Constant::Nil)?,
             Kind::True => self.compiler.constant(Constant::Boolean(true))?,
             Kind::False => self.compiler.constant(Constant::Boolean(false))?,
-            Kind::Number if self.token.number != 0.0 => self
+            Kind::Number if self.token.number() != 0.0 => self
                 .compiler
-                .constant(Constant::Number(self.token.number))?,
-            Kind::String => self.compiler.string_constant(&self.token.text)?,
+                .constant(Constant::Number(self.token.number()))?,
+            Kind::String => {
+                let text = self.scanner.take_text(self.token);
+                self.compiler.string_constant(&text)?
+            }
             _ => return Err(self.unsupported()),
         };
         let literal = match self.token.kind {
