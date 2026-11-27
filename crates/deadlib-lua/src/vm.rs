@@ -29,6 +29,7 @@ mod native_fast;
 mod numeric_leaf;
 mod os;
 mod package;
+mod radix_selector;
 mod reductions;
 mod return_argument;
 mod simple;
@@ -2126,6 +2127,7 @@ impl Vm {
         let mut held: Option<crate::memory::Shared<ProgramData>> = None;
         let mut numeric_call_cache = numeric_leaf::Cache::default();
         let mut return_argument_cache = return_argument::Cache::default();
+        let mut radix_cache = radix_selector::Cache::default();
         let mut forwarding_cache = forwarding::Cache::default();
         let mut table_literal_cache = table_literals::Cache::default();
         let mut triplet_sites = fresh_triplet::Sites::default();
@@ -2821,6 +2823,20 @@ impl Vm {
                             continue;
                         }
                         if i.op == Op::Call && i.b != OPEN_ARGS {
+                            if i.c <= 1
+                                && let Value::Function(callee) = self.registers[a]
+                                && self.try_radix_selection(
+                                    &mut radix_cache,
+                                    callee,
+                                    a,
+                                    usize::from(i.b),
+                                    c,
+                                    error_line,
+                                )
+                            {
+                                numeric_checkpoint_ready = self.open_upvalues.is_empty();
+                                continue;
+                            }
                             let completed = match self.registers[a] {
                                 Value::Native(0) if i.b == 1 && i.c <= 1 => {
                                     self.try_inline_assert(a, i.c == 1, checkpoint_ready)
