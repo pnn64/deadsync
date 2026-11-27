@@ -1023,22 +1023,28 @@ pub fn decode_residual_coding(
         // tsShift = 5 + Log2(nTbS) then bdShift = 20 - BitDepth (spec
         // 8.6.4.2), folded into one shift (the forward transform shift);
         // it is negative for large blocks at high bit depths.
-        let mut wide_or_narrow: Vec<i32> = if wide {
-            std::mem::take(&mut coeffs_wide)
-        } else {
-            coeffs.iter().map(|&c| c as i32).collect()
-        };
-        if rotate {
-            wide_or_narrow.reverse();
-        }
         let ts_shift = transform_shift;
-        for (dst, &c) in coeffs.iter_mut().zip(&wide_or_narrow) {
-            let v = if ts_shift > 0 {
+        let normalize = |c: i32| {
+            (if ts_shift > 0 {
                 (c + (1 << (ts_shift - 1))) >> ts_shift
             } else {
                 c << -ts_shift
-            };
-            *dst = v as i16;
+            }) as i16
+        };
+        if wide {
+            if rotate {
+                coeffs_wide.reverse();
+            }
+            for (dst, &c) in coeffs.iter_mut().zip(&coeffs_wide) {
+                *dst = normalize(c);
+            }
+        } else {
+            if rotate {
+                coeffs.reverse();
+            }
+            for c in coeffs.iter_mut() {
+                *c = normalize(i32::from(*c));
+            }
         }
     } else if rotate {
         coeffs.reverse();

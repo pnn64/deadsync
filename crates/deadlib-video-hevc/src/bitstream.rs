@@ -1,12 +1,9 @@
 /// Bitstream reader for parsing H.265 NAL unit RBSP data.
 /// Reads bits left-to-right (MSB first).
 ///
-/// The internal buffer is padded with zero bytes so that `read_bit` can skip
-/// per-bit bounds checks in the hot path. Only `bits_remaining` and
-/// `more_rbsp_data` use the true data length.
-pub struct BitstreamReader {
-    data: Vec<u8>,
-    data_len: usize, // actual RBSP length (excluding padding)
+/// The reader borrows the RBSP and supplies a bounded zero-padded tail.
+pub struct BitstreamReader<'a> {
+    data: &'a [u8],
     byte_offset: usize,
     bit_offset: u8, // 0-7, bits already consumed in current byte
 }
@@ -16,15 +13,10 @@ pub struct BitstreamReader {
 /// end-of-slice detection doesn't cause index-out-of-bounds panics.
 const PADDING: usize = 128;
 
-impl BitstreamReader {
-    pub fn new(rbsp: &[u8]) -> Self {
-        let data_len = rbsp.len();
-        let mut data = Vec::with_capacity(data_len + PADDING);
-        data.extend_from_slice(rbsp);
-        data.resize(data_len + PADDING, 0);
+impl<'a> BitstreamReader<'a> {
+    pub fn new(rbsp: &'a [u8]) -> Self {
         Self {
-            data,
-            data_len,
+            data: rbsp,
             byte_offset: 0,
             bit_offset: 0,
         }
@@ -33,10 +25,12 @@ impl BitstreamReader {
     /// Read a single bit, returning 0 or 1.
     #[inline(always)]
     pub fn read_bit(&mut self) -> Result<u8, &'static str> {
-        if self.byte_offset >= self.data.len() {
-            return Err("unexpected end of bitstream");
-        }
-        let bit = (self.data[self.byte_offset] >> (7 - self.bit_offset)) & 1;
+        let byte = match self.data.get(self.byte_offset) {
+            Some(&byte) => byte,
+            None if self.byte_offset - self.data.len() < PADDING => 0,
+            None => return Err("unexpected end of bitstream"),
+        };
+        let bit = (byte >> (7 - self.bit_offset)) & 1;
         self.bit_offset += 1;
         if self.bit_offset == 8 {
             self.bit_offset = 0;
@@ -107,12 +101,12 @@ impl BitstreamReader {
     /// Returns true if there is more RBSP data before the trailing bits.
     /// The RBSP trailing bits are: a stop bit (1) followed by zero bits to byte-align.
     pub fn more_rbsp_data(&self) -> bool {
-        if self.byte_offset >= self.data_len {
+        if self.byte_offset >= self.data.len() {
             return false;
         }
 
         // Find the position of the last non-zero byte in the actual data
-        let mut last_nz = self.data_len;
+        let mut last_nz = self.data.len();
         while last_nz > self.byte_offset && self.data[last_nz - 1] == 0 {
             last_nz -= 1;
         }
@@ -147,10 +141,10 @@ impl BitstreamReader {
     }
 
     pub fn bits_remaining(&self) -> usize {
-        if self.byte_offset >= self.data_len {
+        if self.byte_offset >= self.data.len() {
             return 0;
         }
-        (self.data_len - self.byte_offset) * 8 - self.bit_offset as usize
+        (self.data.len() - self.byte_offset) * 8 - self.bit_offset as usize
     }
 }
 

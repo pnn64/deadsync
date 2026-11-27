@@ -179,7 +179,7 @@ impl PictureDecode {
 /// Where a picture in progress is decoded.
 enum PictureSide {
     /// On the calling thread, slice by slice as `decode_nal` receives them.
-    Local(Box<PictureDecode>),
+    Local(Box<Option<PictureDecode>>),
     /// On its own thread (frame threading).
     Thread(Box<PictureThread>),
 }
@@ -194,7 +194,7 @@ struct PictureThread {
 }
 
 enum PictureMessage {
-    Slice(Box<SliceJob>),
+    Slice(Box<ThreadSliceJob>),
     /// No more slices: finish the picture (loop filters, crop) with these
     /// parameter sets and the picture's last slice header, as a sequential
     /// decode does.
@@ -248,7 +248,9 @@ fn picture_thread(
                 // References are read as their rows become final (motion
                 // compensation and temporal MV prediction wait for the rows
                 // they need).
-                if let Err(e) = decode.decode_slice(&job, threads) {
+                if let Err(e) =
+                    decode.decode_slice(&job.syntax, &job.rbsp, &job.epb_positions, threads)
+                {
                     errors.push(e);
                 }
             }
@@ -346,12 +348,8 @@ fn start_picture_thread(
     }
 }
 
-/// One slice segment, parsed and set up by the calling thread, with
-/// everything its CTB decode needs, owned (frame threading runs the decode
-/// on the picture's thread).
+/// One slice segment's parsed syntax and references.
 struct SliceJob {
-    rbsp: Vec<u8>,
-    epb_positions: Vec<u32>,
     sh: SliceHeader,
     sps: Arc<Sps>,
     pps: Arc<Pps>,
@@ -371,10 +369,23 @@ struct SliceJob {
     nal_slice_data_start: u32,
 }
 
+/// A worker holds its packet buffers until the slice has been decoded.
+struct ThreadSliceJob {
+    syntax: SliceJob,
+    rbsp: Vec<u8>,
+    epb_positions: Vec<u32>,
+}
+
 impl PictureDecode {
     /// CTB decode of one slice segment (spec 7.3.8): CABAC set-up, then the
     /// CTB loop, sequential or wavefront.
-    fn decode_slice(&mut self, job: &SliceJob, threads: usize) -> Result<(), DecodeError> {
+    fn decode_slice(
+        &mut self,
+        job: &SliceJob,
+        rbsp: &[u8],
+        epb_positions: &[u32],
+        threads: usize,
+    ) -> Result<(), DecodeError> {
         let (sps, pps, sh) = (&*job.sps, &*job.pps, &job.sh);
         let tile_tables = &*job.tile_tables;
         let pic_width_in_ctbs_for_init = sps.pic_width_in_ctbs_y();
@@ -384,7 +395,6 @@ impl PictureDecode {
         let slice_start_ts = job.slice_start_ts;
         let cabac_byte_offset = job.cabac_byte_offset;
         let nal_slice_data_start = job.nal_slice_data_start;
-        let epb_positions: &[u32] = &job.epb_positions;
         let recorded_slice_addr = job.recorded_slice_addr;
         let pic_width_in_ctbs = sps.pic_width_in_ctbs_y();
         let total_ctbs = pic_width_in_ctbs * sps.pic_height_in_ctbs_y();
@@ -464,7 +474,7 @@ impl PictureDecode {
             None
         };
 
-        let mut cabac = CabacReader::new(&job.rbsp, cabac_byte_offset)?;
+        let mut cabac = CabacReader::new(rbsp, cabac_byte_offset)?;
 
         let slice_ctx = crate::wavefront::SliceContext {
             sps,
@@ -474,7 +484,7 @@ impl PictureDecode {
             recorded_slice_addr,
         };
         let substreams = crate::wavefront::Substreams {
-            rbsp: &job.rbsp,
+            rbsp,
             data_start: cabac_byte_offset,
             nal_data_start: nal_slice_data_start,
             epb_positions,
@@ -944,21 +954,33 @@ fn zscan_table(cache: &mut Option<(ZscanKey, Arc<Vec<i32>>)>, sps: &Sps) -> Arc<
 /// allocate (and fault in, and zero) its planes and tables from scratch.
 #[derive(Default)]
 struct PicturePool {
+    /// The box holding a local picture's decode state is reused between pictures.
+    local_slot: Option<Box<Option<PictureDecode>>>,
     /// State of the last finished picture, per sample type.
     state_u8: Option<PictureState<u8>>,
     state_u16: Option<PictureState<u16>>,
     /// Planes and motion fields of pictures that left the DPB.
     planes_u8: Vec<([Vec<u8>; 3], Vec<MvField>)>,
     planes_u16: Vec<([Vec<u16>; 3], Vec<MvField>)>,
+    /// Retired references that may still be in display order or held by a worker.
+    retired: Vec<Arc<DecodedPicture>>,
 }
 
-/// Plane sets kept per sample type; about one picture leaves the DPB per
-/// picture decoded, so two is enough.
-const POOLED_PLANE_SETS: usize = 2;
+/// A keyframe can retire a full HEVC decoded picture buffer at once.
+const POOLED_PLANE_SETS: usize = 16;
 
 impl PicturePool {
     /// A picture state for `sps`, built from pooled buffers when available.
     fn new_state(&mut self, sps: &Sps, zscan: Arc<Vec<i32>>) -> PictureStateEnum {
+        let mut i = 0;
+        while i < self.retired.len() {
+            if Arc::strong_count(&self.retired[i]) == 1 {
+                let picture = self.retired.swap_remove(i);
+                self.recycle_picture(picture);
+            } else {
+                i += 1;
+            }
+        }
         if sps.needs_u16_samples() {
             let (planes, mvf) = self
                 .planes_u16
@@ -992,11 +1014,16 @@ impl PicturePool {
         }
     }
 
-    /// Take back the planes and motion field of a picture that left the
-    /// DPB, unless something else (a reference list) still holds it.
+    /// Take back the buffers of a retired reference when its readers finish.
     fn recycle_picture(&mut self, pic: Arc<DecodedPicture>) {
-        let Ok(pic) = Arc::try_unwrap(pic) else {
-            return;
+        let pic = match Arc::try_unwrap(pic) {
+            Ok(pic) => pic,
+            Err(pic) => {
+                if self.retired.len() < POOLED_PLANE_SETS {
+                    self.retired.push(pic);
+                }
+                return;
+            }
         };
         let mvf = pic.tab_mvf.into_vec();
         match pic.planes {
@@ -1792,12 +1819,18 @@ impl Decoder {
                     self.in_flight.is_empty(),
                 )))
             } else {
-                PictureSide::Local(Box::new(PictureDecode {
+                let mut slot = self
+                    .pool
+                    .local_slot
+                    .take()
+                    .unwrap_or_else(|| Box::new(None));
+                *slot = Some(PictureDecode {
                     state: ps_enum,
                     saved_cabac_state: None,
                     saved_wpp_cabac_state: None,
                     rows_in_parallel: false,
-                }))
+                });
+                PictureSide::Local(slot)
             };
             self.current_picture = Some(PictureInProgress {
                 side,
@@ -1956,8 +1989,6 @@ impl Decoder {
         // execute the entire inner body monomorphized for the right P.
 
         let job = SliceJob {
-            rbsp: nal.rbsp.to_vec(),
-            epb_positions: nal.epb_positions.clone(),
             sps: Arc::clone(sps),
             pps: Arc::clone(pps),
             tile_tables: Arc::clone(tile_tables),
@@ -1984,11 +2015,21 @@ impl Decoder {
         // after that is then handled the same way whatever the thread count
         // (it may not rewrite complete CTB rows).
         match &mut pic.side {
-            PictureSide::Local(decode) => decode.decode_slice(&job, self.threads)?,
+            PictureSide::Local(decode) => {
+                decode
+                    .as_mut()
+                    .as_mut()
+                    .expect("local picture is present")
+                    .decode_slice(&job, &nal.rbsp, &nal.epb_positions, self.threads)?;
+            }
             PictureSide::Thread(t) => {
                 // A send fails only if the thread panicked, which joining
                 // it reports.
-                let _ = t.jobs.send(PictureMessage::Slice(Box::new(job)));
+                let _ = t.jobs.send(PictureMessage::Slice(Box::new(ThreadSliceJob {
+                    syntax: job,
+                    rbsp: nal.rbsp.to_vec(),
+                    epb_positions: nal.epb_positions.clone(),
+                })));
             }
         }
         Ok(None)
@@ -2112,8 +2153,8 @@ impl Decoder {
         &mut self,
         mut pic: PictureInProgress,
     ) -> Result<Option<Picture>, DecodeError> {
-        let mut decode = match pic.side {
-            PictureSide::Local(decode) => decode,
+        let mut slot = match pic.side {
+            PictureSide::Local(slot) => slot,
             PictureSide::Thread(thread) => {
                 return self.finish_threaded_picture(
                     pic.last_slice_header,
@@ -2122,6 +2163,7 @@ impl Decoder {
                 );
             }
         };
+        let decode = slot.as_mut().as_mut().expect("local picture is present");
         let threads = self.threads.max(1);
         let sps = self
             .sps
@@ -2133,8 +2175,7 @@ impl Decoder {
             .ok_or(DecodeError::InvalidSyntax("picture without active PPS"))?;
         let last_sh = &pic.last_slice_header;
         let layout = decode.finish(sps, pps, last_sh, threads)?;
-        let last_sh_cloned = last_sh.clone();
-        let picture_poc = last_sh_cloned.poc;
+        let picture_poc = last_sh.poc;
         let pic_width = sps.pic_width_in_luma_samples;
         let pic_height = sps.pic_height_in_luma_samples;
 
@@ -2142,7 +2183,7 @@ impl Decoder {
         // longer used beyond this point — NLL will release them here so
         // we can take mutable borrows of `self.*` below.
 
-        self.update_prev_tid0(&last_sh_cloned);
+        self.update_prev_tid0(last_sh);
 
         // Insert the fresh picture into the DPB.
         let ref_list_l0_pocs: Vec<i32> = self.current_ref_list_l0.iter().map(|p| p.poc).collect();
@@ -2183,10 +2224,12 @@ impl Decoder {
             dp.ctb_slice_addr = std::mem::take(&mut state.tab_slice_addr_rs);
             Arc::new(dp)
         });
-        self.pool.recycle_state(decode.state);
+        self.pool
+            .recycle_state(slot.take().expect("local picture is present").state);
+        self.pool.local_slot = Some(slot);
         decoded_pic.mark(PictureReferenceStatus::ShortTerm);
         decoded_pic.set_output();
-        let frame = last_sh_cloned
+        let frame = last_sh
             .pic_output_flag
             .then(|| Picture::new(Arc::clone(&decoded_pic), layout));
         self.dpb.insert(decoded_pic);

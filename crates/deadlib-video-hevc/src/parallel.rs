@@ -39,6 +39,12 @@ pub(crate) fn for_each_band<P, F>(
     P: Send,
     F: Fn(usize, Band<'_, P>) + Sync,
 {
+    if let [start] = starts {
+        debug_assert_eq!(*start, [0; 3]);
+        let [y, u, v] = planes;
+        work(0, [(&mut y[..], 0), (&mut u[..], 0), (&mut v[..], 0)]);
+        return;
+    }
     // Each plane cut into its bands, as ranges of exactly their samples
     // (the planes may be views of a picture other threads read).
     let mut cut: Vec<std::vec::IntoIter<&mut [P]>> = planes
@@ -54,17 +60,12 @@ pub(crate) fn for_each_band<P, F>(
             plane.split_mut(&cuts).into_iter()
         })
         .collect();
-    let mut bands: Vec<Band<'_, P>> = starts
+    let bands: Vec<Band<'_, P>> = starts
         .iter()
         .map(|start| {
             std::array::from_fn(|p| (cut[p].next().expect("one slice per band"), start[p]))
         })
         .collect();
-    if bands.len() == 1 {
-        let band = bands.pop().unwrap();
-        work(0, band);
-        return;
-    }
     std::thread::scope(|s| {
         let work = &work;
         let mut iter = bands.into_iter().enumerate();
