@@ -1346,6 +1346,35 @@ impl Table {
     }
 
     #[inline]
+    // A warm field layout can be used on any matching table. An insertion,
+    // deletion or rehash is detected by validating each physical entry.
+    pub(crate) fn overwrite_cached_number_prefix(
+        &mut self,
+        keys: &[StringId],
+        numbers: &[f64],
+        hints: &[u32],
+    ) -> usize {
+        let Some(part) = &mut self.hash else {
+            return 0;
+        };
+        let mut written = 0;
+        for ((&key, &number), &hint) in keys.iter().zip(numbers).zip(hints) {
+            let Some(entry) = part.entries.get_mut(hint.wrapping_sub(1) as usize) else {
+                break;
+            };
+            if entry.key != Key::String(key) || entry.value == Value::Nil {
+                break;
+            }
+            entry.value = Value::Number(number);
+            written += 1;
+        }
+        if written != 0 {
+            // Preserve the same version increments as the individual writes.
+            self.advance_fields_version(written as u32);
+        }
+        written
+    }
+
     pub(crate) fn set_string_scalar_cached(
         &mut self,
         key: StringId,

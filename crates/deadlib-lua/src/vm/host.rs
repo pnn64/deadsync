@@ -190,6 +190,28 @@ impl Function {
     }
 }
 
+/// A fixed sequence of raw number field names and their VM-specific hints.
+pub struct NumberFields<const N: usize> {
+    names: &'static [&'static [u8]; N],
+    binding: Option<NumberFieldBinding<N>>,
+}
+
+struct NumberFieldBinding<const N: usize> {
+    owner: u64,
+    keys: [StringId; N],
+    hints: [u32; N],
+}
+
+impl<const N: usize> NumberFields<N> {
+    /// The names follow their raw insertion order.
+    pub const fn new(names: &'static [&'static [u8]; N]) -> Self {
+        Self {
+            names,
+            binding: None,
+        }
+    }
+}
+
 /// A native callback's arguments, captured values and result writer.
 ///
 /// Indices are zero-based. Arguments stay unchanged when results are appended.
@@ -1778,6 +1800,68 @@ impl HostCall<'_> {
                 self.vm.raw_set(table, Value::String(key), value)?;
             }
         }
+        Ok(())
+    }
+
+    /// Write a fixed group of raw numeric fields. Strings are interned once
+    /// per VM, and the cached entry positions are checked before every write.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid table or when a raw insertion fails.
+    pub fn raw_table_write_number_fields<const N: usize>(
+        &mut self,
+        table: TableId,
+        fields: &mut NumberFields<N>,
+        numbers: &[f64; N],
+    ) -> Result<(), Error> {
+        self.vm.validate_value(Value::Table(table))?;
+        let slot = slot_index(table.0);
+        if let Some(binding) = fields
+            .binding
+            .as_mut()
+            .filter(|binding| binding.owner == self.vm.identity)
+        {
+            let written = self.vm.tables[slot].overwrite_cached_number_prefix(
+                &binding.keys,
+                numbers,
+                &binding.hints,
+            );
+            for (index, &number) in numbers.iter().enumerate().skip(written) {
+                let key = binding.keys[index];
+                let value = Value::Number(number);
+                if !self.vm.tables[slot].set_string_scalar_cached(
+                    key,
+                    value,
+                    &mut binding.hints[index],
+                ) {
+                    self.vm.raw_set(table, Value::String(key), value)?;
+                }
+            }
+            return Ok(());
+        }
+
+        let mut binding = NumberFieldBinding {
+            owner: self.vm.identity,
+            keys: [StringId(0); N],
+            hints: [0; N],
+        };
+        for (index, &name) in fields.names.iter().enumerate() {
+            // Keep initialization and writes interleaved on an allocation
+            // failure. Every cached key is pinned by the static string index.
+            let Value::String(key) = self.vm.intern_static(name)? else {
+                unreachable!("interned field name");
+            };
+            binding.keys[index] = key;
+            let value = Value::Number(numbers[index]);
+            if !self.vm.tables[slot].set_string_scalar_cached(
+                key,
+                value,
+                &mut binding.hints[index],
+            ) {
+                self.vm.raw_set(table, Value::String(key), value)?;
+            }
+        }
+        fields.binding = Some(binding);
         Ok(())
     }
 

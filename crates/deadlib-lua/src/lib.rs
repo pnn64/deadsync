@@ -53,7 +53,8 @@ pub use vm::{
     GcOperation, HeapStats, HostCall, HostFunction, HostThreadState, IndexResolver, IndexView,
     MemoryUsage, NativeBuiltinBody, NativeCallStatus, NativeDebugFrame, NativeDebugInfo,
     NativeDebugString, NativeHook, NativeHookEvent, NativeHookInfo, NativeLoadStatus, NativeStack,
-    NativeThreadStack, NativeThreadStatus, Root, TripletFieldResolver, TripletResolver, Vm,
+    NativeThreadStack, NativeThreadStatus, NumberFields, Root, TripletFieldResolver,
+    TripletResolver, Vm,
 };
 
 /// Compile Lua 5.1 source or a native chunk into verified, VM-independent bytecode.

@@ -320,7 +320,7 @@ struct Store {
     column_take_from: Option<[[usize; deadsync_core::input::MAX_COLS]; crate::LUA_PLAYERS]>,
     initial_turn_options: Option<[deadsync_gameplay::GameplayTurnOption; crate::LUA_PLAYERS]>,
     spline_workspace: splines::Workspace,
-    replay_getter_slots: [u32; song_replay::GETTER_SCALAR_COUNT],
+    replay_getter_fields: Option<Box<deadlib_lua::NumberFields<{ song_replay::GETTER_SCALAR_COUNT }>>>,
     playback: bool,
     replay_frame: Option<(u64, f64)>,
     replay_dispatch: Option<song_immediate::Dispatch>,

@@ -45,7 +45,7 @@ pub use host::{
     HostCall, HostFunction, HostThreadState, IndexResolver, IndexView, NativeBuiltinBody,
     NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString, NativeHook,
     NativeHookEvent, NativeHookInfo, NativeLoadStatus, NativeStack, NativeThreadStack,
-    TripletFieldResolver, TripletResolver,
+    NumberFields, TripletFieldResolver, TripletResolver,
 };
 pub use memory_limit::MemoryUsage;
 use native::format_number;

@@ -427,33 +427,60 @@ fn sync_getters_inner(
     let Some((current, dest)) = poses else {
         return Ok(());
     };
-    let scalar_fields = [
-        ("__songlua_state_aux", dest.aux),
-        ("__songlua_state_x", dest.x),
-        ("__songlua_state_y", dest.y),
-        ("__songlua_state_z", dest.z),
-        ("__songlua_state_zoom", dest.zoom),
-        ("__songlua_state_zoom_x", dest.zoom_x),
-        ("__songlua_state_zoom_y", dest.zoom_y),
-        ("__songlua_state_zoom_z", dest.zoom_z),
-        ("__songlua_state_rot_x_deg", dest.rot_x_deg),
-        ("__songlua_state_rot_y_deg", dest.rot_y_deg),
-        ("__songlua_state_rot_z_deg", dest.rot_z_deg),
-        ("__songlua_state_skew_x", dest.skew_x),
-        ("__songlua_state_skew_y", dest.skew_y),
-        ("__songlua_state_cropleft", dest.cropleft),
-        ("__songlua_state_cropright", dest.cropright),
-        ("__songlua_state_croptop", dest.croptop),
-        ("__songlua_state_cropbottom", dest.cropbottom),
-        ("__songlua_state_fadeleft", dest.fadeleft),
-        ("__songlua_state_faderight", dest.faderight),
-        ("__songlua_state_fadetop", dest.fadetop),
-        ("__songlua_state_fadebottom", dest.fadebottom),
+    const SCALARS: [&[u8]; GETTER_SCALAR_COUNT] = [
+        b"__songlua_state_aux",
+        b"__songlua_state_x",
+        b"__songlua_state_y",
+        b"__songlua_state_z",
+        b"__songlua_state_zoom",
+        b"__songlua_state_zoom_x",
+        b"__songlua_state_zoom_y",
+        b"__songlua_state_zoom_z",
+        b"__songlua_state_rot_x_deg",
+        b"__songlua_state_rot_y_deg",
+        b"__songlua_state_rot_z_deg",
+        b"__songlua_state_skew_x",
+        b"__songlua_state_skew_y",
+        b"__songlua_state_cropleft",
+        b"__songlua_state_cropright",
+        b"__songlua_state_croptop",
+        b"__songlua_state_cropbottom",
+        b"__songlua_state_fadeleft",
+        b"__songlua_state_faderight",
+        b"__songlua_state_fadetop",
+        b"__songlua_state_fadebottom",
+    ];
+    let numbers = [
+        dest.aux,
+        dest.x,
+        dest.y,
+        dest.z,
+        dest.zoom,
+        dest.zoom_x,
+        dest.zoom_y,
+        dest.zoom_z,
+        dest.rot_x_deg,
+        dest.rot_y_deg,
+        dest.rot_z_deg,
+        dest.skew_x,
+        dest.skew_y,
+        dest.cropleft,
+        dest.cropright,
+        dest.croptop,
+        dest.cropbottom,
+        dest.fadeleft,
+        dest.faderight,
+        dest.fadetop,
+        dest.fadebottom,
     ]
-    .map(|(key, value)| (key.as_bytes(), f64::from(value)));
-    let mut slots = std::mem::take(&mut call.store().replay_getter_slots);
-    let result = call.raw_table_set_cached_numbers(id, &scalar_fields, &mut slots);
-    call.store().replay_getter_slots = slots;
+    .map(f64::from);
+    let mut fields = call
+        .store()
+        .replay_getter_fields
+        .take()
+        .unwrap_or_else(|| Box::new(deadlib_lua::NumberFields::new(&SCALARS)));
+    let result = call.raw_table_write_number_fields(id, &mut fields, &numbers);
+    call.store().replay_getter_fields = Some(fields);
     result?;
     let vectors = [
         ("__songlua_diffuse", dest.diffuse),

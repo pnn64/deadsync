@@ -2,6 +2,80 @@ use super::*;
 use crate::compile;
 
 #[test]
+fn bound_number_fields_preserve_raw_writes_across_layouts_and_vms() {
+    use std::sync::{Arc, Mutex};
+
+    const NAMES: [&[u8]; 3] = [b"first", b"second", b"third"];
+
+    fn publish(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let [Value::Table(table), Value::Number(number)] = *call.arguments() else {
+            unreachable!()
+        };
+        let fields = call
+            .function_data::<Arc<Mutex<NumberFields<3>>>>()
+            .unwrap()
+            .clone();
+        let mut fields = fields.lock().unwrap();
+        call.raw_table_write_number_fields(table, &mut fields, &[number, -0.0, f64::NAN])
+    }
+
+    let fields = Arc::new(Mutex::new(NumberFields::new(&NAMES)));
+    let script = compile(
+        br#"
+        local actor={}
+        local function verify(expected)
+            assert(rawget(actor,'first')==expected)
+            assert(1/rawget(actor,'second')==-math.huge)
+            assert(rawget(actor,'third')~=rawget(actor,'third'))
+        end
+        local function keys()
+            local out={}
+            for k in next,actor do out[#out+1]=k end
+            return table.concat(out,',')
+        end
+        publish(actor,4)
+        verify(4)
+        local first=keys()
+        publish(actor,6)
+        verify(6)
+        assert(keys()==first)
+        for i=1,127 do actor['other'..i]=i end
+        actor.second=nil
+        setmetatable(actor,{__newindex=function()error('raw write expected')end})
+        collectgarbage()
+        publish(actor,7)
+        verify(7)
+        assert(actor.other127==127)
+        return actor
+    "#,
+    )
+    .unwrap();
+
+    for different_order in [false, true] {
+        let mut vm = Vm::try_new_with_lua51_table_order().unwrap();
+        if different_order {
+            vm.intern_static(b"third").unwrap();
+            vm.intern_static(b"unrelated").unwrap();
+        }
+        let function = vm
+            .new_host_function_with_data(publish, &[], fields.clone())
+            .unwrap();
+        vm.set_global(b"publish", function).unwrap();
+        let Value::Table(table) = vm.execute(&script).unwrap()[0] else {
+            unreachable!()
+        };
+        let root = vm.pin(Value::Table(table)).unwrap();
+        let before = vm.raw_fields_version(table).unwrap();
+        vm.call(function, &[Value::Table(table), Value::Number(8.)])
+            .unwrap();
+        assert_eq!(vm.raw_fields_version(table).unwrap(), before.wrapping_add(3));
+        vm.unpin(root).unwrap();
+        let binding = fields.lock().unwrap();
+        assert_eq!(binding.binding.as_ref().unwrap().owner, vm.identity);
+    }
+}
+
+#[test]
 fn shared_number_arrays_keep_identity_and_copy_on_write() {
     let mut vm = Vm::try_new_with_lua51_table_order().unwrap();
     let from_host = vm
