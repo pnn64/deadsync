@@ -205,9 +205,9 @@ fn superblock_loop_filter<P: PlaneAccess>(
         FilterPass::Horizontal => (sub_y, 64 >> sub_x),
     };
 
-    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     let use_avx2 = crate::simd::avx2_enabled();
-    #[cfg(not(all(target_arch = "x86_64", target_feature = "avx2")))]
+    #[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]
     let use_avx2 = false;
 
     let num_edges = 16u32 >> sub;
@@ -236,7 +236,7 @@ fn superblock_loop_filter<P: PlaneAccess>(
                 let (limit, blimit, thresh) = ctx.strength_table[spec.lvl as usize];
                 let px0 = (group.x >> sub_x) as usize;
                 let py0 = (group.y >> sub_y) as usize;
-                #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+                #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
                 if use_avx2 {
                     let lf_fn = match pass {
                         FilterPass::Horizontal => crate::simd::loop_filter_horiz8_uniform_avx2,

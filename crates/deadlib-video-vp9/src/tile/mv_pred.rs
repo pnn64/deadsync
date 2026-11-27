@@ -85,7 +85,7 @@ pub(super) fn use_mv_hp(delta_mv: Mv) -> bool {
         && (delta_mv[1].abs() >> 3) < COMPANDED_MVREF_THRESH
 }
 
-impl TileDecoder {
+impl TileDecoder<'_> {
     /// `is_inside( candidateR, candidateC )` (spec §6.5.2).
     fn is_inside(&self, r: i32, c: i32) -> bool {
         r >= 0

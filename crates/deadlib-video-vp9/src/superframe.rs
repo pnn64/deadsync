@@ -11,20 +11,23 @@
 //! is exactly the concatenation of that many consecutive VP9 frames, in decode order.
 //!
 //! A container reader (e.g. [`crate::ivf::IvfReader`]) hands back one chunk at a time;
-//! [`crate::Decoder::decode_frame`] takes such a chunk directly and runs it through
+//! [`crate::Decoder::push_packet`] takes such a chunk directly and runs it through
 //! [`split_superframe`] internally, decoding each contained VP9 frame in turn.
-
-use alloc::{vec, vec::Vec};
 
 /// Splits one container chunk into the VP9 frame(s) it contains, in decode order.
 ///
 /// If `data` doesn't end with a valid superframe index, returns `data` itself as the sole
 /// element (the common case: one chunk == one VP9 frame).
-pub fn split_superframe(data: &[u8]) -> Vec<&[u8]> {
-    parse_superframe_index(data).unwrap_or_else(|| vec![data])
+pub fn split_superframe(data: &[u8]) -> impl Iterator<Item = &[u8]> {
+    let (frames, count) = parse_superframe_index(data).unwrap_or_else(|| {
+        let mut frames = [&[][..]; 8];
+        frames[0] = data;
+        (frames, 1)
+    });
+    frames.into_iter().take(count)
 }
 
-fn parse_superframe_index(data: &[u8]) -> Option<Vec<&[u8]>> {
+fn parse_superframe_index(data: &[u8]) -> Option<([&[u8]; 8], usize)> {
     let marker = *data.last()?;
     if marker & 0xe0 != 0xc0 {
         return None;
@@ -43,24 +46,21 @@ fn parse_superframe_index(data: &[u8]) -> Option<Vec<&[u8]>> {
         return None;
     }
 
-    let mut sizes = [0usize; 8];
-    let mut pos = 1;
-    for slot in &mut sizes[..num_frames] {
+    let payload = &data[..data.len() - index_size];
+    let mut frames = [&[][..]; 8];
+    let mut offset = 0;
+    for (slot, len) in frames
+        .iter_mut()
+        .zip(index[1..].chunks_exact(bytes_per_framesize))
+        .take(num_frames)
+    {
         let mut size = 0usize;
-        for (b, &byte) in index[pos..pos + bytes_per_framesize].iter().enumerate() {
+        for (b, &byte) in len.iter().enumerate() {
             size |= (byte as usize) << (8 * b);
         }
-        *slot = size;
-        pos += bytes_per_framesize;
-    }
-
-    let payload = &data[..data.len() - index_size];
-    let mut frames = Vec::with_capacity(num_frames);
-    let mut offset = 0usize;
-    for &size in &sizes[..num_frames] {
-        let end = offset.checked_add(size)?;
-        frames.push(payload.get(offset..end)?);
+        let end = usize::checked_add(offset, size)?;
+        *slot = payload.get(offset..end)?;
         offset = end;
     }
-    Some(frames)
+    Some((frames, num_frames))
 }

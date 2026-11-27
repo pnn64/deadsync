@@ -88,7 +88,7 @@ fn single_avail_p2(rf: [u8; 2], intra: bool, single: bool) -> usize {
     }
 }
 
-impl TileDecoder {
+impl TileDecoder<'_> {
     /// Context derivation for `comp_mode` (spec §9.3.2).
     pub(super) fn comp_mode_ctx(&self, n: &NeighborRefInfo) -> usize {
         let fixed = self.comp_fixed_ref;

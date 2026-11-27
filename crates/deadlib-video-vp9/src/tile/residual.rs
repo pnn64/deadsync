@@ -47,7 +47,7 @@ pub(super) fn build_dequant_table(
     table
 }
 
-impl TileDecoder {
+impl TileDecoder<'_> {
     /// `get_uv_tx_size( )` (spec §6.4.22).
     fn get_uv_tx_size(&self, mi_size: u8, tx_size: u8) -> u8 {
         common_get_uv_tx_size(mi_size, tx_size, self.subsampling_x, self.subsampling_y)
@@ -374,7 +374,7 @@ impl TileDecoder {
         // 0 or max_val, so clamping `delta` to [-max_val, max_val] is exact in i16 lanes too.
         let clamped_delta = resid.clamp(-max_val, max_val);
 
-        #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+        #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
         if crate::simd::avx2_enabled() {
             let pw = self.planes[plane].stride();
             let local_x = start_x - self.planes[plane].x0;
@@ -608,7 +608,7 @@ impl TileDecoder {
 
         let _ = max_row;
         let local_x = start_x - self.planes[plane].x0;
-        #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+        #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
         if crate::simd::avx2_enabled() {
             let pw = self.planes[plane].stride();
             debug_assert!(

@@ -1,5 +1,5 @@
 //! AVX2 SIMD kernels, x86_64-only (`core::arch::x86_64` intrinsics, zero dependencies),
-//! enabled at compile time via [`crate::simd::avx2_enabled`]. The scalar decode paths own
+//! selected by [`crate::simd::avx2_enabled`]. The scalar decode paths own
 //! every dispatch point and fallback; this module owns only the vector kernels, split by
 //! pipeline stage into submodules (all entry points re-exported here, so call sites use
 //! `crate::simd::<kernel>`):
@@ -33,8 +33,35 @@ pub(crate) use loop_filter::{loop_filter_horiz8_uniform_avx2, loop_filter_vert8_
 pub(crate) use transform::{inverse_transform_reconstruct_avx2, reconstruct_add_const_avx2};
 
 #[inline]
-pub(crate) const fn avx2_enabled() -> bool {
-    cfg!(target_feature = "avx2")
+pub(crate) fn avx2_enabled() -> bool {
+    if cfg!(target_feature = "avx2") {
+        return true;
+    }
+    use core::sync::atomic::{AtomicU8, Ordering::Relaxed};
+
+    static SUPPORT: AtomicU8 = AtomicU8::new(0);
+    match SUPPORT.load(Relaxed) {
+        0 => {
+            let enabled = detect_avx2();
+            SUPPORT.store(1 + u8::from(enabled), Relaxed);
+            enabled
+        }
+        state => state == 2,
+    }
+}
+
+#[cold]
+fn detect_avx2() -> bool {
+    use core::arch::x86_64::{__cpuid, __cpuid_count, _xgetbv};
+
+    // CPUID is available on x86-64. XGETBV needs OSXSAVE, and AVX2
+    // additionally requires the OS to preserve both XMM and YMM state.
+    unsafe {
+        __cpuid(0).eax >= 7
+            && __cpuid(1).ecx & (3 << 27) == 3 << 27
+            && _xgetbv(0) & 6 == 6
+            && __cpuid_count(7, 0).ebx & (1 << 5) != 0
+    }
 }
 
 /// Narrows `src` (`u16` samples, each known to be in `0..=255`) into `dst` (`u8`) using AVX2

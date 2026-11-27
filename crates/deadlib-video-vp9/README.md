@@ -17,8 +17,9 @@ cargo run --release --example decode -- video.ivf video.yuv
 cargo test --locked --offline
 ```
 
-The default build uses the portable reconstruction path. On x86-64,
-`RUSTFLAGS="-C target-feature=+avx2"` selects the AVX2 kernels at build time.
+On x86-64 the decoder selects AVX2 reconstruction when the processor and
+operating system support it. Other builds use the portable reconstruction
+path. A build targeting AVX2 directly can use `RUSTFLAGS="-C target-feature=+avx2"`.
 
 ## Verification
 

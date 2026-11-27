@@ -21,7 +21,7 @@ mod predict;
 mod prob_tables;
 mod quant;
 mod scan;
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 mod simd;
 mod subpel;
 mod superframe;
@@ -618,12 +618,10 @@ impl Decoder {
         };
 
         let active_u8_geom = (y_w * y_h, uv_w * uv_h);
-        let mut evicted = Vec::new();
-        self.dpb
-            .update_and_recycle(header.refresh_frame_flags, &ref_data, |old| {
-                evicted.push(old)
-            });
-        for old in evicted {
+        let evicted = self
+            .dpb
+            .update_and_recycle(header.refresh_frame_flags, &ref_data);
+        for old in evicted.into_iter().flatten() {
             match (
                 old.y.into_backing(),
                 old.u.into_backing(),
@@ -878,9 +876,7 @@ impl Decoder {
         );
         self.apply_frame_context_reset(ctx_reset);
 
-        // Backward adaptation (spec §6.1.2) needs `tile_decoder.counts()` before `tile_decoder`
-        // is consumed; FPM / error-resilient refresh saves `compressed.probs` directly after
-        // `tile_decoder.into_parts()` drops its `Arc` so `Arc::unwrap_or_clone` avoids cloning.
+        // Backward adaptation needs the counters before the tile decoder is consumed.
         if backward_adapt {
             let starting_probs = self.frame_contexts.load(ctx_idx);
             let final_probs = refresh_probs(
@@ -896,7 +892,7 @@ impl Decoder {
         self.update_persistent_state(&header, color_config);
 
         // Last use of tile_decoder: consume it to drop its read-only `Arc`s to DPB slots,
-        // `prev_mi_grid`, and `compressed.probs` BEFORE refreshing DPB / saving probs /
+        // `prev_mi_grid` before refreshing DPB / saving probs /
         // replacing `self.prev_mi_grid`, so evicted buffers have strong count 1 and recycle
         // cleanly into our pools.
         let (planes, mi_grid, above_ctx, scratch, counts) = tile_decoder.into_parts();
@@ -906,8 +902,7 @@ impl Decoder {
             self.counts_pool = Some(c);
         }
         if header.refresh_frame_context && !backward_adapt {
-            self.frame_contexts
-                .save(ctx_idx, Arc::unwrap_or_clone(compressed.probs));
+            self.frame_contexts.save(ctx_idx, compressed.probs);
         }
         let frame = self.output_and_refresh_refs(&header, &color_config, planes);
         self.store_and_recycle_mi_grid(mi_grid);
@@ -997,6 +992,6 @@ fn refresh_probs(
         }
         working
     } else {
-        (*compressed.probs).clone()
+        compressed.probs.clone()
     }
 }

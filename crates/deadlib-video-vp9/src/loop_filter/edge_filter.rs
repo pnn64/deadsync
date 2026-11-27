@@ -30,9 +30,9 @@ pub(super) trait PlaneAccess {
     /// # Safety
     /// Caller must ensure `(x, y)` lies inside the plane's bounds.
     unsafe fn lf_set(&mut self, x: usize, y: usize, v: u16);
-    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn lf_base_ptr(&mut self) -> *mut u16;
-    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     fn lf_stride(&self) -> usize;
 }
 
@@ -47,12 +47,12 @@ impl PlaneAccess for Plane {
         // SAFETY: caller upholds `PlaneAccess::lf_set` bounds contract.
         self.set_unchecked(x, y, v);
     }
-    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     #[inline]
     fn lf_base_ptr(&mut self) -> *mut u16 {
         self.base_ptr_mut()
     }
-    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     #[inline]
     fn lf_stride(&self) -> usize {
         self.stride()

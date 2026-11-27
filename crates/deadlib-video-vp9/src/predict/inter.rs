@@ -15,17 +15,17 @@ use crate::tile::Mv;
 
 /// Reference pixel sample type (`u8` for 8-bit DPB planes, `u16` for 10/12-bit DPB planes),
 /// allowing hot AVX2 unscaled inter-prediction kernels to share one implementation.
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 pub(crate) trait RefSample: Copy {
     const IS_U8: bool;
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 impl RefSample for u8 {
     const IS_U8: bool = true;
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 impl RefSample for u16 {
     const IS_U8: bool = false;
 }
@@ -333,7 +333,7 @@ fn block_inter_predict_into_plane(
     debug_assert!(dst_y + h <= dst.height);
     let ref_slice = ref_plane.as_slice_ref();
 
-    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     if (w == 4 || w.is_multiple_of(8))
         && crate::simd::avx2_enabled()
         && try_inter_predict_avx2(
@@ -392,7 +392,7 @@ fn block_inter_predict_into_plane(
     }
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[allow(clippy::too_many_arguments)]
 fn try_inter_predict_avx2(
     ref_data: RefSlice<'_>,

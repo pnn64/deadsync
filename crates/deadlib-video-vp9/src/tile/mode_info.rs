@@ -67,7 +67,7 @@ fn decode_sub8x8_intra_modes<F: FnMut(u32, u32, &[u8; 4]) -> u8>(
     (last_mode, sub_modes)
 }
 
-impl TileDecoder {
+impl TileDecoder<'_> {
     /// `seg_feature_active( feature )` (spec §6.4.9).
     fn seg_feature_active(&self, segment_id: u8, feature: usize) -> bool {
         self.segmentation.enabled && self.segmentation.feature_enabled[segment_id as usize][feature]

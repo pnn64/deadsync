@@ -95,22 +95,20 @@ impl Dpb {
         })
     }
 
-    /// Same as [`Dpb::update`], additionally passing any evicted slot whose `Arc` refcount drops
-    /// to 0 into `on_evict` for caller-managed buffer pooling.
+    /// Refreshes reference slots and collects any uniquely held evicted frames for reuse.
     pub(crate) fn update_and_recycle(
         &mut self,
         refresh_frame_flags: u8,
         data: &Arc<RefFrameData>,
-        mut on_evict: impl FnMut(RefFrameData),
-    ) {
-        for (slot, entry) in self.slots.iter_mut().enumerate() {
-            if (refresh_frame_flags >> slot) & 1 == 1 {
-                if let Some(old) = entry.replace(data.clone()) {
-                    if let Ok(owned) = Arc::try_unwrap(old) {
-                        on_evict(owned);
-                    }
-                }
+    ) -> [Option<RefFrameData>; NUM_REF_FRAMES] {
+        core::array::from_fn(|slot| {
+            if refresh_frame_flags & (1 << slot) != 0 {
+                self.slots[slot]
+                    .replace(Arc::clone(data))
+                    .and_then(Arc::into_inner)
+            } else {
+                None
             }
-        }
+        })
     }
 }

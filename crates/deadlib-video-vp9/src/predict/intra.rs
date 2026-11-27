@@ -9,7 +9,7 @@ use crate::prob_tables::{
     TX_4X4, V_PRED,
 };
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[inline]
 fn load_clamped_above(plane: &Plane, x: usize, y: usize, max_x: usize, dst: &mut [u16]) {
     for (i, slot) in dst.iter_mut().enumerate() {
@@ -19,7 +19,7 @@ fn load_clamped_above(plane: &Plane, x: usize, y: usize, max_x: usize, dst: &mut
     }
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[inline]
 fn load_clamped_left(plane: &Plane, x: usize, y: usize, max_y: usize, dst: &mut [u16]) {
     for (i, slot) in dst.iter_mut().enumerate() {
@@ -52,7 +52,7 @@ pub fn predict_intra(
     max_y: usize,
     bit_depth: u8,
 ) {
-    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     if matches!(mode, V_PRED | H_PRED | DC_PRED | TM_PRED) && crate::simd::avx2_enabled() {
         predict_intra_avx2(
             plane, x, y, have_left, have_above, tx_size, mode, max_x, max_y, bit_depth,
@@ -78,7 +78,7 @@ pub fn predict_intra(
 /// Runs `f(dst_base, above)` borrowing row `y - 1` strictly within `[local_x..local_x + size]`
 /// when `have_above && x + size - 1 <= max_x`, or via a stack-clamped buffer otherwise.
 /// Uses `plane.base_ptr_mut()` without ever forming an overlapping full-plane `&mut [u16]` slice.
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[inline]
 #[allow(clippy::too_many_arguments)]
 fn with_above_row<F: FnOnce(*mut u16, Option<&[u16]>)>(
@@ -107,7 +107,7 @@ fn with_above_row<F: FnOnce(*mut u16, Option<&[u16]>)>(
     }
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[allow(clippy::too_many_arguments)]
 fn predict_intra_avx2(
     plane: &mut Plane,

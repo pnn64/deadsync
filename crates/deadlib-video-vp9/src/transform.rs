@@ -223,7 +223,7 @@ macro_rules! idct_body {
         }
     }};
 }
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 pub(crate) use idct_body;
 
 /// Spec §8.7.1.3: the inverse DCT butterfly network itself (`2 <= n <= 5`).
@@ -315,7 +315,7 @@ macro_rules! iadst4_body {
         t[3] = $round14(o3);
     }};
 }
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 pub(crate) use iadst4_body;
 
 /// Shared inverse ADST8 body (spec §8.7.1.7) for scalar `i64` and AVX2 `i32`/`i64` drivers.
@@ -348,7 +348,7 @@ macro_rules! iadst8_body {
         }
     }};
 }
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 pub(crate) use iadst8_body;
 
 /// Shared inverse ADST16 body (spec §8.7.1.8) for scalar `i64` and AVX2 `i32`/`i64` drivers.
@@ -408,7 +408,7 @@ macro_rules! iadst16_body {
         }
     }};
 }
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 pub(crate) use iadst16_body;
 
 /// Spec §8.7.1.6: inverse ADST4 body.

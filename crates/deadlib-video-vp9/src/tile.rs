@@ -451,10 +451,10 @@ impl MiGrid {
         }
     }
 
-    /// Releases the transient sub-8x8 MV side table before archiving this grid as `prev_mi_grid`
+    /// Clears the transient sub-8x8 MV side table before archiving this grid as `prev_mi_grid`
     /// (temporal MV prediction only reads representative `MiInfo::mv` and `ref_frame`).
     pub(crate) fn clear_sub_mvs(&mut self) {
-        self.sub_mvs = Vec::new();
+        self.sub_mvs.clear();
     }
 
     #[inline]
@@ -621,10 +621,10 @@ fn get_tile_offset(tile_num: u32, mis: u32, tile_sz_log2: u32) -> u32 {
 /// Decoder that walks tiles and superblocks to decode mode info.
 ///
 /// Holds per-frame state (mode info grid, above/left partition context).
-pub struct TileDecoder {
+pub struct TileDecoder<'p> {
     tx_mode: u8,
-    /// `Arc`-shared with the `CompressedHeader` that produced it (never mutated here).
-    probs: Arc<CompressedHeaderProbs>,
+    /// Immutable probability tables for this frame.
+    probs: &'p CompressedHeaderProbs,
     segmentation: SegmentationParams,
     mi_cols: u32,
     mi_rows: u32,
@@ -703,13 +703,13 @@ pub struct TileDecoder {
     scratch: Box<TileScratch>,
 }
 
-impl TileDecoder {
+impl<'p> TileDecoder<'p> {
     /// Creates frame-local decode state with reusable scratch buffers.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new_with_buffers(
         header: &NewFrameHeader,
         color_config: ColorConfig,
-        compressed: &CompressedHeader,
+        compressed: &'p CompressedHeader,
         use_prev_frame_mvs: bool,
         prev_mi_grid: Option<Arc<MiGrid>>,
         resolved_refs: [Option<Arc<RefFrameData>>; 3],
@@ -768,7 +768,7 @@ impl TileDecoder {
 
         Self {
             tx_mode: compressed.tx_mode,
-            probs: compressed.probs.clone(),
+            probs: &compressed.probs,
             segmentation: header.segmentation,
             mi_cols: image_size.mi_cols,
             mi_rows: image_size.mi_rows,

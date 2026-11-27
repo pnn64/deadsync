@@ -28,7 +28,6 @@
 //! The inter-related reads called only when `FrameIsIntra == 0`
 //! (`read_inter_mode_probs` onward, spec §6.3.9-6.3.18) were implemented in M3.
 
-use alloc::sync::Arc;
 use core::fmt;
 
 use crate::bool_coder::{BoolCoderError, BoolDecoder};
@@ -225,9 +224,8 @@ impl Default for FrameContextStore {
 pub struct CompressedHeader {
     /// `tx_mode` (spec §7.3.1).
     pub tx_mode: u8,
-    /// The full set of updated probability tables. `Arc`-wrapped so that `TileDecoder`
-    /// (which never mutates it) can share this frame's copy instead of deep-cloning it.
-    pub probs: Arc<CompressedHeaderProbs>,
+    /// Updated probability tables borrowed by the tile decoder.
+    pub probs: CompressedHeaderProbs,
     /// `reference_mode` (spec §7.3.6). Always `SINGLE_REFERENCE` when `FrameIsIntra == 1`.
     pub reference_mode: u8,
     /// `CompFixedRef` (spec §6.3.18). Unused (0) when `reference_mode == SINGLE_REFERENCE`.
@@ -503,7 +501,7 @@ pub fn parse_compressed_header(
 
     Ok(CompressedHeader {
         tx_mode,
-        probs: Arc::new(probs),
+        probs,
         reference_mode,
         comp_fixed_ref,
         comp_var_ref,

@@ -54,7 +54,7 @@ impl Plane {
     }
 
     /// Row stride in samples, including any pixels beyond the visible width.
-    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     #[inline]
     pub fn stride(&self) -> usize {
         self.stride
@@ -221,7 +221,7 @@ impl Plane {
         out.clear();
         out.reserve(total);
 
-        #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+        #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
         if crate::simd::avx2_enabled() {
             let dst_base = out.spare_capacity_mut().as_mut_ptr() as *mut u8;
             if crop_width == self.stride {
@@ -269,7 +269,7 @@ pub(crate) enum RefSlice<'a> {
 }
 
 impl RefSlice<'_> {
-    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     #[inline]
     pub(crate) fn len(self) -> usize {
         match self {
