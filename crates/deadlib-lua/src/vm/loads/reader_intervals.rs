@@ -4,6 +4,7 @@
 use super::*;
 use crate::memory::{Shared, text::Text};
 use crate::parser::{NativeRootEvent, RootText};
+use std::sync::atomic::AtomicU64;
 
 const MIN_PREFIX: usize = 64;
 const MAX_ENTRIES: usize = 24;
@@ -16,7 +17,13 @@ struct Interval {
     end: usize,
     nesting: usize,
     closed: bool,
-    events: Box<[NativeRootEvent]>,
+    events: Box<[RecordedEvent]>,
+}
+
+#[derive(Debug)]
+struct RecordedEvent {
+    event: NativeRootEvent,
+    string_hint: AtomicU64,
 }
 
 #[derive(Debug)]
@@ -33,8 +40,24 @@ pub(in crate::vm) struct Plan {
 }
 
 impl Plan {
-    pub(in crate::vm) fn events(&self, interval: usize) -> &[NativeRootEvent] {
-        &self.intervals[interval].events
+    pub(in crate::vm) fn events(
+        &self,
+        interval: usize,
+    ) -> impl Iterator<Item = (&NativeRootEvent, Option<&AtomicU64>)> {
+        self.intervals[interval].events.iter().map(|saved| {
+            // The replay checks every byte except the preamble number.
+            let hint = match &saved.event {
+                NativeRootEvent::Anchor(RootText::Source { start, end })
+                | NativeRootEvent::ConstantText(RootText::Source { start, end })
+                    if (*start as usize) < self.digits.end
+                        && (*end as usize) > self.digits.start =>
+                {
+                    None
+                }
+                _ => Some(&saved.string_hint),
+            };
+            (&saved.event, hint)
+        })
     }
 }
 
@@ -168,7 +191,9 @@ impl Recording {
         events: &[NativeRootEvent],
     ) -> Option<()> {
         let start = self.intervals.last().map_or(0, |interval| interval.end);
-        let bytes = self.bytes.checked_add(std::mem::size_of_val(events))?;
+        let bytes = self
+            .bytes
+            .checked_add(events.len().checked_mul(size_of::<RecordedEvent>())?)?;
         let bytes = events.iter().try_fold(bytes, |cost, event| {
             let owned = match event {
                 NativeRootEvent::Anchor(RootText::Owned(text))
@@ -189,7 +214,10 @@ impl Recording {
         let mut saved = Vec::new();
         saved.try_reserve_exact(events.len()).ok()?;
         for event in events {
-            saved.push(copy_event(event)?);
+            saved.push(RecordedEvent {
+                event: copy_event(event)?,
+                string_hint: AtomicU64::new(0),
+            });
         }
         self.intervals
             .try_push(Interval {
@@ -206,24 +234,27 @@ impl Recording {
 
 fn hidden_first_constant(interval: &Interval, number: f64) -> bool {
     use NativeRootEvent::*;
-    let [Open, tail @ ..] = interval.events.as_ref() else {
+    let [first, tail @ ..] = interval.events.as_ref() else {
         return false;
     };
+    if !matches!(first.event, Open) {
+        return false;
+    }
     let Some(first_child) = tail
         .iter()
-        .position(|event| matches!(event, Open | OpenWithoutTable))
+        .position(|saved| matches!(saved.event, Open | OpenWithoutTable))
     else {
         return false;
     };
-    if !matches!(tail[first_child], OpenWithoutTable) {
+    if !matches!(tail[first_child].event, OpenWithoutTable) {
         return false;
     }
     // This function opened and closed within the first packet. It has no
     // public constant table, and a number adds no edge to the prototype.
     // The original event is safe to replay when this number changes.
     let mut seen = false;
-    for event in &tail[first_child + 1..] {
-        match event {
+    for saved in &tail[first_child + 1..] {
+        match &saved.event {
             Constant(crate::bytecode::Constant::Number(value)) if !seen && *value == number => {
                 seen = true;
             }

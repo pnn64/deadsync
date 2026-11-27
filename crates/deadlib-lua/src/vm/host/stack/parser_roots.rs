@@ -1,6 +1,7 @@
 //! Native-reader roots follow incremental parser/decoder events.
 use super::*;
 use crate::parser::{NativeRootEvent, RootText};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 impl NativeStack<'_, '_> {
     pub(super) fn apply_load_roots(&mut self, index: usize) -> Result<usize, Error> {
@@ -53,11 +54,13 @@ impl Vm {
                 }
             }
         }
-        let interval: &[NativeRootEvent] = replayed
+        let interval = replayed
             .as_ref()
-            .map_or(events.as_slice(), |(plan, index)| plan.events(*index));
+            .into_iter()
+            .flat_map(|(plan, index)| plan.events(*index))
+            .chain(events.iter().map(|event| (event, None)));
         let result = (|| -> Result<(), Error> {
-            for event in interval {
+            for (event, string_hint) in interval {
                 if matches!(
                     event,
                     NativeRootEvent::Open | NativeRootEvent::OpenWithoutTable
@@ -130,7 +133,7 @@ impl Vm {
                     .expect("active parser prototype");
                 if let NativeRootEvent::Anchor(text) = event {
                     if let Some(table) = table {
-                        let key = self.intern_parser_text(index, text)?;
+                        let key = self.intern_parser_text(index, text, string_hint)?;
                         if self.tables[slot_index(table.0)].get_string(key) == Value::Nil {
                             // The string key is valid and the scalar-overwrite
                             // path would repeat the lookup before a miss.
@@ -197,9 +200,9 @@ impl Vm {
                                 NativeRootEvent::Constant(Constant::String(bytes)) => {
                                     self.try_intern(bytes)?
                                 }
-                                NativeRootEvent::ConstantText(text) => {
-                                    Value::String(self.intern_parser_text(index, text)?)
-                                }
+                                NativeRootEvent::ConstantText(text) => Value::String(
+                                    self.intern_parser_text(index, text, string_hint)?,
+                                ),
                                 _ => unreachable!("parser roots own their string constants"),
                             };
                             if let Value::String(string) = value {
@@ -269,11 +272,28 @@ impl Vm {
         self.gc_note_control(storage_after.saturating_sub(storage_before));
         result
     }
-    fn intern_parser_text(&mut self, index: usize, text: &RootText) -> Result<StringId, Error> {
+    fn intern_parser_text(
+        &mut self,
+        index: usize,
+        text: &RootText,
+        hint: Option<&AtomicU64>,
+    ) -> Result<StringId, Error> {
+        if let Some(hint) = hint {
+            let id = StringId(hint.load(Ordering::Relaxed));
+            if self.strings.bytes.contains(id.0) {
+                self.strings.bytes.preserve_new_reference(id.0);
+                return Ok(id);
+            }
+        }
         let bytes = text.bytes(self.loads[index].source());
-        self.strings
+        let id = self
+            .strings
             .try_intern(bytes)
-            .map_err(|_| self.memory_failure())
+            .map_err(|_| self.memory_failure())?;
+        if let Some(hint) = hint {
+            hint.store(id.0, Ordering::Relaxed);
+        }
+        Ok(id)
     }
 
     fn native_load_push(
