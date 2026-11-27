@@ -2208,7 +2208,7 @@ impl Vm {
             let mut pc = frame.pc();
             let base = frame.base;
             if pc == 0
-                && prototype.code.len() == 20
+                && matches!(prototype.code.len(), 19 | 20)
                 && prototype.params == 1
                 && !prototype.vararg
                 && let Some((return_pc, value)) = self.try_table_search(function, prototype, base)

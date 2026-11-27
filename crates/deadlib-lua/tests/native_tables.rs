@@ -609,3 +609,32 @@ return true
         [Value::Boolean(true)]
     );
 }
+
+#[test]
+fn pairs_search_preserves_false_keys_and_replaced_iterators() {
+    let mut vm = Vm::new();
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+scan_pairs, scan_table = pairs, {alpha = false, [false] = 42}
+local function search(name)
+    for n, v in scan_pairs(scan_table) do
+        if n == name then return v end
+    end
+    return nil
+end
+assert(search('alpha') == false and search(false) == 42)
+assert(search(nil) == nil and search('missing') == nil)
+scan_pairs = function()
+    return function(_, key)
+        if key == nil then return 'alpha', 100 end
+    end, nil, nil
+end
+assert(search('alpha') == 100 and search(false) == nil)
+return true
+"#,
+        ),
+        [Value::Boolean(true)]
+    );
+}
