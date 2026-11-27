@@ -119,6 +119,34 @@ fn weak_tables_preserve_lua51_strings_cycles_and_strong_values() {
 }
 
 #[test]
+fn scalar_weak_arrays_keep_the_metatable_and_track_new_weak_values() {
+    let program = compile(
+        br#"
+        local t = setmetatable({17, false}, {
+            __mode = string.rep('x', 256) .. 'v',
+            payload = {42},
+        })
+        collectgarbage('collect')
+        assert(t[1] == 17 and t[2] == false)
+        assert(getmetatable(t).payload[1] == 42)
+
+        local function insert_values(t)
+            t[1] = {}
+            t.temporary = {}
+        end
+        insert_values(t)
+        collectgarbage('collect')
+        assert(t[1] == nil and t.temporary == nil and t[2] == false)
+        return getmetatable(t).payload[1]
+        "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+    }
+}
+
+#[test]
 fn collected_threads_close_surviving_cells_and_preserve_identity() {
     for source in [
         "collectgarbage('stop');local w=setmetatable({},{__mode='v'});local f;do local co=coroutine.wrap(function()local n=10;coroutine.yield(function()n=n+1;return n end)end);f=co();w[1]=co end;collectgarbage();return w[1],f(),f()",

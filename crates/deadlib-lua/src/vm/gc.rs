@@ -1429,16 +1429,21 @@ impl Vm {
                 }
             }
             if let Trace::Value(Value::Table(id)) | Trace::MarkedValue(Value::Table(id)) = item
-                && self
-                    .tables
-                    .get(id.0)
-                    .is_some_and(Table::is_edge_free_array)
+                && let Some(table) = self.tables.get(id.0)
+                && table.host_state().is_none()
+                && table.is_scalar_array_only()
             {
-                // This still consumes one trace visit. Without any edges,
-                // metadata or hash nodes, the complete table fits in this step.
+                // No entry needs tracing. A metatable edge can reuse the
+                // popped work slot, so this visit needs no reservation.
+                let metatable = table.metatable();
                 self.tables.mark(id.0);
                 self.tables[slot_index(id.0)].trace = TableTrace::Idle;
                 work.pop();
+                if let Some(mt) = metatable
+                    && (budget != usize::MAX || !self.tables.marked(mt.0))
+                {
+                    work.push(Trace::Value(Value::Table(mt)));
+                }
                 visited += 1;
                 continue;
             }
@@ -1843,10 +1848,14 @@ impl Vm {
             while marked != 0 {
                 let index = word * 64 + marked.trailing_zeros() as usize;
                 marked &= marked - 1;
-                let Some(mt) = self.tables[index].metatable() else {
+                let table = &self.tables[index];
+                let Some(mt) = table.metatable() else {
                     continue;
                 };
                 metatable_end = index as u32 + 1;
+                if table.is_scalar_array_only() {
+                    continue;
+                }
                 let (weak_keys, weak_values) = modes.get(self, mt);
                 if !weak_keys && !weak_values {
                     continue;

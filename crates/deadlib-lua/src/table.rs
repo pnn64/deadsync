@@ -682,10 +682,8 @@ impl Table {
             part.slots[slot] = index | Self::slot_tag(slots, hash).0;
         }
     }
-    pub(crate) fn is_edge_free_array(&self) -> bool {
-        self.metatable == 0
-            && self.host_state == 0
-            && self.hash_part().entries.is_empty()
+    pub(crate) fn is_scalar_array_only(&self) -> bool {
+        self.hash_part().entries.is_empty()
             && (matches!(self.array, ArrayStorage::SharedSequence { .. })
                 || (self.array.len() <= 4 && self.array.iter().copied().all(array_scalar)))
     }
