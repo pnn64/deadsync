@@ -260,7 +260,7 @@ impl<'a> Compiler<'a> {
                     };
                     let done = self.predicate_finish(*cond, reg)?;
                     self.reset(saved);
-                    self.function.loops.try_push((saved, Vec::new()))?;
+                    self.function.loops.try_push((saved, boolean::List::default()))?;
                     self.tasks.try_push(Task::WhileEnd(start, done))?;
                     self.tasks.try_push(Task::Scope(self.ast.ids(*body)))?;
                 }
@@ -380,7 +380,7 @@ impl<'a> Compiler<'a> {
                     let head = self.function.code.len() as u32;
                     let locals = self.function.locals.len();
                     self.bind(name.bytes(self.source), base + 3)?;
-                    self.function.loops.try_push((saved, Vec::new()))?;
+                    self.function.loops.try_push((saved, boolean::List::default()))?;
                     self.tasks
                         .try_push(Task::ForEnd(id, base, controls, locals, prep, head))?;
                     self.tasks.try_push(Task::Scope(self.ast.ids(*body)))?;

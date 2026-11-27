@@ -3,14 +3,19 @@ use super::*;
 
 /// Resolve shared unconditional jumps once, including cycles in empty loops.
 /// Boolean LOADBOOL skips remain adjacent to their two materializers.
-pub(super) fn thread_jumps(code: &mut [Emission]) -> Result<(), Error> {
+pub(super) fn thread_jumps(
+    code: &mut [Emission],
+    targets: &mut Vec<u32>,
+    path: &mut Vec<usize>,
+) -> Result<(), Error> {
     if !code.iter().any(|i| i.op == Op::Jump && i.b == 0) {
         return Ok(());
     }
     const NEW: u32 = u32::MAX;
     const VISITING: u32 = u32::MAX - 1;
-    let mut targets = fallible::repeat(NEW, code.len())?;
-    let mut path = Vec::new();
+    targets.clear();
+    targets.try_resize(code.len(), NEW)?;
+    debug_assert!(path.is_empty());
     for pc in 0..code.len() {
         if code[pc].op != Op::Jump || code[pc].b != 0 || targets[pc] != NEW {
             continue;
@@ -49,6 +54,18 @@ pub(super) struct List {
     head: u32,
     tail: u32,
 }
+impl List {
+    pub(super) fn push(&mut self, code: &mut [Emission], pc: usize) {
+        let link = pc as u32 + 1;
+        if self.tail != 0 {
+            code[self.tail as usize - 1].c = link;
+        } else {
+            self.head = link;
+        }
+        self.tail = link;
+        code[pc].c = 0;
+    }
+}
 #[derive(Clone, Copy)]
 enum Value {
     Constant(ExprId),
@@ -76,14 +93,7 @@ impl Default for Boolean {
 }
 impl Compiler<'_> {
     pub(super) fn list_push(&mut self, list: &mut List, pc: usize) {
-        let link = pc as u32 + 1;
-        if list.tail != 0 {
-            self.function.code[list.tail as usize - 1].c = link;
-        } else {
-            list.head = link;
-        }
-        list.tail = link;
-        self.function.code[pc].c = 0;
+        list.push(&mut self.function.code, pc);
     }
     fn list_join(&mut self, left: &mut List, right: List) {
         if right.head == 0 {

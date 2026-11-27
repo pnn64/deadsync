@@ -98,6 +98,8 @@ impl std::ops::DerefMut for Emission {
 #[derive(Default)]
 struct Function {
     code: Vec<Emission>,
+    jump_targets: Vec<u32>,
+    jump_path: Vec<usize>,
     // An empty dense table keeps the function in consecutive-prefix mode.
     gc_maps: Vec<[u64; 4]>,
     gc_prefix_start: u8,
@@ -110,7 +112,7 @@ struct Function {
     constants: constants::Constants,
     locals: Vec<Local>,
     upvalues: Vec<(Name, Upvalue)>,
-    loops: Vec<(u16, Vec<usize>)>,
+    loops: Vec<(u16, boolean::List)>,
     next: u16,
     max: u16,
     params: u16,
@@ -332,7 +334,7 @@ impl<'a> Compiler<'a> {
     }
     fn finish(&mut self) -> Result<u32, Error> {
         let f = &mut *self.function;
-        boolean::thread_jumps(&mut f.code)?;
+        boolean::thread_jumps(&mut f.code, &mut f.jump_targets, &mut f.jump_path)?;
         for &pc in &f.logical_tests {
             let i = f.code[pc];
             if i.c as usize > pc
@@ -894,15 +896,12 @@ impl<'a> Compiler<'a> {
         self.function.locals.truncate(retained);
     }
     fn finish_loop(&mut self) {
-        for pc in self
+        let (_, exits) = self
             .function
             .loops
             .pop()
-            .expect("compiler loop stack must be balanced")
-            .1
-        {
-            self.patch(pc);
-        }
+            .expect("compiler loop stack must be balanced");
+        self.list_patch(exits, self.function.code.len());
     }
     fn multiple(&self, id: ExprId) -> bool {
         matches!(

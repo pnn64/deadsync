@@ -65,7 +65,7 @@ impl<'a> Compiler<'a> {
             Stmt::Repeat(body, _) => {
                 let start = self.function.code.len() as u32;
                 let locals = self.function.locals.len();
-                self.function.loops.try_push((saved, Vec::new()))?;
+                self.function.loops.try_push((saved, boolean::List::default()))?;
                 self.tasks
                     .try_push(Task::RepeatCond(id, saved, start, locals))?;
                 self.tasks.try_push(Task::Block(self.ast.ids(*body)))?;
@@ -94,7 +94,8 @@ impl<'a> Compiler<'a> {
                     self.debug_line(self.line);
                 }
                 let pc = self.emit(Op::Jump, 0, 0, 0)?;
-                self.function.loops.last_mut().unwrap().1.try_push(pc)?;
+                let f = &mut *self.function;
+                f.loops.last_mut().unwrap().1.push(&mut f.code, pc);
             }
             Stmt::LocalFunction(name, value) => {
                 let reg = self.alloc(1)?;
@@ -253,7 +254,7 @@ impl<'a> Compiler<'a> {
         for (i, name) in names.iter().enumerate() {
             self.bind(name.bytes(self.source), results + i as u8)?;
         }
-        self.function.loops.try_push((saved, Vec::new()))?;
+        self.function.loops.try_push((saved, boolean::List::default()))?;
         self.tasks
             .try_push(Task::ForInEnd(results, controls, locals, head, done))?;
         self.tasks.try_push(Task::Scope(ast.ids(*body)))?;
