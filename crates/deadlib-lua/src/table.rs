@@ -360,12 +360,20 @@ struct HashPart {
     slots: Buffer<u32>,
     native_dead_keys: u32,
     last_free: u32,
+    // In ordinary tables, a positive integer in the hash can migrate during
+    // an array append. Deletions leave this hint conservative until rebuild.
+    may_have_array_keys: bool,
     // Two one-based indices. Keys are checked before using either hint.
     next_hash_hint: AtomicU64,
     unpublished_rows: Option<Unique<UnpublishedFields>>,
 }
 
 impl HashPart {
+    fn array_key(entry: &Entry) -> bool {
+        matches!(entry.key, Key::Number(bits)
+            if array_index(Value::Number(f64::from_bits(bits))).is_some())
+    }
+
     #[inline]
     fn read_value(&self, entry: &Entry) -> Value {
         if let Value::Table(root) = entry.value
@@ -390,6 +398,7 @@ static EMPTY_HASH: HashPart = HashPart {
     slots: Buffer::empty_global(),
     native_dead_keys: 0,
     last_free: 0,
+    may_have_array_keys: false,
     next_hash_hint: AtomicU64::new(0),
     unpublished_rows: None,
 };
@@ -577,6 +586,7 @@ impl Table {
                 slots: Buffer::new_in(memory.clone()),
                 native_dead_keys: 0,
                 last_free: 0,
+                may_have_array_keys: false,
                 next_hash_hint: AtomicU64::new(0),
                 unpublished_rows: None,
             };
@@ -769,6 +779,7 @@ impl Table {
                 .try_reserve(layout.slots.len().saturating_sub(part.slots.len()))?;
             part.entries.clear();
             part.entries.extend_from_slice(&layout.entries);
+            part.may_have_array_keys = part.entries.iter().any(HashPart::array_key);
             part.slots.clear();
             part.slots.extend_from_slice(&layout.slots);
             part.last_free = layout.last_free;
@@ -909,7 +920,9 @@ impl Table {
         let part = self.hash_part_mut();
         part.slots.resize(slots, 0);
         part.slots.fill(0);
+        part.may_have_array_keys = false;
         for (i, entry) in part.entries.iter().enumerate() {
+            part.may_have_array_keys |= HashPart::array_key(entry);
             let hash = entry.key.hash();
             let mut slot = hash & (part.slots.len() - 1);
             while part.slots[slot] != 0 {
@@ -1157,7 +1170,7 @@ impl Table {
         } else if index == self.array.len()
             && index < self.array.allocated_capacity()
             && !self.native51
-            && self.hash_part().slots.is_empty()
+            && !self.hash_part().may_have_array_keys
             && value != Value::Nil
         {
             self.array.heap_mut().push(value);
@@ -1512,7 +1525,8 @@ impl Table {
         if self.native51 {
             return self.native_set(k, value, string_hash);
         }
-        if let Some(i) = array_index(key) {
+        let array = array_index(key);
+        if let Some(i) = array {
             if i < self.array.len() || (i == self.array.len() && value != Value::Nil) {
                 self.array.try_make_writable(i + 1)?;
             }
@@ -1522,7 +1536,7 @@ impl Table {
                 return Ok(());
             }
             if i == self.array.len() && value != Value::Nil {
-                if self.hash_part().slots.is_empty() {
+                if !self.hash_part().may_have_array_keys {
                     self.array.heap_mut().try_push(value)?;
                     self.touch_array();
                     return Ok(());
@@ -1613,7 +1627,8 @@ impl Table {
         };
         let part = self.hash_part_mut();
         part.slots[slot] = index | Self::slot_tag(part.slots.len(), k.hash()).0;
-        self.hash_part_mut().entries.push(Entry {
+        part.may_have_array_keys |= array.is_some();
+        part.entries.push(Entry {
             key: k,
             value,
             native_hash: 0,
