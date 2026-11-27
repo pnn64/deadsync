@@ -22,10 +22,119 @@ FILES = [
     "attrib.lua", "verybig.lua",
 ]
 RETURNS = {"locals.lua": 5, "events.lua": 12, "attrib.lua": 27, "verybig.lua": 10}
+PGO_TRAINING = [name for name in FILES if name not in ("constructs.lua", "files.lua")]
+PGO_ITERATIONS = 3
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def run_sample(
+    binary: Path, source: Path, directory: Path, name: str, sample: int,
+    environment: dict[str, str], timeout: float, cpu: int | None = None,
+) -> dict:
+    cwd = directory / name / str(sample)
+    shutil.copytree(source, cwd)
+    # Cargo/Git do not retain the archive's empty module-search directory.
+    (cwd / "libs/P1").mkdir(parents=True, exist_ok=True)
+    child_command = [str(binary), "rust-bench", str(cwd / name)]
+    child = subprocess.Popen(child_command, cwd=cwd, env=environment,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE,
+                             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+    if cpu is not None:
+        if sys.platform == "win32":
+            affinity = ctypes.windll.kernel32.SetProcessAffinityMask
+            affinity.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+            if not affinity(int(child._handle), 1 << cpu):
+                child.kill()
+                child.communicate()
+                raise ctypes.WinError()
+        else:
+            os.sched_setaffinity(child.pid, {cpu})
+    expired = False
+    try:
+        stdout, stderr = child.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        expired = True
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/PID", str(child.pid), "/T", "/F"], capture_output=True)
+        else:
+            child.kill()
+        stdout, stderr = child.communicate()
+    error = stderr.decode("utf-8", "replace")
+    record = next((line.split("\t") for line in error.splitlines()
+                   if line.startswith("BENCH\t")), None)
+    passed = (not expired and child.returncode == 0 and record is not None
+              and len(record) == 5 and record[1] == name)
+    if passed:
+        expected = struct.pack(">d", float(RETURNS[name])).hex() if name in RETURNS else "none"
+        passed = record[4] == expected
+    platform_failure = (sys.platform == "win32" and name == "files.lua"
+                        and child.returncode == 1 and not expired
+                        and any(line.startswith("FAIL\tRuntime\t59\t")
+                                and line.endswith(": Permission denied") for line in error.splitlines()))
+    row = dict(file=name, sample=sample, command=child_command, exit=child.returncode,
+               timeout=expired, status="pass" if passed else
+               "platform-expected-failure" if platform_failure else "fail",
+               stdout=stdout.decode("utf-8", "replace"), stderr=error)
+    if passed:
+        row.update(nanoseconds=int(record[2]),
+                   cycles=int(record[3]) if record[3] != "unavailable" else None,
+                   returned=record[4])
+    return row
+
+
+def profiled_build(
+    root: Path, source: Path, directory: Path, suffix: str, command: list[str],
+    environment: dict[str, str], timeout: float,
+) -> tuple[Path, list[str], dict]:
+    rustc = environment.get("RUSTC", "rustc")
+    version = subprocess.check_output([rustc, "-vV"], cwd=root, text=True)
+    host = next(line.removeprefix("host: ") for line in version.splitlines() if line.startswith("host: "))
+    libdir = subprocess.check_output([rustc, "--print", "target-libdir"], cwd=root, text=True)
+    profdata = Path(libdir.strip()).parent / "bin" / f"llvm-profdata{suffix}"
+    if not profdata.is_file():
+        raise SystemExit("llvm-profdata is missing from this Rust toolchain. Install llvm-tools-preview.")
+
+    def build(flag: str, target: Path) -> tuple[Path, list[str]]:
+        env = environment.copy()
+        args = command + ["--target", host, "--target-dir", str(target)]
+        separator = "\x1f"
+        if "CARGO_ENCODED_RUSTFLAGS" in env:
+            flags = env["CARGO_ENCODED_RUSTFLAGS"]
+            env["CARGO_ENCODED_RUSTFLAGS"] = separator.join(filter(None, [flags, flag]))
+        elif "RUSTFLAGS" in env:
+            env["CARGO_ENCODED_RUSTFLAGS"] = separator.join([*env["RUSTFLAGS"].split(), flag])
+        else:
+            # Cargo joins the target tuple's flags with matching cfg flags.
+            args += ["--config", f"target.{host}.rustflags={json.dumps([flag])}"]
+        subprocess.run(args, cwd=root, env=env, check=True)
+        return target / host / f"release/examples/official_suite{suffix}", args
+
+    raw = directory / "profiles"
+    raw.mkdir()
+    instrumented, instrument_command = build(f"-Cprofile-generate={raw}", directory / "generate")
+    training_env = dict(environment, LLVM_PROFILE_FILE=str(raw / "fixture-%p-%m.profraw"))
+    jobs = [(name, trial) for trial in range(PGO_ITERATIONS) for name in PGO_TRAINING]
+    random.Random(51051).shuffle(jobs)
+    for name, trial in jobs:
+        row = run_sample(instrumented, source, directory / "training", name, trial,
+                         training_env, timeout)
+        if row["status"] != "pass":
+            raise SystemExit(f"PGO training failed on {name} (sample {trial})\n{row['stderr']}")
+    profiles = sorted(raw.glob("fixture-*.profraw"))
+    if len(profiles) != len(jobs):
+        raise SystemExit(f"PGO expected {len(jobs)} fixture profiles, found {len(profiles)}")
+    merged = directory / "merged.profdata"
+    subprocess.run([str(profdata), "merge", "-o", str(merged), *map(str, profiles)],
+                   cwd=root, check=True)
+    binary, build_command = build(f"-Cprofile-use={merged}", directory / "optimized")
+    return binary, build_command, dict(
+        training_files=PGO_TRAINING, training_samples=PGO_ITERATIONS, rustc=version.strip(),
+        instrument_command=instrument_command, profile=str(merged), profile_sha256=sha256(merged),
+    )
 
 
 def main() -> None:
@@ -35,6 +144,8 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=120)
     parser.add_argument("--cpu", type=int, help="Pin benchmark children to one logical processor")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--pgo", action="store_true",
+                        help="Train on the portable suite with constructs.lua held out")
     args = parser.parse_args()
     if args.samples < 1 or args.timeout <= 0 or (args.cpu is not None and args.cpu < 0):
         parser.error("samples and timeout must be positive; CPU must be nonnegative")
@@ -51,19 +162,26 @@ def main() -> None:
 
     crate = bench.parent
     paths = sorted((crate / "src").rglob("*.rs"))
-    paths += [crate / "Cargo.toml", crate / "build.rs", crate / "examples/official_suite.rs"]
+    paths += [crate / "Cargo.toml", crate / "build.rs", crate / "examples/official_suite.rs",
+              Path(__file__).resolve()]
     hashes = {p.relative_to(root).as_posix(): sha256(p) for p in paths}
     command = ["cargo", "build", "--release", "--locked", "-p", "deadlib-lua",
                "--example", "official_suite", "-j2"]
-    subprocess.run(command, cwd=root, check=True)
     target = (root / Path(os.environ.get("CARGO_TARGET_DIR", "target"))).resolve()
     suffix = ".exe" if sys.platform == "win32" else ""
     directory = target / "lua51-benchmark" / f"{time.time_ns()}-{os.getpid()}"
     directory.mkdir(parents=True)
-    binary = directory / f"official_suite{suffix}"
-    shutil.copy2(target / f"release/examples/official_suite{suffix}", binary)
     environment = {k: v for k, v in os.environ.items()
                    if not k.upper().startswith(("LUA_", "LUAJIT_", "LUNA_", "COMPARISON_SETUP"))}
+    pgo = None
+    if args.pgo:
+        built, command, pgo = profiled_build(root, source, directory, suffix, command,
+                                              environment, args.timeout)
+    else:
+        subprocess.run(command, cwd=root, check=True)
+        built = target / f"release/examples/official_suite{suffix}"
+    binary = directory / f"official_suite{suffix}"
+    shutil.copy2(built, binary)
     jobs = [(name, sample) for sample in range(args.samples) for name in args.files]
     random.Random(51051).shuffle(jobs)
     rows = []
@@ -77,68 +195,32 @@ def main() -> None:
         source=manifest, source_hashes=hashes, build_command=command,
         binary=str(binary), binary_sha256=sha256(binary), cpu=args.cpu, rows=rows,
     )
+    if pgo is not None:
+        metadata["profile_guided"] = pgo
     for name, sample in jobs:
         if name in failed:
             continue
-        cwd = directory / "runs" / name / str(sample)
-        shutil.copytree(source, cwd)
-        # Cargo/Git do not retain the archive's empty module-search directory.
-        (cwd / "libs/P1").mkdir(parents=True, exist_ok=True)
-        child_command = [str(binary), "rust-bench", str(cwd / name)]
-        child = subprocess.Popen(child_command, cwd=cwd, env=environment,
-                                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE,
-                                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
-        if args.cpu is not None:
-            if sys.platform == "win32":
-                affinity = ctypes.windll.kernel32.SetProcessAffinityMask
-                affinity.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
-                if not affinity(int(child._handle), 1 << args.cpu):
-                    child.kill()
-                    child.communicate()
-                    raise ctypes.WinError()
-            else:
-                os.sched_setaffinity(child.pid, {args.cpu})
-        expired = False
-        try:
-            stdout, stderr = child.communicate(timeout=args.timeout)
-        except subprocess.TimeoutExpired:
-            expired = True
-            if sys.platform == "win32":
-                subprocess.run(["taskkill", "/PID", str(child.pid), "/T", "/F"], capture_output=True)
-            else:
-                child.kill()
-            stdout, stderr = child.communicate()
-        error = stderr.decode("utf-8", "replace")
-        record = next((line.split("\t") for line in error.splitlines()
-                       if line.startswith("BENCH\t")), None)
-        passed = not expired and child.returncode == 0 and record is not None
-        if passed and name in RETURNS:
-            passed = record[4] == struct.pack(">d", float(RETURNS[name])).hex()
-        platform_failure = (sys.platform == "win32" and name == "files.lua"
-                            and child.returncode == 1 and not expired
-                            and any(line.startswith("FAIL\tRuntime\t59\t")
-                                    and line.endswith(": Permission denied") for line in error.splitlines()))
-        row = dict(file=name, sample=sample, command=child_command, exit=child.returncode,
-                   timeout=expired, status="pass" if passed else
-                   "platform-expected-failure" if platform_failure else "fail",
-                   stdout=stdout.decode("utf-8", "replace"), stderr=error)
-        if passed:
-            row.update(nanoseconds=int(record[2]),
-                       cycles=int(record[3]) if record[3] != "unavailable" else None,
-                       returned=record[4])
-        else:
+        row = run_sample(binary, source, directory / "runs", name, sample,
+                         environment, args.timeout, args.cpu)
+        if row["status"] != "pass":
             failed.add(name)
         rows.append(row)
         output.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
         print(name, sample, row["status"], flush=True)
     if any(sha256(root / name) != expected for name, expected in hashes.items()):
         raise SystemExit("crate sources changed during benchmark; results cannot be attributed")
-    metadata["summary"] = {
-        name: dict(samples=len(times), median_ms=statistics.median(times) / 1e6)
-        for name in args.files
-        if (times := [r["nanoseconds"] for r in rows if r["file"] == name and r["status"] == "pass"])
-    }
+    summary = {}
+    for name in args.files:
+        passed = [row for row in rows if row["file"] == name and row["status"] == "pass"]
+        if not passed:
+            continue
+        cycles = [row["cycles"] for row in passed if row["cycles"] is not None]
+        summary[name] = dict(
+            samples=len(passed),
+            median_ms=statistics.median(row["nanoseconds"] for row in passed) / 1e6,
+            median_cycles=statistics.median(cycles) if cycles else None,
+        )
+    metadata["summary"] = summary
     output.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print(output)
     if any(r["status"] == "fail" for r in rows):

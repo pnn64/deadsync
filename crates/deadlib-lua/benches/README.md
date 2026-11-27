@@ -13,15 +13,30 @@ python crates/deadlib-lua/benches/run_lua51.py --samples 9
 python crates/deadlib-lua/benches/run_lua51.py --files literals.lua strings.lua --samples 9
 ```
 
-The runner builds the normal release `official_suite` example, freezes its
-executable, and checks source identities. Each sample uses a fresh process/VM
-and a private copy of the suite under ignored `target/lua51-benchmark/` output.
+By default the runner builds the normal release `official_suite` example,
+freezes its executable, and checks source identities. Each sample uses a fresh
+process/VM and a private copy of the suite under ignored
+`target/lua51-benchmark/` output.
 The clock covers `dofile` loading, compilation, and execution. Standard-library
 initialization, the common bootstrap, and preparation of the small `dofile`
 driver happen before the clock. Results include elapsed nanoseconds, Windows
 process CPU cycles, original output, return values, source checksums, and binary
 identity. `--cpu N` pins child processes where supported; `--output PATH` selects
 the JSON result path. Workload order is shuffled with a fixed seed.
+
+Install the Rust toolchain's `llvm-tools-preview` component before running
+the profile-guided benchmark.
+
+```sh
+python crates/deadlib-lua/benches/run_lua51.py --pgo --files constructs.lua --samples 31
+```
+
+The runner trains an instrumented release on three passes over the 16 portable
+fixtures other than `constructs.lua` and `files.lua`. It merges the profiles and
+builds the timed release in a separate target directory. The JSON records the
+training set, compiler version and profile checksum. The two builds and profile
+artifacts are stored with the other ignored benchmark output.
+[Rust profile-guided optimization](https://doc.rust-lang.org/rustc/profile-guided-optimization.html)
 
 The bootstrap uses the upstream `_U` flag for portable tests, disables the
 optional internal C test module `T`, seeds the RNG, and selects the C locale.
