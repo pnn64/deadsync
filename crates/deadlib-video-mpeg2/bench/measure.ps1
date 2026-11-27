@@ -1,12 +1,13 @@
 param(
     [Parameter(Mandatory = $true)] [string] $ItgmaniaRoot,
-    [ValidateSet('mpeg1', 'mpeg2', 'mpeg4', 'mp42')] [string] $Codec = 'mpeg2',
+    [ValidateSet('mpeg1', 'mpeg2', 'mpeg4', 'mp42', 'vp9')] [string] $Codec = 'mpeg2',
     [string] $OpenItgRoot = '../openitg-master',
     [string] $Results,
     [ValidateRange(0, 63)] [int] $Cpu = 2,
     [ValidateRange(1, 100)] [int] $CycleRuns = 9,
     [ValidateRange(1, 100)] [int] $AllocationRuns = 3,
-    [string] $SongsRoot = 'C:/Games/ITGmania/Songs'
+    [string] $SongsRoot = 'C:/Games/ITGmania/Songs',
+    [switch] $Avx2
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,6 +25,7 @@ function Assert-Exit([string] $Operation) {
 }
 
 $originalPath = $env:Path
+$originalRustFlags = $env:RUSTFLAGS
 Push-Location $repo
 try {
     $out = (New-Item -ItemType Directory -Force -Path $Results).FullName
@@ -31,22 +33,29 @@ try {
     $object = Join-Path $out 'ffmpeg.obj'
     $cyclesExe = Join-Path $out 'cycles.exe'
     $allocExe = Join-Path $out 'allocations.exe'
-    $crate = if ($Codec -in 'mpeg4', 'mp42') { 'deadlib-video-mpeg4' } else { 'deadlib-video-mpeg2' }
+    $crate = switch ($Codec) {
+        { $_ -in 'mpeg4', 'mp42' } { 'deadlib-video-mpeg4' }
+        'vp9' { 'deadlib-video-vp9' }
+        default { 'deadlib-video-mpeg2' }
+    }
     $module = $crate.Replace('-', '_')
     $rlib = Join-Path $build "release\lib$module.rlib"
 
+    if ($Avx2) { $env:RUSTFLAGS = "$originalRustFlags -C target-feature=+avx2".Trim() }
     cargo build --release --locked --offline --manifest-path "crates/$crate/Cargo.toml" --target-dir $build
     Assert-Exit "Building $crate"
+    $env:RUSTFLAGS = $originalRustFlags
     $defines = @()
     if ($Codec -eq 'mpeg1') { $defines = @('/DBENCH_MPEG1') }
     if ($Codec -eq 'mpeg4') { $defines = @('/DBENCH_MPEG4') }
     if ($Codec -eq 'mp42') { $defines = @('/DBENCH_MP42') }
+    if ($Codec -eq 'vp9') { $defines = @('/DBENCH_VP9') }
     cl.exe /nologo /c /O2 /MT /std:c11 @defines "/I$ffInclude" "/Fo$object" (Join-Path $PSScriptRoot 'ffmpeg.c')
     Assert-Exit 'Compiling the FFmpeg harness'
     $common = @('--edition', '2021', '--crate-name', 'mpeg_bench', '-C', 'opt-level=3',
         '-C', 'target-feature=+crt-static', '--extern', "$module=$rlib",
         "-Lnative=$ffLib", '-lavcodec', '-lavutil', "-Clink-arg=$object")
-    if ($Codec -in 'mpeg4', 'mp42') { $common += @('--cfg', $Codec) }
+    if ($Codec -in 'mpeg4', 'mp42', 'vp9') { $common += @('--cfg', $Codec) }
     $bench = Join-Path $PSScriptRoot 'bench.rs'
     rustc @common -o $cyclesExe $bench
     Assert-Exit 'Building the cycle harness'
@@ -63,16 +72,26 @@ try {
         ffmpeg -nostdin -v error -y -i assets/media/openitg/logo.mpg -map 0:v:0 -c:v copy -f m4v $sample
         Assert-Exit 'Extracting logo'
         $samples = @($sample, 'crates/deadlib-video-mpeg4/tests/fixtures/progressive.m4v')
-    } elseif ($Codec -eq 'mp42') {
-        $inputs = @(
-            (Join-Path $SongsRoot 'UPS 3/Testament Of Axis/A-Short_People_Got_No_Reason_To_Live.avi'),
-            (Join-Path $SongsRoot 'lua-songs/My Penny/banner.avi'),
-            'crates/deadlib-video-mpeg4/tests/fixtures/mp42.avi'
-        )
+    } elseif ($Codec -in 'mp42', 'vp9') {
+        if ($Codec -eq 'vp9') {
+            $expected = 'vp9'
+            $song = Join-Path $SongsRoot 'Cringle Culmination/Million Dollar Baby/lua'
+            $inputs = @(
+                (Join-Path $song 'Countdown.mp4'), (Join-Path $song 'Film.mp4'),
+                'crates/deadlib-video-vp9/tests/fixtures/indexed.mp4'
+            )
+        } else {
+            $expected = 'msmpeg4v2'
+            $inputs = @(
+                (Join-Path $SongsRoot 'UPS 3/Testament Of Axis/A-Short_People_Got_No_Reason_To_Live.avi'),
+                (Join-Path $SongsRoot 'lua-songs/My Penny/banner.avi'),
+                'crates/deadlib-video-mpeg4/tests/fixtures/mp42.avi'
+            )
+        }
         $samples = foreach ($inputFile in $inputs) {
             $name = [IO.Path]::GetFileNameWithoutExtension($inputFile)
             $sample = Join-Path $out "$name.packets"
-            py (Join-Path $PSScriptRoot 'pack_mp42.py') $inputFile $sample
+            py (Join-Path $PSScriptRoot 'pack_packets.py') $expected $inputFile $sample
             Assert-Exit "Extracting $name picture packets"
             $sample
         }
@@ -95,6 +114,7 @@ try {
     py (Join-Path $PSScriptRoot 'summarize.py') $out $CycleRuns $AllocationRuns $Codec
     Assert-Exit 'Summarizing measurements'
 } finally {
+    $env:RUSTFLAGS = $originalRustFlags
     $env:Path = $originalPath
     Pop-Location
 }

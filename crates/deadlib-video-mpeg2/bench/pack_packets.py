@@ -1,4 +1,4 @@
-"""Store AVI dimensions and padded picture packets for both decoders."""
+"""Store container dimensions and padded picture packets for both decoders."""
 
 import json
 import struct
@@ -8,22 +8,23 @@ from pathlib import Path
 
 
 def main():
-    source, destination = map(Path, sys.argv[1:])
+    codec, source, destination = sys.argv[1:]
+    source, destination = Path(source), Path(destination)
     probe = json.loads(subprocess.check_output([
         "ffprobe", "-v", "error", "-select_streams", "v:0",
         "-show_entries", "stream=codec_name,width,height:packet=pos,size",
         "-of", "json", str(source),
     ]))
     stream, = probe["streams"]
-    assert stream["codec_name"] == "msmpeg4v2", source
-    with source.open("rb") as avi, destination.open("wb") as packets:
+    assert stream["codec_name"] == codec, source
+    with source.open("rb") as container, destination.open("wb") as packets:
         packets.write(struct.pack("<II", stream["width"], stream["height"]))
         for packet in probe["packets"]:
             size = int(packet["size"])
             if size == 0:
                 continue
-            avi.seek(int(packet["pos"]))
-            payload = avi.read(size)
+            container.seek(int(packet["pos"]))
+            payload = container.read(size)
             assert len(payload) == size, source
             packets.write(struct.pack("<I", size))
             packets.write(payload)

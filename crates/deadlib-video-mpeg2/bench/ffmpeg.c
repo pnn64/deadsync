@@ -1,4 +1,7 @@
-#if defined(BENCH_MP42)
+#if defined(BENCH_VP9)
+#define BENCH_DECODER_NAME "vp9"
+#define BENCH_PACKET_INPUT
+#elif defined(BENCH_MP42)
 #define BENCH_DECODER_NAME "msmpeg4v2"
 #define BENCH_PACKET_INPUT
 #elif defined(BENCH_MPEG4)
@@ -8,5 +11,7 @@
 #else
 #define BENCH_DECODER_NAME "mpeg2video"
 #endif
+#ifndef BENCH_VP9
 #define BENCH_IDCT FF_IDCT_SIMPLE
+#endif
 #include "../../deadlib-video-h264/bench/ffmpeg.c"
