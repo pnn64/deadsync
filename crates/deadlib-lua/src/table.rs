@@ -798,7 +798,6 @@ impl Table {
         self.mark_parser_pristine();
         Ok(())
     }
-    #[cfg(test)]
     pub fn pairs(&self) -> impl Iterator<Item = (Value, Value)> + '_ {
         self.array
             .iter()

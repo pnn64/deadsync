@@ -13,6 +13,7 @@ use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN_ARGS, Op, Prototype, RK}
 mod dense_array;
 pub(super) use dense_array::dense_loop_store;
 mod fresh_array;
+mod pairs_count;
 mod periodic;
 mod substring;
 pub(super) mod while_numeric;
@@ -437,7 +438,9 @@ impl<'a> Body<'a> {
         let right = self.is_nil(right)?;
         // A comparison with nil is independent of the other value's type
         // and cannot invoke an equality metamethod.
-        (left || right).then_some(Operand::Constant(Value::Boolean((left == right) == (i.op == Op::Eq))))
+        (left || right).then_some(Operand::Constant(Value::Boolean(
+            (left == right) == (i.op == Op::Eq),
+        )))
     }
 
     fn call_expression(
@@ -818,7 +821,11 @@ impl Vm {
                     Some(_) => return None,
                     None => integer(self.registers[base + register])?,
                 };
-                Some((register, add_exact_sum(total, terms, segment_count)?, terms.last))
+                Some((
+                    register,
+                    add_exact_sum(total, terms, segment_count)?,
+                    terms.last,
+                ))
             } else {
                 None
             };

@@ -638,3 +638,42 @@ return true
         [Value::Boolean(true)]
     );
 }
+
+#[test]
+fn checked_pairs_count_preserves_updates_and_assertion_failures() {
+    let mut vm = Vm::new();
+    let program = compile(
+        br#"
+        local sentinel = {saved = 17}
+        local function capture() return sentinel.saved end
+        checked_counter = {count = 5}
+        checked_assert = assert
+        function check_pairs(t)
+            for k, v in pairs(t) do
+                checked_counter.count = checked_counter.count + 2
+                checked_assert(k and v and t[k] == v)
+            end
+        end
+        check_pairs({4, 0, 12, label = 9})
+        assert(checked_counter.count == 13 and capture() == 17)
+        check_pairs({})
+        assert(checked_counter.count == 13)
+        checked_assert = function(condition)
+            assert(condition)
+            checked_counter.calls = (checked_counter.calls or 0) + 1
+        end
+        check_pairs({1, 2, 3})
+        assert(checked_counter.count == 19 and checked_counter.calls == 3)
+        checked_assert = assert
+        check_pairs({1, false, 3, 4})
+    "#,
+    )
+    .unwrap();
+    let error = vm.execute(&program).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Runtime);
+    assert!(error.message().contains("assertion failed"), "{error}");
+    assert_eq!(
+        execute(&mut vm, b"return checked_counter.count"),
+        [Value::Number(23.0)]
+    );
+}

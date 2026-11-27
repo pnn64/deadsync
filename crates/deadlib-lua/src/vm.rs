@@ -3004,6 +3004,14 @@ impl Vm {
                         {
                             self.check_iterator_call()?;
                         }
+                        if i.op == Op::CallIter
+                            && i.b == 2
+                            && i.c == 2
+                            && matches!(self.registers[a], Value::Native(NEXT | PAIRS_NEXT))
+                            && self.registers[a + 2] == Value::Nil
+                        {
+                            let _ = self.batch_checked_pairs(&prototype.code, pc - 1, base);
+                        }
                         let actual = self.start_lua_call(
                             a,
                             count,
