@@ -69,8 +69,9 @@ impl Vm {
                 }
             }
         }
-        let result = if let Some((plan, interval)) = &replayed {
-            self.apply_replayed_roots(index, base, top, limit_base, plan, *interval)
+        let result = if let Some((plan, interval, value)) = &replayed {
+            let number = NativeRootEvent::Constant(Constant::Number(*value));
+            self.apply_replayed_roots(index, base, top, limit_base, plan, *interval, &number)
         } else {
             self.apply_root_events(
                 index,
@@ -102,6 +103,7 @@ impl Vm {
         limit_base: usize,
         plan: &Plan,
         interval: usize,
+        number: &NativeRootEvent,
     ) -> Result<(), Error> {
         let mut next = 0;
         for segment in plan.segments(interval) {
@@ -113,7 +115,7 @@ impl Vm {
                     limit_base,
                     false,
                     true,
-                    plan.events(interval, next..segment.range.start),
+                    plan.events(interval, next..segment.range.start, number),
                 )?;
             }
             next = segment.range.end;
@@ -124,7 +126,7 @@ impl Vm {
                 .active
                 .last()
                 .expect("active parser prototype");
-            let events = plan.events(interval, segment.range.clone());
+            let events = plan.events(interval, segment.range.clone(), number);
             let Some(table) = table else {
                 self.apply_root_events(index, base, top, limit_base, false, true, events)?;
                 continue;
@@ -154,15 +156,15 @@ impl Vm {
             let changed = !self.tables[slot_index(table.0)].parser_pristine();
             self.tables[slot_index(table.0)].mark_parser_pristine();
             if let Some(snapshot) = snapshot.as_deref_mut() {
-                let anchors =
-                    plan.events(interval, segment.range.clone())
-                        .filter_map(|(event, hint)| {
-                            if let (NativeRootEvent::Anchor(_), Some(hint)) = (event, hint) {
-                                Some(StringId(hint.load(Ordering::Relaxed)))
-                            } else {
-                                None
-                            }
-                        });
+                let anchors = plan
+                    .events(interval, segment.range.clone(), number)
+                    .filter_map(|(event, hint)| {
+                        if let (NativeRootEvent::Anchor(_), Some(hint)) = (event, hint) {
+                            Some(StringId(hint.load(Ordering::Relaxed)))
+                        } else {
+                            None
+                        }
+                    });
                 self.capture_parser_snapshot(
                     plan,
                     snapshot,
@@ -182,7 +184,7 @@ impl Vm {
             limit_base,
             false,
             true,
-            plan.events(interval, next..plan.event_count(interval)),
+            plan.events(interval, next..plan.event_count(interval), number),
         )
     }
 

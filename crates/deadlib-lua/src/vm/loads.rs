@@ -457,7 +457,7 @@ impl Loading {
     }
     pub(super) fn replayed_interval(
         &self,
-    ) -> Option<(crate::memory::Shared<reader_intervals::Plan>, usize)> {
+    ) -> Option<(crate::memory::Shared<reader_intervals::Plan>, usize, f64)> {
         self.trace.replayed_interval()
     }
     pub(super) fn record_interval(&mut self, events: &[crate::parser::NativeRootEvent]) {
@@ -559,9 +559,6 @@ impl Loading {
             playback.reconstruct(&mut self.parser, &self.source, self.native_depth)?;
         }
         let Some(mut ast) = self.parser.resume(&self.source, self.closed)? else {
-            if first && !self.parser.has_closed_function() {
-                self.trace = reader_intervals::Trace::None;
-            }
             return Ok(None);
         };
         if !self.parser.reusable()

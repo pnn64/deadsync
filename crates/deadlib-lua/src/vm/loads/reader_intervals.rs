@@ -73,6 +73,7 @@ pub(in crate::vm) struct Plan {
     intervals: Vec<Interval>,
     program: Shared<ProgramData>,
     target: (usize, usize),
+    preamble_event: (usize, usize),
     bytes: usize,
     layout_bytes: AtomicUsize,
 }
@@ -98,16 +99,24 @@ impl Plan {
         self.layout_bytes.fetch_sub(bytes, Ordering::Relaxed);
     }
 
-    pub(in crate::vm) fn events(
-        &self,
+    pub(in crate::vm) fn events<'a>(
+        &'a self,
         interval: usize,
         range: Range<usize>,
-    ) -> impl Iterator<Item = (&NativeRootEvent, Option<&AtomicU64>)> {
-        self.intervals[interval].events[range].iter().map(|saved| {
-            // The replay checks every byte except the preamble number.
-            let hint = exact_text(&saved.event, &self.digits).then_some(&saved.string_hint);
-            (&saved.event, hint)
-        })
+        number: &'a NativeRootEvent,
+    ) -> impl Iterator<Item = (&'a NativeRootEvent, Option<&'a AtomicU64>)> {
+        let first = range.start;
+        self.intervals[interval].events[range]
+            .iter()
+            .enumerate()
+            .map(move |(index, saved)| {
+                if self.preamble_event == (interval, first + index) {
+                    return (number, None);
+                }
+                // The replay checks every byte except the preamble number.
+                let hint = exact_text(&saved.event, &self.digits).then_some(&saved.string_hint);
+                (&saved.event, hint)
+            })
     }
 }
 
@@ -242,11 +251,11 @@ impl Trace {
         }
     }
 
-    pub(super) fn replayed_interval(&self) -> Option<(Shared<Plan>, usize)> {
+    pub(super) fn replayed_interval(&self) -> Option<(Shared<Plan>, usize, f64)> {
         let Self::Replay(playback) = self else {
             return None;
         };
-        Some((playback.plan.clone(), playback.next - 1))
+        Some((playback.plan.clone(), playback.next - 1, playback.value))
     }
 
     pub(super) fn record(
@@ -334,38 +343,36 @@ impl Recording {
     }
 }
 
-fn hidden_first_constant(interval: &Interval, number: f64) -> bool {
+/// Locate the first function's sole numeric root even when its closing
+/// event waits for the next token in a later reader packet.
+fn first_function_number(intervals: &[Interval], number: f64) -> Option<(usize, usize)> {
     use NativeRootEvent::*;
-    let [first, tail @ ..] = interval.events.as_ref() else {
-        return false;
-    };
-    if !matches!(first.event, Open) {
-        return false;
+    let mut events = intervals.iter().enumerate().flat_map(|(packet, interval)| {
+        interval
+            .events
+            .iter()
+            .enumerate()
+            .map(move |(index, saved)| ((packet, index), &saved.event))
+    });
+    if !matches!(events.next()?.1, Open) {
+        return None;
     }
-    let Some(first_child) = tail
-        .iter()
-        .position(|saved| matches!(saved.event, Open | OpenWithoutTable))
-    else {
-        return false;
-    };
-    if !matches!(tail[first_child].event, OpenWithoutTable) {
-        return false;
-    }
-    // This function opened and closed within the first packet. It has no
-    // public constant table, and a number adds no edge to the prototype.
-    // The original event is safe to replay when this number changes.
-    let mut seen = false;
-    for saved in &tail[first_child + 1..] {
-        match &saved.event {
-            Constant(crate::bytecode::Constant::Number(value)) if !seen && *value == number => {
-                seen = true;
+    let mut child = false;
+    let mut constant = None;
+    for (position, event) in events {
+        match event {
+            Open | OpenWithoutTable if !child => child = true,
+            Constant(crate::bytecode::Constant::Number(value))
+                if child && constant.is_none() && value.to_bits() == number.to_bits() =>
+            {
+                constant = Some(position);
             }
-            Close => return seen,
-            Open | OpenWithoutTable | Constant(_) | ConstantText(_) => return false,
+            Close => return constant,
+            Open | OpenWithoutTable | Constant(_) | ConstantText(_) if child => return None,
             _ => {}
         }
     }
-    false
+    None
 }
 
 fn copy_text(text: &RootText) -> Option<RootText> {
@@ -444,7 +451,7 @@ impl Cache {
     }
 
     pub(super) fn remember(&mut self, source: &[u8], trace: Trace, program: &Program) {
-        let Trace::Record(recording) = trace else {
+        let Trace::Record(mut recording) = trace else {
             return;
         };
         if !recording
@@ -452,13 +459,27 @@ impl Cache {
             .last()
             .is_some_and(|interval| interval.closed)
             || recording.locale != crate::locale::revision()
-            || !hidden_first_constant(&recording.intervals[0], recording.preamble.value)
         {
             return;
         }
+        let Some(preamble_event) =
+            first_function_number(&recording.intervals, recording.preamble.value)
+        else {
+            return;
+        };
         let Some(target) = recording.preamble.function_target(&program.data) else {
             return;
         };
+        // A visible preamble table may have a different numeric key or array
+        // extent in each load. Its remaining segments use ordinary replay.
+        if let Some(segment) = recording.intervals[preamble_event.0]
+            .segments
+            .iter_mut()
+            .find(|segment| segment.range.contains(&preamble_event.1))
+        {
+            segment.exact = false;
+        }
+
         let bytes = recording.bytes
             + recording.intervals.capacity() * size_of::<Interval>()
             + source.len()
@@ -480,6 +501,7 @@ impl Cache {
                 intervals: recording.intervals,
                 program: program.data.clone(),
                 target,
+                preamble_event,
                 bytes,
                 layout_bytes: AtomicUsize::new(0),
             },
@@ -557,10 +579,65 @@ mod tests {
             assert_eq!(vm.call(chunk, &[]).unwrap(), &[Value::Number(expected)]);
         }
         assert_eq!(vm.compile_spare.reader_intervals.plans.len(), 1);
-        let first = &vm.compile_spare.reader_intervals.plans[0].intervals[0];
-        assert!(hidden_first_constant(first, 11.0));
+        let replay = &vm.compile_spare.reader_intervals.plans[0];
+        assert_eq!(replay.preamble_event.0, 0);
         assert_eq!(code[0], code[1]);
         assert_ne!(code[1], code[2]);
+    }
+
+    #[test]
+    fn reader_replay_publishes_the_current_number_when_the_first_function_stays_open() {
+        let program = crate::compile(
+            br#"
+            return function(sequence)
+                local blocks = {
+                    "local function sequence() return " .. sequence .. " end\n--" ..
+                    string.rep("x", 96),
+                    string.rep("y", 128),
+                    "\nreturn sequence()\n",
+                }
+                local offset, child = 0, nil
+                return assert(load(function()
+                    offset = offset + 1
+                    if offset == 2 or offset == 3 then
+                        local _, root = debug.getlocal(2, 6)
+                        assert(type(root) == "table")
+                        child = child or root
+                        assert(child == root)
+                        assert(rawget(root, sequence) == 0)
+                        assert(rawget(root, 3 - sequence) == nil)
+                    elseif offset == 4 then
+                        assert(debug.getlocal(2, 6) == nil)
+                    end
+                    return blocks[offset]
+                end, "@split-first-function"))
+            end
+            "#,
+        )
+        .unwrap();
+        for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+            let callback = vm.execute(&program).unwrap()[0];
+            let root = vm.pin(callback).unwrap();
+            let mut entry_code = None;
+            for sequence in [1.0, 2.0] {
+                let chunk = vm
+                    .call(vm.rooted(root).unwrap(), &[Value::Number(sequence)])
+                    .unwrap()[0];
+                let Value::Function(id) = chunk else {
+                    panic!("expected compiled chunk");
+                };
+                assert_eq!(vm.compile_spare.reader_intervals.plans.len(), 1);
+                let closure = &vm.functions[slot_index(id.0)];
+                let code = vm.programs[closure.program].data.prototypes[closure.prototype]
+                    .code
+                    .as_ptr();
+                if let Some(first) = entry_code {
+                    assert_eq!(first, code);
+                }
+                entry_code = Some(code);
+                assert_eq!(vm.call(chunk, &[]).unwrap(), &[Value::Number(sequence)]);
+            }
+        }
     }
 
     #[test]
