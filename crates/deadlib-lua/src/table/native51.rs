@@ -253,32 +253,11 @@ impl Table {
             }
         };
         if self.hash_part().entries[position].value != Value::Nil {
-            let free = self.hash_part().entries[..self.hash_part().last_free as usize]
-                .iter()
-                .rposition(|entry| matches!(entry.key, Key::Vacant));
-            let Some(free) = free else {
+            let Some(new_position) = self.native_resolve_collision::<true>(position) else {
                 self.native_rehash(key)?;
                 return self.native_set(key, value, |_| hash);
             };
-            self.hash_part_mut().last_free = free as u32;
-            let old = self.hash_part().entries[position];
-            let other = main_position(old.key, old.native_hash, self.hash_part().entries.len());
-            if other != position {
-                let mut previous = other;
-                while self.hash_part().entries[previous].next != position as u32 + 1 {
-                    previous = self.hash_part().entries[previous].next as usize - 1;
-                }
-                let slot = self.native_identity_slot(position);
-                self.hash_part_mut().entries[previous].next = free as u32 + 1;
-                self.hash_part_mut().entries[free] = old;
-                self.hash_part_mut().slots[slot] =
-                    self.hash_part().slots[slot] - position as u32 + free as u32;
-                self.hash_part_mut().entries[position] = EMPTY;
-            } else {
-                self.hash_part_mut().entries[free].next = old.next;
-                self.hash_part_mut().entries[position].next = free as u32 + 1;
-                position = free;
-            }
+            position = new_position;
         } else if self.hash_part().entries[position].key != Key::Vacant
             && let Some((slot, Some(_))) = self.slot(self.hash_part().entries[position].key)
         {
@@ -307,6 +286,37 @@ impl Table {
             self.remember_hash_entry(position as u32 + 1);
         }
         Ok(())
+    }
+
+    #[inline]
+    fn native_resolve_collision<const INDEXED: bool>(&mut self, position: usize) -> Option<usize> {
+        let part = self.hash_part();
+        let free = part.entries[..part.last_free as usize]
+            .iter()
+            .rposition(|entry| matches!(entry.key, Key::Vacant))?;
+        let old = part.entries[position];
+        let other = main_position(old.key, old.native_hash, part.entries.len());
+        let part = self.hash_part_mut();
+        part.last_free = free as u32;
+        if other == position {
+            part.entries[free].next = old.next;
+            part.entries[position].next = free as u32 + 1;
+            return Some(free);
+        }
+        let mut previous = other;
+        while part.entries[previous].next != position as u32 + 1 {
+            previous = part.entries[previous].next as usize - 1;
+        }
+        if INDEXED {
+            let slot = self.native_identity_slot(position);
+            let word = &mut self.hash_part_mut().slots[slot];
+            *word = *word - position as u32 + free as u32;
+        }
+        let part = self.hash_part_mut();
+        part.entries[previous].next = free as u32 + 1;
+        part.entries[free] = old;
+        part.entries[position] = EMPTY;
+        Some(position)
     }
 
     fn native_rehash(&mut self, extra: Key) -> Result<(), Error> {
@@ -352,21 +362,39 @@ impl Table {
         self.native_resize(array, total - array_used)
     }
 
-    fn native_reinsert(&mut self, key: Key, value: Value, hash: u32) -> Result<(), Error> {
+    fn native_reinsert(&mut self, key: Key, value: Value, hash: u32) {
         if let Some(index) = array_index(key.value()).filter(|&i| i < self.array.len()) {
             self.array[index] = value;
-            return Ok(());
+            return;
         }
-        // Resize visits each live key once, so probe directly for a vacant slot.
-        let identity_hash = key.hash();
-        let vacant = self.hash_part().slots.len().checked_sub(1).map(|mask| {
-            let mut slot = identity_hash & mask;
-            while self.hash_part().slots[slot] != 0 {
-                slot = (slot + 1) & mask;
+        let mut position = main_position(key, hash, self.hash_part().entries.len());
+        if self.hash_part().entries[position].value != Value::Nil {
+            position = self
+                .native_resolve_collision::<false>(position)
+                .expect("space for live keys in replacement hash");
+        }
+        let entry = &mut self.hash_part_mut().entries[position];
+        entry.key = key;
+        entry.value = value;
+        entry.native_hash = hash;
+    }
+
+    fn native_build_index(&mut self) {
+        let Some(part) = self.hash.as_deref_mut() else {
+            return;
+        };
+        let len = part.slots.len();
+        let mask = len - 1;
+        for (index, entry) in part.entries.iter().enumerate() {
+            if entry.value != Value::Nil {
+                let hash = entry.key.hash();
+                let mut slot = hash & mask;
+                while part.slots[slot] != 0 {
+                    slot = (slot + 1) & mask;
+                }
+                part.slots[slot] = (index as u32 + 1) | Self::slot_tag(len, hash).0;
             }
-            slot
-        });
-        self.native_insert(key, value, hash, identity_hash, vacant)
+        }
     }
 
     pub(super) fn native_resize(&mut self, array: usize, records: usize) -> Result<(), Error> {
@@ -412,7 +440,7 @@ impl Table {
                 let hash = hash(key, |_| {
                     unreachable!("numeric keys do not use a string hash")
                 });
-                replacement.native_reinsert(key, value, hash)?;
+                replacement.native_reinsert(key, value, hash);
             }
         }
         for entry in self
@@ -422,8 +450,10 @@ impl Table {
             .rev()
             .filter(|e| e.value != Value::Nil)
         {
-            replacement.native_reinsert(entry.key, entry.value, entry.native_hash)?;
+            replacement.native_reinsert(entry.key, entry.value, entry.native_hash);
         }
+        // The keys have settled into their Lua 5.1 positions. Index them once.
+        replacement.native_build_index();
         self.array = replacement.array;
         self.hash = replacement.hash;
         if let Some(part) = self.hash.as_deref_mut() {
