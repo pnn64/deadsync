@@ -1107,6 +1107,21 @@ impl Vm {
         self.gc.phase == Phase::Pause && self.gc_checkpoint_idle()
     }
 
+    // A fresh inline triplet in a reused arena slot adds no heap allocations.
+    // In Propagate the ordinary constructor could still grow the work queue.
+    pub(super) fn can_defer_inline_triplet(&self) -> bool {
+        self.gc.phase != Phase::Propagate
+            && (self.gc.stopped
+                || self.gc.running != 0
+                || self.gc.closing
+                || self
+                    .gc
+                    .last_live
+                    .saturating_add(self.gc_debt())
+                    .saturating_add(size_of::<Table>())
+                    < self.gc.threshold)
+    }
+
     // Runs at every frame entry: the test stays inline and the work does not.
     #[inline]
     pub(super) fn maybe_gc(&mut self) -> Result<(), Error> {

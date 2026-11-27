@@ -13,6 +13,7 @@ mod console;
 mod debug;
 mod errors;
 mod forwarding;
+mod fresh_triplet;
 mod gc;
 mod hooks;
 mod host;
@@ -44,6 +45,7 @@ pub use host::{
     HostCall, HostFunction, HostThreadState, IndexResolver, IndexView, NativeBuiltinBody,
     NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString, NativeHook,
     NativeHookEvent, NativeHookInfo, NativeLoadStatus, NativeStack, NativeThreadStack,
+    TripletResolver,
 };
 pub use memory_limit::MemoryUsage;
 use native::format_number;
@@ -2091,6 +2093,7 @@ impl Vm {
         let mut numeric_call_cache = numeric_leaf::Cache::default();
         let mut forwarding_cache = forwarding::Cache::default();
         let mut table_literal_cache = table_literals::Cache::default();
+        let mut triplet_sites = fresh_triplet::Sites::default();
         let mut field_hints = [[0; 2]; simple::FIELD_HINTS];
         let mut reduction_retry: Option<reductions::Retry> = None;
         'frames: loop {
@@ -2154,7 +2157,9 @@ impl Vm {
             let mut numeric_checkpoint_ready = false;
             let mut resume_hints = threads::inline_resume::ResumeHints::default();
             let mut ignored_numeric_while = None;
+            let mut deferred_literal: Option<fresh_triplet::Pending> = None;
             loop {
+                let simple_start = pc;
                 // With no hook or instruction limit counting instructions,
                 // runs of simple ones execute without frame bookkeeping.
                 if self.hooks.mask & (hooks::LINE | hooks::COUNT) == 0 && self.budget.is_none() {
@@ -2290,6 +2295,25 @@ impl Vm {
                         self.hooks.yield_owner = None;
                     }
                 }
+                if let Some(literal) = deferred_literal.take() {
+                    let table_slot = base + usize::from(literal.register);
+                    if literal.begin == simple_start
+                        && literal.end == pc - 1
+                        && self.write_inlined_triplet(table_slot)?
+                    {
+                        // Both the scalar-only SETLIST and a result-discarding
+                        // CALL were completed without running arbitrary Lua.
+                        pc += 1;
+                        self.frames[frame_index].pc = pc as u32;
+                        self.top = table_slot - 3;
+                        // The earlier budget check covered the sole inline
+                        // table we just allocated. Stay in this Lua frame.
+                        continue;
+                    }
+                    // No collector, hook or nested Lua has run since NEWTABLE.
+                    // Restore its ordinary table before the first slow instruction.
+                    self.registers[table_slot] = Value::Table(self.try_table_with_capacity(3, 0)?);
+                }
                 match i.op {
                     Op::Load => {
                         // Initial nil slots were cleared on frame entry. A call
@@ -2330,6 +2354,27 @@ impl Vm {
                         }
                     }
                     Op::NewTable => {
+                        if i.b == 3
+                            && i.c == 0
+                            && i.a >= 3
+                            && self.lua51_table_order
+                            && self.has_triplet_resolver(self.registers[a - 3])
+                            && let Some(end) = triplet_sites.fill_end(function, prototype, pc)
+                            && self.open_upvalues.is_empty()
+                            && self.sort_fast_context()
+                            && self.tables.has_free_slots(2)
+                            && self.tables.memory().allocator().is_none()
+                            && self.can_defer_inline_triplet()
+                        {
+                            self.gc.pending = false;
+                            deferred_literal = Some(fresh_triplet::Pending {
+                                begin: pc,
+                                end,
+                                register: i.a,
+                            });
+                            self.registers[a] = Value::Nil;
+                            continue;
+                        }
                         let reduced = if i.b == 0 && i.c == 0 {
                             self.elide_fresh_dense_fill(
                                 base, pc, prototype, program_index, proto_index,

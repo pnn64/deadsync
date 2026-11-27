@@ -1025,6 +1025,10 @@ impl Table {
             false
         }
     }
+    pub(crate) fn can_replace_array_value(&self, index: usize) -> bool {
+        !matches!(self.array, ArrayStorage::SharedSequence { .. }) && index < self.array.len()
+    }
+
     #[inline]
     pub(crate) fn replace_array_value(&mut self, index: usize, value: Value) -> bool {
         if matches!(self.array, ArrayStorage::SharedSequence { .. }) {

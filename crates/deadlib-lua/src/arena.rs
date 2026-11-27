@@ -412,6 +412,9 @@ impl<T> Arena<T> {
     pub fn len(&self) -> usize {
         self.values.len()
     }
+    pub(crate) fn has_free_slots(&self, count: usize) -> bool {
+        self.free.len() >= count
+    }
     pub fn live_len(&self) -> usize {
         self.live
     }

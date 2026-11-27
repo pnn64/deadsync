@@ -66,6 +66,16 @@ pub type HostFunction = fn(&mut HostCall<'_>) -> Result<(), Error>;
 /// error, run Lua or change any table.
 pub type IndexResolver = fn(&IndexView<'_>, TableId, Value) -> Option<Value>;
 
+/// Resolve a pure host call on a fresh numeric triplet into a raw array write.
+/// This applies to bound callbacks that ignore their first argument. The
+/// resolver receives the second argument and the coordinates from the third.
+/// Return a table, one-based index and replacement coordinates only if the
+/// ordinary binding would perform exactly that write with no other effects.
+/// Returning `None` runs the ordinary binding with its Lua table argument.
+/// The fast call is only used when the caller discards all results.
+pub type TripletResolver =
+    fn(&IndexView<'_>, Value, [f64; 3]) -> Option<(TableId, u32, [f64; 3])>;
+
 /// Read-only access to VM tables for an [`IndexResolver`].
 pub struct IndexView<'a> {
     tables: &'a Arena<Table>,
@@ -106,6 +116,13 @@ impl<'a> IndexView<'a> {
         self.strings.get(id.0).map(AsRef::as_ref)
     }
 
+    /// Whether a live table has no metatable. A collected table returns false.
+    pub fn has_no_metatable(&self, table: TableId) -> bool {
+        self.tables
+            .get(table.0)
+            .is_some_and(|table| table.metatable().is_none())
+    }
+
     /// Read a table without consulting metatables. A collected table reads as empty.
     pub fn raw_get(&self, table: TableId, key: Value) -> Value {
         self.tables
@@ -139,6 +156,7 @@ pub(super) struct Function {
     callback: HostFunction,
     data: Option<Shared<dyn Any + Send + Sync>>,
     resolver: Option<IndexResolver>,
+    triplet_resolver: Option<TripletResolver>,
 }
 impl std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -316,6 +334,7 @@ impl Vm {
             callback,
             data,
             resolver: None,
+            triplet_resolver: None,
         };
         self.new_native(threads::NativeKind::Host(function), captures)
     }
@@ -369,6 +388,62 @@ impl Vm {
             }
             _ => Err(Error::new(ErrorKind::Runtime, 0, "host function expected")),
         }
+    }
+
+    /// Install a raw-write fast path for a host callback whose third argument
+    /// is a fresh numeric triplet. See [`TripletResolver`] for the contract.
+    ///
+    /// # Errors
+    /// Returns an error if `function` is not a live host function.
+    pub fn set_triplet_resolver(
+        &mut self,
+        function: Value,
+        resolver: TripletResolver,
+    ) -> Result<(), Error> {
+        self.validate_value(function)?;
+        if let Value::Native(id) = function
+            && let Some(closure) = self.native_closures.get_mut(id)
+            && let threads::NativeKind::Host(function) = &mut closure.kind
+        {
+            function.triplet_resolver = Some(resolver);
+            return Ok(());
+        }
+        Err(Error::new(ErrorKind::Runtime, 0, "host function expected"))
+    }
+
+    pub(super) fn has_triplet_resolver(&self, value: Value) -> bool {
+        let Value::Native(id) = value else {
+            return false;
+        };
+        self.host_binding(id)
+            .is_some_and(|binding| binding.triplet_resolver.is_some())
+    }
+
+    pub(super) fn resolve_triplet_write(
+        &self,
+        callee: Value,
+        index: Value,
+        numbers: [f64; 3],
+    ) -> Option<(TableId, u32, [f64; 3])> {
+        let Value::Native(id) = callee else {
+            return None;
+        };
+        let closure = self.native_closures.get(id)?;
+        let threads::NativeKind::Host(binding) = &closure.kind else {
+            return None;
+        };
+        let resolver = binding.triplet_resolver?;
+        resolver(
+            &IndexView::new(
+                &self.tables,
+                &self.strings.bytes,
+                self.meta_names[Meta::Index as usize],
+                &closure.captures,
+                binding.data(),
+            ),
+            index,
+            numbers,
+        )
     }
 
     // Host-initiated reads may use resolvers under the interpreter's condition:
@@ -1201,6 +1276,18 @@ impl HostCall<'_> {
         resolver: IndexResolver,
     ) -> Result<(), Error> {
         self.vm.set_index_resolver(function, resolver)
+    }
+
+    /// Install the pure triplet fast path for a host function in this VM.
+    ///
+    /// # Errors
+    /// Returns an error if `function` is not a live host function.
+    pub fn set_triplet_resolver(
+        &mut self,
+        function: Value,
+        resolver: TripletResolver,
+    ) -> Result<(), Error> {
+        self.vm.set_triplet_resolver(function, resolver)
     }
 
     /// Keep temporary values alive across nested calls for the duration of `run`.

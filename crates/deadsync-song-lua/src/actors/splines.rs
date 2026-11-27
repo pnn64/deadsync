@@ -1,6 +1,6 @@
 //! The existing three-axis NoteColumn spline API and shared gameplay solver.
 use super::*;
-use deadlib_lua::NativeStack;
+use deadlib_lua::{IndexView, NativeStack};
 use sprites::set;
 
 #[derive(Default)]
@@ -116,8 +116,19 @@ fn spline(call: &mut HostCall<'_>) -> Result<TableId, Error> {
             ("SetLoop", "set_loop"),
             ("get_loop", "get_loop"),
         ] {
-            let function =
-                call.new_host_function_with_data(spline_method, &[Value::Table(owner)], name)?;
+            let function = if name == "SetPoint" {
+                let size = call.intern_static(b"__songlua_spline_size")?;
+                let points = call.intern_static(b"__songlua_spline_points")?;
+                let function = call.new_host_function_with_data(
+                    |call| named_spline_method(call, "SetPoint"),
+                    &[Value::Table(owner)],
+                    PointKeys { size, points },
+                )?;
+                call.set_triplet_resolver(function, resolve_numeric_point)?;
+                function
+            } else {
+                call.new_host_function_with_data(spline_method, &[Value::Table(owner)], name)?
+            };
             set(call, owner, name, function)?;
             if alias != name {
                 set(call, owner, alias, function)?;
@@ -202,8 +213,14 @@ fn push_vector(stack: &mut NativeStack<'_, '_>, values: [f32; 3]) -> Result<(), 
 
 fn spline_method(call: &mut HostCall<'_>) -> Result<(), Error> {
     let name = *call.function_data::<&'static str>().unwrap();
+    named_spline_method(call, name)
+}
+
+fn named_spline_method(call: &mut HostCall<'_>, name: &str) -> Result<(), Error> {
     let owner = call.captures()[0];
-    if name == "Solve" && let Value::Table(table) = owner {
+    if name == "Solve"
+        && let Value::Table(table) = owner
+    {
         let mut workspace = std::mem::take(&mut call.store().spline_workspace);
         let result = solve_numeric(call, table, &mut workspace);
         call.store().spline_workspace = workspace;
@@ -332,11 +349,52 @@ fn spline_method(call: &mut HostCall<'_>) -> Result<(), Error> {
     stack.finish(1)
 }
 
+// The names were interned as VM-owned static strings before registration.
+struct PointKeys {
+    size: Value,
+    points: Value,
+}
+
+fn numeric_point_index(size: f64, index: f64) -> Option<u32> {
+    let index = index.trunc();
+    let size = size.trunc();
+    ((0.0..=65536.0).contains(&size) && (1.0..=size).contains(&index)).then_some(index as u32)
+}
+
+fn resolve_numeric_point(
+    view: &IndexView<'_>,
+    index: Value,
+    coordinates: [f64; 3],
+) -> Option<(TableId, u32, [f64; 3])> {
+    let [Value::Table(owner)] = *view.captures() else {
+        return None;
+    };
+    if !view.has_no_metatable(owner) {
+        return None;
+    }
+    let Value::Number(index) = index else {
+        return None;
+    };
+    let keys = view.function_data::<PointKeys>()?;
+    let Value::Number(size) = view.raw_get(owner, keys.size) else {
+        return None;
+    };
+    let index = numeric_point_index(size, index)?;
+    let Value::Table(points) = view.raw_get(owner, keys.points) else {
+        return None;
+    };
+    Some((
+        points,
+        index,
+        coordinates.map(|value| f64::from(value as f32)),
+    ))
+}
+
 fn set_numeric_point(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Error> {
     let [_, Value::Number(index), Value::Table(input)] = call.arguments() else {
         return Ok(false);
     };
-    let index = index.trunc();
+    let index = *index;
     let input = *input;
     if call.raw_metatable(owner)?.is_some() {
         return Ok(false);
@@ -344,10 +402,9 @@ fn set_numeric_point(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Er
     let Value::Number(size) = get_static(call, owner, b"__songlua_spline_size")? else {
         return Ok(false);
     };
-    let size = size.trunc();
-    if !(0.0..=65536.0).contains(&size) || !(1.0..=size).contains(&index) {
+    let Some(index) = numeric_point_index(size, index) else {
         return Ok(false);
-    }
+    };
     let Value::Table(points) = get_static(call, owner, b"__songlua_spline_points")? else {
         return Ok(false);
     };
@@ -362,7 +419,7 @@ fn set_numeric_point(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Er
         return Ok(false);
     };
     let values = [x as f32, y as f32, z as f32].map(f64::from);
-    call.raw_table_set_number_array(points, index as u32, &values)?;
+    call.raw_table_set_number_array(points, index, &values)?;
     call.push(Value::Table(owner))?;
     Ok(true)
 }
@@ -425,7 +482,9 @@ fn solve_numeric(
     if looping == Value::Nil {
         return Ok(false);
     }
-    let coefficients = workspace.solver.solve_with_loop(&workspace.points, looping.is_truthy());
+    let coefficients = workspace
+        .solver
+        .solve_with_loop(&workspace.points, looping.is_truthy());
     let mut stack = call.native_stack()?;
     stack.set_top(stack.top().max(3))?;
     let owner = Value::Table(owner);
