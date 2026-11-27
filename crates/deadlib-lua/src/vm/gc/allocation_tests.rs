@@ -156,7 +156,7 @@ fn every_collection_reservation_is_owned_recoverable_and_resumable() {
                 children.push(child);
             }
             // Both fixtures include cold liveness storage, independently of the
-            // frontier growth required by initial tracing and atomic refresh.
+            // work reservations for seeding roots and tracing the frontier.
             vm.reserve_registers(1).unwrap();
             vm.resize_registers(1);
             vm.registers[0] = Value::Table(table);
@@ -219,7 +219,7 @@ fn every_collection_reservation_is_owned_recoverable_and_resumable() {
     let mut total = 0;
     for wide_stack in [false, true] {
         let points = run(0, wide_stack);
-        assert!(points >= 4, "wide_stack={wide_stack}, points={points}");
+        assert!(points >= 3, "wide_stack={wide_stack}, points={points}");
         for nth in 1..=points {
             run(nth, wide_stack);
         }

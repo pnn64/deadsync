@@ -1737,7 +1737,14 @@ impl Vm {
         // newly reached threads/cells still receive their ordinary first scan.
         let small_refresh = fresh_cycle.then(|| refresh_threads.ordered()).flatten();
         let threads = small_refresh.map_or_else(|| self.threads.marked_count(), <[_]>::len);
-        let metatable_words = (self.gc.metatable_table_end as usize).div_ceil(64);
+        // A full collection traces these tables from a fresh set of marks
+        // without returning to Lua. Only incremental marking can have seen
+        // a different metatable or weakness mode on the first visit.
+        let metatable_words = if fresh_cycle {
+            0
+        } else {
+            (self.gc.metatable_table_end as usize).div_ceil(64)
+        };
         let tables = self
             .tables
             .marked_slots_in_words(0..metatable_words)
