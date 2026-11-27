@@ -2177,6 +2177,7 @@ impl Vm {
                     let inline_calls = numeric_checkpoint_ready
                         && self.frames.len() < self.frames.capacity()
                         && self.frames.len() + 1 < usize::from(self.call_slots);
+                    let can_change_field_liveness = self.gc_can_change_field_liveness();
                     let mut cx = simple::Context {
                         registers: &mut self.registers,
                         constants: self.programs[program_index].bound_constants(proto_index),
@@ -2196,6 +2197,7 @@ impl Vm {
                         env,
                         base,
                         gc_pending: self.gc.pending,
+                        can_change_field_liveness,
                         closed: self.open_upvalues.is_empty(),
                         index_name: self.meta_names[Meta::Index as usize],
                         // A hook would observe the handler call a resolver skips.

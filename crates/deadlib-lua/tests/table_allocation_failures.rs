@@ -27,7 +27,9 @@ impl Shape {
     }
     fn points(self) -> usize {
         match self {
-            Self::EmptyHash | Self::HashGrowth => 2,
+            // The first write allocates the hash part as well as its buffers.
+            Self::EmptyHash => 3,
+            Self::HashGrowth => 2,
             Self::ArrayMigration => 1,
         }
     }

@@ -1010,6 +1010,10 @@ impl Vm {
         }
         Ok(())
     }
+    pub(super) fn gc_can_change_field_liveness(&self) -> bool {
+        self.gc.phase != Phase::Propagate
+    }
+
     pub(super) fn gc_table_write(&mut self, id: TableId, key: Value, value: Value) {
         if self.gc.phase == Phase::Propagate && self.tables.marked(id.0) {
             let (weak_keys, weak_values) = self.table_mode(&self.tables[slot_index(id.0)]);

@@ -1425,6 +1425,65 @@ impl Table {
             false
         }
     }
+
+    /// Update a validated string slot without growing the hash part.
+    /// The caller must handle the key write barrier during propagation.
+    #[inline]
+    pub(crate) fn set_cached_global_scalar(
+        &mut self,
+        key: StringId,
+        value: Value,
+        hint: &mut u32,
+        can_change_liveness: bool,
+    ) -> bool {
+        if !matches!(
+            value,
+            Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_)
+        ) {
+            return false;
+        }
+        let key = Key::String(key);
+        let hinted = hint.wrapping_sub(1) as usize;
+        let index = if self
+            .hash_part()
+            .entries
+            .get(hinted)
+            .is_some_and(|entry| entry.key == key)
+        {
+            hinted
+        } else if let Some((_, Some(index))) = self.slot(key) {
+            index
+        } else {
+            return false;
+        };
+        let was_nil = self.hash_part().entries[index].value == Value::Nil;
+        let now_nil = value == Value::Nil;
+        if was_nil || now_nil {
+            if !can_change_liveness || (was_nil && self.metatable().is_some()) {
+                return false;
+            }
+            if was_nil && !now_nil {
+                self.note_string_key_added();
+            }
+        }
+        let native = self.native51;
+        let part = self.hash_part_mut();
+        if native && was_nil != now_nil {
+            if now_nil {
+                part.native_dead_keys += 1;
+            } else if part.native_dead_keys != 0 {
+                part.native_dead_keys -= 1;
+            }
+        }
+        part.entries[index].value = value;
+        self.touch_fields();
+        *hint = (index + 1) as u32;
+        if was_nil || now_nil {
+            self.remember_hash_entry(*hint);
+        }
+        true
+    }
+
     #[inline]
     fn remember_hash_entry(&self, index: u32) {
         let hints = &self

@@ -1,6 +1,52 @@
 use deadlib_lua::{Value, Vm, compile};
 
 #[test]
+fn cached_global_writes_preserve_deleted_slots_and_newindex() {
+    let program = compile(
+        br#"
+local env = {}
+local function write(value) slot = value end
+setfenv(write, env)
+for i = 1, 100 do
+    write(i)
+    assert(env.slot == i)
+    write(nil)
+    assert(env.slot == nil and pcall(next, env, 'slot'))
+    collectgarbage('step', 1)
+end
+write(17)
+local calls = 0
+setmetatable(env, {__newindex = function(t, k, v)
+    assert(t == env and k == 'slot')
+    calls = calls + 1
+    if v ~= nil then rawset(t, k, v) end
+end})
+write(nil)
+assert(calls == 0 and env.slot == nil)
+write(nil)
+write(40)
+write(42)
+assert(calls == 2 and env.slot == 42)
+return env.slot
+"#,
+    )
+    .unwrap();
+    for native_order in [false, true] {
+        for checked in [false, true] {
+            let mut vm = if native_order {
+                Vm::try_new_with_lua51_table_order().unwrap()
+            } else {
+                Vm::new()
+            };
+            if checked {
+                vm.set_instruction_limit(Some(u64::MAX));
+            }
+            assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+        }
+    }
+}
+
+#[test]
 fn numeric_vararg_relays_keep_defaults_results_and_dispatch_guards() {
     let program = compile(
         br#"

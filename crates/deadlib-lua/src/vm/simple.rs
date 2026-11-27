@@ -29,6 +29,8 @@ pub(super) struct Context<'a, Threads = &'a Arena<threads::Thread>> {
     pub base: usize,
     /// A pending collection must still be polled by the normal SetTable path.
     pub gc_pending: bool,
+    /// A string slot can change liveness without a write barrier.
+    pub can_change_field_liveness: bool,
     /// No upvalue is open, so closing a scope has nothing to do.
     pub closed: bool,
     /// The interned `__index` name, for inherited field reads.
@@ -190,12 +192,11 @@ pub(super) fn step(
             let Value::String(name) = cx.constant(i.c as usize) else {
                 return None;
             };
-            // An existing, non-nil scalar can be overwritten without
-            // invoking __newindex, allocating, or adding a GC edge.
-            if !cx.tables[slot_index(cx.env.0)].set_string_scalar_cached(
+            if !cx.tables[slot_index(cx.env.0)].set_cached_global_scalar(
                 name,
                 cx.registers[a],
                 &mut cx.field_hints[pc % FIELD_HINTS][0],
+                cx.can_change_field_liveness,
             ) {
                 return None;
             }
