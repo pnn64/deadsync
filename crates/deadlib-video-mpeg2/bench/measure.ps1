@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)] [string] $ItgmaniaRoot,
-    [ValidateSet('mpeg1', 'mpeg2', 'mpeg4', 'mp42', 'vp9')] [string] $Codec = 'mpeg2',
+    [ValidateSet('mpeg1', 'mpeg2', 'mpeg4', 'mp42', 'vp9', 'hevc')] [string] $Codec = 'mpeg2',
     [string] $OpenItgRoot = '../openitg-master',
     [string] $Results,
     [ValidateRange(0, 63)] [int] $Cpu = 2,
@@ -36,6 +36,7 @@ try {
     $crate = switch ($Codec) {
         { $_ -in 'mpeg4', 'mp42' } { 'deadlib-video-mpeg4' }
         'vp9' { 'deadlib-video-vp9' }
+        'hevc' { 'deadlib-video-hevc' }
         default { 'deadlib-video-mpeg2' }
     }
     $module = $crate.Replace('-', '_')
@@ -50,12 +51,13 @@ try {
     if ($Codec -eq 'mpeg4') { $defines = @('/DBENCH_MPEG4') }
     if ($Codec -eq 'mp42') { $defines = @('/DBENCH_MP42') }
     if ($Codec -eq 'vp9') { $defines = @('/DBENCH_VP9') }
+    if ($Codec -eq 'hevc') { $defines = @('/DBENCH_HEVC') }
     cl.exe /nologo /c /O2 /MT /std:c11 @defines "/I$ffInclude" "/Fo$object" (Join-Path $PSScriptRoot 'ffmpeg.c')
     Assert-Exit 'Compiling the FFmpeg harness'
     $common = @('--edition', '2021', '--crate-name', 'mpeg_bench', '-C', 'opt-level=3',
         '-C', 'target-feature=+crt-static', '--extern', "$module=$rlib",
         "-Lnative=$ffLib", '-lavcodec', '-lavutil', "-Clink-arg=$object")
-    if ($Codec -in 'mpeg4', 'mp42', 'vp9') { $common += @('--cfg', $Codec) }
+    if ($Codec -in 'mpeg4', 'mp42', 'vp9', 'hevc') { $common += @('--cfg', $Codec) }
     $bench = Join-Path $PSScriptRoot 'bench.rs'
     rustc @common -o $cyclesExe $bench
     Assert-Exit 'Building the cycle harness'
@@ -72,8 +74,14 @@ try {
         ffmpeg -nostdin -v error -y -i assets/media/openitg/logo.mpg -map 0:v:0 -c:v copy -f m4v $sample
         Assert-Exit 'Extracting logo'
         $samples = @($sample, 'crates/deadlib-video-mpeg4/tests/fixtures/progressive.m4v')
-    } elseif ($Codec -in 'mp42', 'vp9') {
-        if ($Codec -eq 'vp9') {
+    } elseif ($Codec -in 'mp42', 'vp9', 'hevc') {
+        if ($Codec -eq 'hevc') {
+            $expected = 'hevc'
+            $inputs = @(
+                (Join-Path $SongsRoot 'lua-songs/[recognize m.] happy century/video/bg.mp4'),
+                'crates/deadlib-video-hevc/tests/fixtures/main.mp4'
+            )
+        } elseif ($Codec -eq 'vp9') {
             $expected = 'vp9'
             $song = Join-Path $SongsRoot 'Cringle Culmination/Million Dollar Baby/lua'
             $inputs = @(

@@ -1,4 +1,6 @@
-#[cfg(not(any(mpeg4, mp42, vp9)))]
+#[cfg(hevc)]
+use deadlib_video_hevc as codec;
+#[cfg(not(any(mpeg4, mp42, vp9, hevc)))]
 use deadlib_video_mpeg2 as codec;
 #[cfg(any(mpeg4, mp42))]
 use deadlib_video_mpeg4 as codec;
@@ -6,8 +8,10 @@ use deadlib_video_mpeg4 as codec;
 use deadlib_video_vp9 as codec;
 use std::{env, ffi::c_void, hint::black_box, io::Write, path::Path};
 
-#[cfg(not(vp9))]
+#[cfg(not(any(vp9, hevc)))]
 type Decoded = std::sync::Arc<codec::Frame>;
+#[cfg(hevc)]
+type Decoded = codec::Frame;
 #[cfg(vp9)]
 type Decoded = codec::Picture;
 
@@ -180,7 +184,7 @@ impl Engine {
     }
 }
 
-#[cfg(not(vp9))]
+#[cfg(not(any(vp9, hevc)))]
 fn consume_rust(frame: Decoded, out: &mut Output, sha: Option<&Sha>) {
     out.frames += 1;
     out.luma_pixels += (frame.width() * frame.height()) as u64;
@@ -210,12 +214,26 @@ fn consume_rust(frame: Decoded, out: &mut Output, sha: Option<&Sha>) {
     }
 }
 
-#[cfg(not(any(mp42, vp9)))]
+#[cfg(hevc)]
+fn consume_rust(frame: Decoded, out: &mut Output, sha: Option<&Sha>) {
+    out.frames += 1;
+    out.luma_pixels += u64::from(frame.width) * u64::from(frame.height);
+    if let Some(sha) = sha {
+        for plane in [&frame.y, &frame.u, &frame.v] {
+            let bytes = plane.as_u8().unwrap();
+            unsafe { av_sha_update(sha.0, bytes.as_ptr(), bytes.len()) };
+        }
+    } else {
+        black_box(frame.y.as_u8().unwrap()[0]);
+    }
+}
+
+#[cfg(not(any(mp42, vp9, hevc)))]
 fn decode_rust(bytes: &[u8], output: impl FnMut(Decoded)) {
     codec::decode_elementary_stream(bytes, output).unwrap();
 }
 
-#[cfg(any(mp42, vp9))]
+#[cfg(any(mp42, vp9, hevc))]
 fn decode_rust(mut bytes: &[u8], mut output: impl FnMut(Decoded)) {
     fn take_u32(bytes: &mut &[u8]) -> usize {
         let (number, rest) = bytes.split_first_chunk::<4>().unwrap();
@@ -234,6 +252,15 @@ fn decode_rust(mut bytes: &[u8], mut output: impl FnMut(Decoded)) {
         let height = take_u32(&mut bytes);
         codec::MsMpeg4v2Decoder::new(width, height).unwrap()
     };
+    #[cfg(hevc)]
+    let (mut decoder, length_size) = {
+        bytes = &bytes[8..];
+        let config_size = take_u32(&mut bytes);
+        let mut decoder = codec::Decoder::new().with_display_order();
+        let length_size = decoder.push_decoder_config(&bytes[..config_size]).unwrap();
+        bytes = &bytes[config_size..];
+        (decoder, length_size)
+    };
     while !bytes.is_empty() {
         let size = take_u32(&mut bytes);
         #[cfg(mp42)]
@@ -242,7 +269,15 @@ fn decode_rust(mut bytes: &[u8], mut output: impl FnMut(Decoded)) {
         if let Some(frame) = decoder.push_picture(&bytes[..size]).unwrap() {
             output(frame);
         }
+        #[cfg(hevc)]
+        decoder
+            .push_packet(&bytes[..size], length_size, &mut output)
+            .unwrap();
         bytes = &bytes[size + 64..];
+    }
+    #[cfg(hevc)]
+    while let Some(frame) = decoder.flush().unwrap() {
+        output(frame);
     }
 }
 
@@ -334,7 +369,7 @@ fn main() {
         // A full nine-frame VP9 decode is too short for a stable cycle sample.
         // Include decoder creation and release in each repetition for both engines.
         #[cfg(not(allocations))]
-        let decodes = if cfg!(vp9) && clip == "indexed" {
+        let decodes = if (cfg!(vp9) && clip == "indexed") || (cfg!(hevc) && clip == "main") {
             256
         } else {
             1

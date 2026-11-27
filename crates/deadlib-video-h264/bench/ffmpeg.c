@@ -8,6 +8,7 @@
 #include <string.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/mem.h>
 #ifdef BENCH_PACKET_INPUT
 #include <libavutil/intreadwrite.h>
 #endif
@@ -102,6 +103,22 @@ int ff_decode(const uint8_t *data, int size, unsigned mode, struct AVSHA *sha, O
     if (!input) goto done;
     data += 8;
     size -= 8;
+#ifdef BENCH_PACKET_CONFIG
+    ret = AVERROR_INVALIDDATA;
+    if (size < 4) goto done;
+    uint32_t config_size = AV_RL32(data);
+    data += 4;
+    size -= 4;
+    if (!config_size || config_size > (uint32_t)size ||
+        config_size > INT_MAX - AV_INPUT_BUFFER_PADDING_SIZE) goto done;
+    dec->extradata = av_mallocz(config_size + AV_INPUT_BUFFER_PADDING_SIZE);
+    ret = AVERROR(ENOMEM);
+    if (!dec->extradata) goto done;
+    dec->extradata_size = (int)config_size;
+    memcpy(dec->extradata, data, config_size);
+    data += config_size;
+    size -= config_size;
+#endif
 #else
     AVCodecParserContext *parser = codec ? av_parser_init(codec->id) : NULL;
     if (!codec || !dec || !parser || !frame || !packet) goto done;
