@@ -10,6 +10,12 @@ create a `Decoder` with `with_display_order`, feed its `hvcC` record with
 `push_decoder_config`, and pass the returned length-field size to
 `push_packet`. Drain the last pictures with `flush`.
 
+Use `decode_mp4_pictures`, `decode_annex_b_pictures`, or a decoder's
+`push_packet_pictures` and `flush_picture` to share the reference-plane
+buffers. A `Picture` can outlive the decoder and its visible rows exclude
+stride padding. Use `Picture::to_owned_frame` when contiguous owned
+samples are needed.
+
 ```sh
 cargo run --release --example decode -- bg.mp4 bg.yuv
 cargo run --release --example decode -- bg.hevc bg.yuv

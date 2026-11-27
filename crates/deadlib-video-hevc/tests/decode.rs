@@ -1,4 +1,7 @@
-use deadlib_video_hevc::{DecodeError, Decoder, Frame, Mp4Error, decode_annex_b, decode_mp4};
+use deadlib_video_hevc::{
+    DecodeError, Decoder, Frame, Mp4Error, decode_annex_b, decode_mp4, decode_mp4_pictures,
+    parse_annex_b,
+};
 
 const MP4: &[u8] = include_bytes!("fixtures/main.mp4");
 const ANNEX_B: &[u8] = include_bytes!("fixtures/main.hevc");
@@ -44,6 +47,38 @@ fn decodes_mp4_and_annex_b_in_display_order() {
 
     hashes.clear();
     decode_annex_b(ANNEX_B, |frame| hashes.push(fingerprint(frame))).unwrap();
+    assert_eq!(hashes, EXPECTED);
+}
+
+#[test]
+fn retained_pictures_keep_their_samples() {
+    let mut pictures = Vec::new();
+    decode_mp4_pictures(MP4, |picture| pictures.push(picture)).unwrap();
+    let hashes: Vec<_> = pictures
+        .iter()
+        .map(|p| fingerprint(p.to_owned_frame()))
+        .collect();
+    assert_eq!(hashes, EXPECTED);
+}
+
+#[test]
+fn picture_output_survives_threaded_reordering() {
+    let mut decoder = Decoder::new().with_display_order().with_threads(2);
+    let mut pictures = Vec::new();
+    for nal in parse_annex_b(ANNEX_B) {
+        assert!(decoder.decode_nal_picture(&nal).unwrap().is_none());
+        while let Some(picture) = decoder.next_picture() {
+            pictures.push(picture);
+        }
+    }
+    while let Some(picture) = decoder.flush_picture().unwrap() {
+        pictures.push(picture);
+    }
+    drop(decoder);
+    let hashes: Vec<_> = pictures
+        .iter()
+        .map(|p| fingerprint(p.to_owned_frame()))
+        .collect();
     assert_eq!(hashes, EXPECTED);
 }
 

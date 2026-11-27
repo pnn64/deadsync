@@ -26,6 +26,7 @@ mod intra_pred;
 mod inverse_transform;
 mod output;
 mod parallel;
+mod picture;
 #[allow(dead_code)]
 pub(crate) mod pixel;
 #[allow(dead_code)]
@@ -64,7 +65,8 @@ mod transport;
 pub use decoder::{DecodeLimits, Decoder, Frame};
 pub use error::DecodeError;
 pub use nal::{NalUnit, NalUnitType, parse_annex_b, parse_hvcc, parse_nal};
+pub use picture::{Picture, PicturePlane};
 pub use pixel::{Pixel, PixelData};
 
-pub use mp4::{Mp4Error, decode_mp4};
-pub use transport::decode_annex_b;
+pub use mp4::{Mp4Error, decode_mp4, decode_mp4_pictures};
+pub use transport::{decode_annex_b, decode_annex_b_pictures};

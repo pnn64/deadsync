@@ -11,7 +11,7 @@ use std::{env, ffi::c_void, hint::black_box, io::Write, path::Path};
 #[cfg(not(any(vp9, hevc)))]
 type Decoded = std::sync::Arc<codec::Frame>;
 #[cfg(hevc)]
-type Decoded = codec::Frame;
+type Decoded = codec::Picture;
 #[cfg(vp9)]
 type Decoded = codec::Picture;
 
@@ -217,14 +217,15 @@ fn consume_rust(frame: Decoded, out: &mut Output, sha: Option<&Sha>) {
 #[cfg(hevc)]
 fn consume_rust(frame: Decoded, out: &mut Output, sha: Option<&Sha>) {
     out.frames += 1;
-    out.luma_pixels += u64::from(frame.width) * u64::from(frame.height);
+    out.luma_pixels += u64::from(frame.width()) * u64::from(frame.height());
     if let Some(sha) = sha {
-        for plane in [&frame.y, &frame.u, &frame.v] {
-            let bytes = plane.as_u8().unwrap();
-            unsafe { av_sha_update(sha.0, bytes.as_ptr(), bytes.len()) };
+        for plane in frame.planes() {
+            for row in plane.rows_u8().unwrap() {
+                unsafe { av_sha_update(sha.0, row.as_ptr(), row.len()) };
+            }
         }
     } else {
-        black_box(frame.y.as_u8().unwrap()[0]);
+        black_box(frame.planes()[0].rows_u8().unwrap().next().unwrap()[0]);
     }
 }
 
@@ -271,12 +272,12 @@ fn decode_rust(mut bytes: &[u8], mut output: impl FnMut(Decoded)) {
         }
         #[cfg(hevc)]
         decoder
-            .push_packet(&bytes[..size], length_size, &mut output)
+            .push_packet_pictures(&bytes[..size], length_size, &mut output)
             .unwrap();
         bytes = &bytes[size + 64..];
     }
     #[cfg(hevc)]
-    while let Some(frame) = decoder.flush().unwrap() {
+    while let Some(frame) = decoder.flush_picture().unwrap() {
         output(frame);
     }
 }

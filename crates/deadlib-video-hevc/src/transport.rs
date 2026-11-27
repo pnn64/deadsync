@@ -1,8 +1,16 @@
 use crate::nal::{annex_b_units, find_start_code, parse_nal};
-use crate::{DecodeError, Decoder, Frame};
+use crate::{DecodeError, Decoder, Frame, Picture};
 
 /// Decodes a complete Annex B stream and emits its frames in display order.
 pub fn decode_annex_b(data: &[u8], mut output: impl FnMut(Frame)) -> Result<(), DecodeError> {
+    decode_annex_b_pictures(data, |picture| output(picture.to_owned_frame()))
+}
+
+/// Decodes a complete Annex B stream and emits shared pictures in display order.
+pub fn decode_annex_b_pictures(
+    data: &[u8],
+    mut output: impl FnMut(Picture),
+) -> Result<(), DecodeError> {
     let (start, prefix) =
         find_start_code(data, 0).ok_or(DecodeError::InvalidSyntax("missing Annex B start code"))?;
     if data[..prefix].iter().any(|&byte| byte != 0) {
@@ -15,7 +23,7 @@ pub fn decode_annex_b(data: &[u8], mut output: impl FnMut(Frame)) -> Result<(), 
     for payload in annex_b_units(data, start) {
         feed(&mut decoder, payload, &mut output)?;
     }
-    while let Some(frame) = decoder.flush()? {
+    while let Some(frame) = decoder.flush_picture()? {
         output(frame);
     }
     Ok(())
@@ -24,13 +32,13 @@ pub fn decode_annex_b(data: &[u8], mut output: impl FnMut(Frame)) -> Result<(), 
 fn feed(
     decoder: &mut Decoder,
     data: &[u8],
-    output: &mut impl FnMut(Frame),
+    output: &mut impl FnMut(Picture),
 ) -> Result<(), DecodeError> {
     let nal = parse_nal(data).ok_or(DecodeError::InvalidSyntax("NAL unit header"))?;
-    if let Some(frame) = decoder.decode_nal(&nal)? {
+    if let Some(frame) = decoder.decode_nal_picture(&nal)? {
         output(frame);
     }
-    while let Some(frame) = decoder.next_output() {
+    while let Some(frame) = decoder.next_picture() {
         output(frame);
     }
     Ok(())
@@ -81,9 +89,23 @@ impl Decoder {
     /// [`Self::flush`] until it returns `Ok(None)` after the last packet.
     pub fn push_packet(
         &mut self,
-        mut packet: &[u8],
+        packet: &[u8],
         length_size: u8,
         mut output: impl FnMut(Frame),
+    ) -> Result<(), DecodeError> {
+        self.push_packet_pictures(packet, length_size, |picture| {
+            output(picture.to_owned_frame())
+        })
+    }
+
+    /// Feeds one length-prefixed packet and emits pictures with shared planes.
+    ///
+    /// Call [`Self::flush_picture`] after feeding the last packet.
+    pub fn push_packet_pictures(
+        &mut self,
+        mut packet: &[u8],
+        length_size: u8,
+        mut output: impl FnMut(Picture),
     ) -> Result<(), DecodeError> {
         if !(1..=4).contains(&length_size) {
             return Err(DecodeError::InvalidSyntax("NAL length-field size"));

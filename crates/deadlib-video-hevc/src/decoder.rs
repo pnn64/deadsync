@@ -14,6 +14,7 @@ use crate::dpb::{
 };
 use crate::error::DecodeError;
 use crate::nal::{NalUnit, NalUnitType};
+use crate::picture::{Picture, PictureLayout};
 use crate::pixel::{Pixel, PixelData};
 use crate::pps::{Pps, parse_pps};
 use crate::shared::SharedTable;
@@ -151,14 +152,14 @@ struct PictureDecode {
 impl PictureDecode {
     /// The end of the picture's decode: grey out CTBs no slice decoded,
     /// run the loop filters (with the flags of the picture's last slice
-    /// header `last_sh`, as before) and return the cropped frame.
+    /// header `last_sh`) and determine the visible picture geometry.
     fn finish(
         &mut self,
         sps: &Sps,
         pps: &Pps,
         last_sh: &SliceHeader,
         threads: usize,
-    ) -> Result<Frame, DecodeError> {
+    ) -> Result<PictureLayout, DecodeError> {
         with_picture_state!(&mut self.state, |state| fill_undecoded_ctbs(state));
         with_picture_state!(&mut self.state, |state| {
             // Per-slice: CUs of slices with deblocking disabled have no
@@ -170,18 +171,8 @@ impl PictureDecode {
                 crate::deblock::deblock_picture(state, sps, pps, last_sh, threads);
                 crate::sao::apply_sao_picture(state, sps, threads);
             }
-            crop_frame(
-                state,
-                sps.pic_width_in_luma_samples,
-                sps.pic_height_in_luma_samples,
-                sps.cropped_width(),
-                sps.cropped_height(),
-                sps.conf_win_left_offset,
-                sps.conf_win_top_offset,
-                last_sh.poc,
-                sps.bit_depth_luma,
-            )
-        })
+        });
+        PictureLayout::from_sps(sps)
     }
 }
 
@@ -216,7 +207,7 @@ enum PictureMessage {
 
 /// What a picture thread returns.
 struct PictureResult {
-    frame: Result<Frame, DecodeError>,
+    frame: Result<Picture, DecodeError>,
     /// Errors from the picture's slice data, in slice order.
     errors: Vec<DecodeError>,
     /// The picture state, for recycling (its lent tables released).
@@ -268,7 +259,9 @@ fn picture_thread(
         }
     }
     let frame = match finish {
-        Some((sps, pps, last_sh)) => decode.finish(&sps, &pps, &last_sh, threads),
+        Some((sps, pps, last_sh)) => decode
+            .finish(&sps, &pps, &last_sh, threads)
+            .map(|layout| Picture::new(Arc::clone(&guard.0), layout)),
         None => Err(DecodeError::InvalidSyntax(
             "picture abandoned before its end",
         )),
@@ -890,7 +883,7 @@ pub struct Decoder {
     /// Decoding-order mode: frames ready but not yet returned. A call can
     /// finish two pictures (an incomplete earlier one, then its own), and
     /// `decode_nal` returns one frame per call.
-    pending_frames: std::collections::VecDeque<Frame>,
+    pending_frames: std::collections::VecDeque<Picture>,
     /// Buffers reused from earlier pictures.
     pool: PicturePool,
 }
@@ -1072,128 +1065,6 @@ fn generated_reference<P: Pixel>(
     Arc::new(dp)
 }
 
-/// Crop a decoded picture's planes to the conformance window and build a Frame.
-/// The pixel planes may have CTU-aligned strides larger than `coded_w`, so we
-/// always use `state.y_stride` / `state.uv_stride` for row addressing.
-#[allow(clippy::too_many_arguments)]
-fn crop_frame<P: Pixel>(
-    state: &crate::cu_tree::PictureState<P>,
-    coded_w: u32,
-    coded_h: u32,
-    cropped_w: u32,
-    cropped_h: u32,
-    left_offset: u32, // in chroma sample units
-    top_offset: u32,  // in chroma sample units
-    poc: i32,
-    bit_depth: u8,
-) -> Result<Frame, DecodeError> {
-    // Conformance-window offsets are in chroma sample units; scale by
-    // SubWidthC/SubHeightC (`chroma_shift_*`) to reach luma coordinates.
-    let luma_left = left_offset
-        .checked_shl(state.chroma_shift_w)
-        .filter(|v| v >> state.chroma_shift_w == left_offset)
-        .and_then(|value| usize::try_from(value).ok())
-        .ok_or(DecodeError::InvalidSyntax("invalid luma crop offset"))?;
-    let luma_top = top_offset
-        .checked_shl(state.chroma_shift_h)
-        .filter(|v| v >> state.chroma_shift_h == top_offset)
-        .and_then(|value| usize::try_from(value).ok())
-        .ok_or(DecodeError::InvalidSyntax("invalid luma crop offset"))?;
-    let cw = usize::try_from(cropped_w)
-        .map_err(|_| DecodeError::InvalidSyntax("invalid cropped width"))?;
-    let ch = usize::try_from(cropped_h)
-        .map_err(|_| DecodeError::InvalidSyntax("invalid cropped height"))?;
-    let coded_w =
-        usize::try_from(coded_w).map_err(|_| DecodeError::InvalidSyntax("invalid coded width"))?;
-    let coded_h =
-        usize::try_from(coded_h).map_err(|_| DecodeError::InvalidSyntax("invalid coded height"))?;
-    if luma_left.checked_add(cw).is_none_or(|end| end > coded_w)
-        || luma_top.checked_add(ch).is_none_or(|end| end > coded_h)
-    {
-        return Err(DecodeError::InvalidSyntax(
-            "conformance window exceeds picture dimensions",
-        ));
-    }
-    let stride_y = state.y_stride;
-    let stride_uv = state.uv_stride;
-    let chroma_format_idc = state.chroma_array_type;
-
-    // Fast path: if the output dimensions match the stride (no padding, no
-    // conformance crop), we can do a simple row-copy or even clone.
-    let no_crop =
-        luma_left == 0 && luma_top == 0 && cw == stride_y && ch == state.y_plane.len() / stride_y;
-    if no_crop {
-        return Ok(Frame {
-            y: P::wrap_vec(state.y_plane[0..state.y_plane.len()].to_vec()),
-            u: P::wrap_vec(state.u_plane[0..state.u_plane.len()].to_vec()),
-            v: P::wrap_vec(state.v_plane[0..state.v_plane.len()].to_vec()),
-            width: cropped_w,
-            height: cropped_h,
-            pic_order_cnt: poc,
-            bit_depth,
-            chroma_format_idc,
-        });
-    }
-
-    let mut y = Vec::with_capacity(cw * ch);
-    for row in 0..ch {
-        let src_row = luma_top + row;
-        let start = src_row
-            .checked_mul(stride_y)
-            .and_then(|value| value.checked_add(luma_left))
-            .ok_or(DecodeError::InvalidSyntax("invalid luma crop range"))?;
-        let end = start
-            .checked_add(cw)
-            .ok_or(DecodeError::InvalidSyntax("invalid luma crop range"))?;
-        y.extend_from_slice(
-            state
-                .y_plane
-                .get_range(start..end)
-                .ok_or(DecodeError::InvalidSyntax("invalid luma crop range"))?,
-        );
-    }
-    let cw_c = cw >> state.chroma_shift_w;
-    let ch_c = ch >> state.chroma_shift_h;
-    let chroma_left = usize::try_from(left_offset)
-        .map_err(|_| DecodeError::InvalidSyntax("invalid chroma crop offset"))?;
-    let chroma_top = usize::try_from(top_offset)
-        .map_err(|_| DecodeError::InvalidSyntax("invalid chroma crop offset"))?;
-    let mut u = Vec::with_capacity(cw_c * ch_c);
-    let mut v = Vec::with_capacity(cw_c * ch_c);
-    for row in 0..ch_c {
-        let src_row = chroma_top + row;
-        let start = src_row
-            .checked_mul(stride_uv)
-            .and_then(|value| value.checked_add(chroma_left))
-            .ok_or(DecodeError::InvalidSyntax("invalid chroma crop range"))?;
-        let end = start
-            .checked_add(cw_c)
-            .ok_or(DecodeError::InvalidSyntax("invalid chroma crop range"))?;
-        u.extend_from_slice(
-            state
-                .u_plane
-                .get_range(start..end)
-                .ok_or(DecodeError::InvalidSyntax("invalid chroma crop range"))?,
-        );
-        v.extend_from_slice(
-            state
-                .v_plane
-                .get_range(start..end)
-                .ok_or(DecodeError::InvalidSyntax("invalid chroma crop range"))?,
-        );
-    }
-    Ok(Frame {
-        y: P::wrap_vec(y),
-        u: P::wrap_vec(u),
-        v: P::wrap_vec(v),
-        width: cropped_w,
-        height: cropped_h,
-        pic_order_cnt: poc,
-        bit_depth,
-        chroma_format_idc,
-    })
-}
-
 impl Decoder {
     /// A decoder in decoding-order mode with the default
     /// [`DecodeLimits`]: Level 6.2's maximum picture size and an estimated
@@ -1290,6 +1161,11 @@ impl Decoder {
     /// the next frame in display order is still decoding: keep calling
     /// after each NAL unit, and [`flush`](Self::flush) at the end.
     pub fn next_output(&mut self) -> Option<Frame> {
+        self.next_picture().map(|picture| picture.to_owned_frame())
+    }
+
+    /// Takes the next picture released in display order with shared planes.
+    pub fn next_picture(&mut self) -> Option<Picture> {
         self.collect_pictures(false);
         self.output_queue.pop()
     }
@@ -1364,6 +1240,16 @@ impl Decoder {
     /// completes in the same call, the later frame is returned by the next
     /// call (or by `flush`), so frames stay in decoding order.
     pub fn decode_nal(&mut self, nal: &NalUnit<'_>) -> Result<Option<Frame>, DecodeError> {
+        Ok(self
+            .decode_nal_picture(nal)?
+            .map(|picture| picture.to_owned_frame()))
+    }
+
+    /// Returns a decoded picture with shared planes when output is available.
+    pub fn decode_nal_picture(
+        &mut self,
+        nal: &NalUnit<'_>,
+    ) -> Result<Option<Picture>, DecodeError> {
         let result = self.decode_nal_inner(nal);
         self.collect_pictures(false);
         // An error from a picture decoded on its own thread (frame
@@ -1402,7 +1288,7 @@ impl Decoder {
         }
     }
 
-    fn decode_nal_inner(&mut self, nal: &NalUnit<'_>) -> Result<Option<Frame>, DecodeError> {
+    fn decode_nal_inner(&mut self, nal: &NalUnit<'_>) -> Result<Option<Picture>, DecodeError> {
         // Spec 7.4.2.2: a decoder of the base layer ignores NAL units with
         // nuh_layer_id > 0 (the layers of SHVC / MV-HEVC streams, such as
         // the second view of stereo video), parameter sets included.
@@ -1494,6 +1380,13 @@ impl Decoder {
     /// waiting is released, and each call returns the next one in display
     /// order until `None`.
     pub fn flush(&mut self) -> Result<Option<Frame>, DecodeError> {
+        Ok(self
+            .flush_picture()?
+            .map(|picture| picture.to_owned_frame()))
+    }
+
+    /// Returns a decoded picture with shared planes when output is available.
+    pub fn flush_picture(&mut self) -> Result<Option<Picture>, DecodeError> {
         // A picture still in progress at the end of the stream (its last
         // slices lost or failed) is finished with its missing CTBs filled.
         if let Some(frame) = self.end_picture()? {
@@ -1513,7 +1406,7 @@ impl Decoder {
 
     /// End the picture in progress, if any (it is finished as it is, with
     /// any CTBs no slice decoded filled mid-grey).
-    fn end_picture(&mut self) -> Result<Option<Frame>, DecodeError> {
+    fn end_picture(&mut self) -> Result<Option<Picture>, DecodeError> {
         match self.current_picture.take() {
             Some(pic) => self.finish_picture(pic),
             None => Ok(None),
@@ -1524,7 +1417,7 @@ impl Decoder {
         &mut self,
         nal: &NalUnit<'_>,
         nut: NalUnitType,
-    ) -> Result<Option<Frame>, DecodeError> {
+    ) -> Result<Option<Picture>, DecodeError> {
         // Cleared until this segment's reference lists are built, whatever
         // happens to it before then (as FFmpeg does).
         let previous_slice_initialized = std::mem::replace(&mut self.slice_initialized, false);
@@ -2132,7 +2025,7 @@ impl Decoder {
         last_sh: SliceHeader,
         slice_ref_pocs: Vec<(i32, crate::dpb::SliceRefLists)>,
         thread: PictureThread,
-    ) -> Result<Option<Frame>, DecodeError> {
+    ) -> Result<Option<Picture>, DecodeError> {
         let sps = self
             .sps
             .clone()
@@ -2215,7 +2108,10 @@ impl Decoder {
     /// failed), run the in-loop filters, store it in the DPB and hand the
     /// frame to the output (decoding-order return value or display-order
     /// queue).
-    fn finish_picture(&mut self, mut pic: PictureInProgress) -> Result<Option<Frame>, DecodeError> {
+    fn finish_picture(
+        &mut self,
+        mut pic: PictureInProgress,
+    ) -> Result<Option<Picture>, DecodeError> {
         let mut decode = match pic.side {
             PictureSide::Local(decode) => decode,
             PictureSide::Thread(thread) => {
@@ -2236,7 +2132,7 @@ impl Decoder {
             .as_ref()
             .ok_or(DecodeError::InvalidSyntax("picture without active PPS"))?;
         let last_sh = &pic.last_slice_header;
-        let emitted_frame = decode.finish(sps, pps, last_sh, threads)?;
+        let layout = decode.finish(sps, pps, last_sh, threads)?;
         let last_sh_cloned = last_sh.clone();
         let picture_poc = last_sh_cloned.poc;
         let pic_width = sps.pic_width_in_luma_samples;
@@ -2290,6 +2186,9 @@ impl Decoder {
         self.pool.recycle_state(decode.state);
         decoded_pic.mark(PictureReferenceStatus::ShortTerm);
         decoded_pic.set_output();
+        let frame = last_sh_cloned
+            .pic_output_flag
+            .then(|| Picture::new(Arc::clone(&decoded_pic), layout));
         self.dpb.insert(decoded_pic);
         for retired in self.dpb.cleanup_unused() {
             self.pool.recycle_picture(retired);
@@ -2298,7 +2197,6 @@ impl Decoder {
         // PicOutputFlag (spec 8.1.3): a picture with pic_output_flag = 0 is
         // decoded and kept for reference but never output. (Skipped RASL
         // pictures never reach this point.)
-        let frame = last_sh_cloned.pic_output_flag.then_some(emitted_frame);
         if self.display_order {
             // Output process once the picture is decoded (C.5.2.3).
             let sps = self

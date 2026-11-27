@@ -2,7 +2,7 @@
 
 use core::{fmt, ops::Range};
 
-use crate::{DecodeError, Decoder, Frame};
+use crate::{DecodeError, Decoder, Frame, Picture};
 
 /// Errors from the HEVC track reader or decoder.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -256,6 +256,11 @@ fn sample_descriptions(input: &[u8]) -> Result<Vec<Option<&[u8]>>> {
 /// Frames are emitted in display order. Audio, timestamps and edit lists
 /// are ignored. HEVC configuration is read from the track's `hvcC` box.
 pub fn decode_mp4(file: &[u8], mut output: impl FnMut(Frame)) -> Result<()> {
+    decode_mp4_pictures(file, |picture| output(picture.to_owned_frame()))
+}
+
+/// Decodes the first indexed HEVC MP4 track and emits shared pictures in display order.
+pub fn decode_mp4_pictures(file: &[u8], mut output: impl FnMut(Picture)) -> Result<()> {
     let mut top = file;
     let mut movie = None;
     let mut media = Vec::new();
@@ -300,10 +305,10 @@ pub fn decode_mp4(file: &[u8], mut output: impl FnMut(Frame)) -> Result<()> {
                 active_description = Some(index);
             }
             decoder
-                .push_packet(sample, length_size, &mut output)
+                .push_packet_pictures(sample, length_size, &mut output)
                 .map_err(Mp4Error::Decode)
         })?;
-        while let Some(frame) = decoder.flush().map_err(Mp4Error::Decode)? {
+        while let Some(frame) = decoder.flush_picture().map_err(Mp4Error::Decode)? {
             output(frame);
         }
         return Ok(());

@@ -11,7 +11,7 @@
 
 use std::collections::VecDeque;
 
-use crate::decoder::Frame;
+use crate::Picture;
 use crate::sps::Sps;
 
 /// DPB limits of the highest temporal sub-layer (HighestTid) of the active
@@ -46,7 +46,7 @@ impl OutputLimits {
 /// handed to its thread, before its samples exist: its frame is `Pending`
 /// until the thread finishes (`OutputQueue::resolve`).
 enum Slot {
-    Ready(Frame),
+    Ready(Picture),
     Pending(u64),
     /// The picture's thread produced no frame (it failed); output skips it.
     Gone,
@@ -132,8 +132,8 @@ impl OutputQueue {
 
     /// C.5.2.3, once the current picture is decoded: `frame` is the picture
     /// when PicOutputFlag = 1, `None` otherwise ("not needed for output").
-    pub(crate) fn after_picture(&mut self, limits: &OutputLimits, frame: Option<Frame>) {
-        let entry = frame.map(|f| (f.pic_order_cnt, Slot::Ready(f)));
+    pub(crate) fn after_picture(&mut self, limits: &OutputLimits, frame: Option<Picture>) {
+        let entry = frame.map(|f| (f.pic_order_cnt(), Slot::Ready(f)));
         self.add_picture(limits, entry);
     }
 
@@ -144,7 +144,7 @@ impl OutputQueue {
     }
 
     /// The frame of pending picture `id` (`None`: it has none).
-    pub(crate) fn resolve(&mut self, id: u64, frame: Option<Frame>) {
+    pub(crate) fn resolve(&mut self, id: u64, frame: Option<Picture>) {
         let mut frame = Some(frame);
         let slots = self
             .waiting
@@ -182,7 +182,7 @@ impl OutputQueue {
 
     /// Take the next frame released for output. `None` also while the next
     /// one is still decoding on its thread.
-    pub(crate) fn pop(&mut self) -> Option<Frame> {
+    pub(crate) fn pop(&mut self) -> Option<Picture> {
         loop {
             match self.ready.front()? {
                 Slot::Pending(_) => return None,
@@ -201,19 +201,8 @@ impl OutputQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pixel::PixelData;
-
-    fn frame(poc: i32) -> Frame {
-        Frame {
-            y: PixelData::U8(vec![]),
-            u: PixelData::U8(vec![]),
-            v: PixelData::U8(vec![]),
-            width: 0,
-            height: 0,
-            pic_order_cnt: poc,
-            bit_depth: 8,
-            chroma_format_idc: 1,
-        }
+    fn frame(poc: i32) -> Picture {
+        Picture::empty_for_test(poc)
     }
 
     fn limits(reorder: usize, dpb: usize) -> OutputLimits {
@@ -226,7 +215,7 @@ mod tests {
 
     fn drain(q: &mut OutputQueue) -> Vec<i32> {
         std::iter::from_fn(|| q.pop())
-            .map(|f| f.pic_order_cnt)
+            .map(|f| f.pic_order_cnt())
             .collect()
     }
 
