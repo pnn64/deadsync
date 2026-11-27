@@ -1,6 +1,6 @@
 //! Inline raw writes for proven, unobserved Lua triplet arguments.
 
-use super::{Error, FunctionId, Op, Value, Vm, slot_index};
+use super::{Error, FunctionId, Op, TableId, Value, Vm, slot_index};
 use crate::bytecode::{Instruction, Prototype};
 
 const MAX_FILL_INSTRUCTIONS: usize = 24;
@@ -107,6 +107,19 @@ fn find_fill_end(prototype: &Prototype, begin: usize) -> Option<usize> {
 }
 
 impl Vm {
+    pub(super) fn overwrite_private_triplet_at(
+        &mut self,
+        root: TableId,
+        index: usize,
+        values: [f64; 3],
+    ) -> bool {
+        let Some(&Value::Table(row)) = self.tables[slot_index(root.0)].array_values().get(index)
+        else {
+            return false;
+        };
+        self.tables[slot_index(row.0)].overwrite_private_triplet(values)
+    }
+
     #[cold]
     pub(super) fn write_inlined_triplet(&mut self, slot: usize) -> Result<bool, Error> {
         let call = slot - 3;
@@ -121,7 +134,7 @@ impl Vm {
         else {
             return Ok(false);
         };
-        let Some((target, index, values)) =
+        let Some((target, index, values, private)) =
             self.resolve_triplet_write(self.registers[call], self.registers[slot - 1], [x, y, z])
         else {
             return Ok(false);
@@ -133,6 +146,9 @@ impl Vm {
             || !self.tables[slot_index(target.0)].can_replace_array_value(index)
         {
             return Ok(false);
+        }
+        if private && self.overwrite_private_triplet_at(target, index, values) {
+            return Ok(true);
         }
         let array = self.try_allocate_dense_table(3)?;
         self.tables[slot_index(array.0)].initialize_number_array(&values);

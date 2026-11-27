@@ -20,9 +20,26 @@ impl NativeStack<'_, '_> {
     /// # Errors
     /// Rejects a pending error, full native stack, table overflow or allocation failure.
     pub fn create_number_array(&mut self, numbers: &[f64]) -> Result<(), Error> {
-        let table = self.push_new_table(|vm| vm.try_allocate_dense_table(numbers.len()))?;
-        self.call.vm.tables[slot_index(table.0)].initialize_number_array(numbers);
-        Ok(())
+        self.push_new_table(|vm| vm.try_allocate_number_array(numbers))
+            .map(|_| ())
+    }
+
+    /// Read a numeric row without placing its table on the stack.
+    pub fn read_unpublished_triplet(
+        &mut self,
+        owner: isize,
+        field: &'static [u8],
+        index: usize,
+    ) -> Result<Option<[f64; 3]>, Error> {
+        self.check_error()?;
+        let Value::Table(owner) = self.indexed_value(owner)? else {
+            return Ok(None);
+        };
+        let key = self.call.intern_static(field)?;
+        Ok(self
+            .call
+            .unpublished_triplets(owner, key)
+            .map(|read| read(index)))
     }
 
     /// Push a dense table of fresh row tables, each containing fresh number arrays.
@@ -86,14 +103,9 @@ impl NativeStack<'_, '_> {
         if watch && let (Value::String(key), Value::Table(root)) = (key, value) {
             // No Lua or host code received the root from the construction
             // stack. The raw field assignment is its only reference.
-            let vm = &mut self.call.vm;
-            let table = &mut vm.tables[slot_index(owner.0)];
-            let before = table.heap_bytes();
-            // The assignment already succeeded. If reserving the optional
-            // tracking record fails, leave the assigned field untracked.
-            let _ = table.register_unpublished_rows(key, root);
-            let after = table.heap_bytes();
-            vm.note_table_resize(before, after);
+            self.call
+                .vm
+                .watch_unpublished_rows(owner, key, root, crate::table::NumberRows::Nested);
         }
         Ok(())
     }

@@ -1,4 +1,5 @@
 //! Typed spline observations for the existing compiler's column transforms.
+use super::splines::POINTS;
 use super::*;
 use crate::{SongLuaColumnTransformSample as Sample, SongLuaColumnTransformTarget as Target};
 
@@ -8,7 +9,6 @@ const ROT: &str = "__songlua_rot_handler";
 const MODE: &str = "__songlua_spline_mode";
 const SPLINE: &str = "__songlua_spline";
 const SIZE: &str = "__songlua_spline_size";
-const POINTS: &str = "__songlua_spline_points";
 const DISABLED: &str = "NoteColumnSplineMode_Disabled";
 const OFFSET: &str = "NoteColumnSplineMode_Offset";
 const POSITION: &str = "NoteColumnSplineMode_Position";
@@ -173,6 +173,42 @@ fn spline_size(call: &mut HostCall<'_>, spline: TableId) -> Result<usize, Error>
         .and_then(|n| usize::try_from(n).ok())
         .unwrap_or(0))
 }
+// Resolve uniform offsets in the same order for ordinary Lua rows and
+// for the numeric-only view of a private spline.
+fn uniform_points(
+    size: usize,
+    component: usize,
+    witness: Option<usize>,
+    mut read: impl FnMut(usize) -> Result<[f32; 3], Error>,
+) -> Result<(Option<f32>, Option<usize>), Error> {
+    if let Some(index) = witness.filter(|&index| index <= size) {
+        let first = read(1).ok().map(|point| point[component]);
+        let other = read(index).ok().map(|point| point[component]);
+        if first.zip(other).is_some_and(|(a, b)| (a - b).abs() > 0.001) {
+            return Ok((None, None));
+        }
+    }
+    let first = read(1)?[component];
+    for index in 2..=size {
+        if (read(index)?[component] - first).abs() > 0.001 {
+            return Ok((None, Some(index)));
+        }
+    }
+    Ok((Some(first), None))
+}
+
+fn uniform_witness(
+    call: &mut HostCall<'_>,
+    spline: TableId,
+    key: &'static str,
+) -> Result<Option<usize>, Error> {
+    let value = field(call, spline, key)?;
+    if value == Value::Nil {
+        return Ok(None);
+    }
+    Ok(Some(numeric(call, value, Numeric::Unsigned)? as usize))
+}
+
 fn uniform(
     call: &mut HostCall<'_>,
     column: TableId,
@@ -202,44 +238,46 @@ fn uniform(
             if size == 0 {
                 return Ok(Some(baseline));
             }
-            let points = field(call, spline, POINTS)?;
-            let points = required_table(call, points)?;
-            call.with_roots(&[Value::Table(points)], |call| {
+            let witness_key = match component {
+                0 => "__songlua_nonuniform_x",
+                1 => "__songlua_nonuniform_y",
+                _ => "__songlua_nonuniform_z",
+            };
+            let points_key = call.intern_static(POINTS.as_bytes())?;
+            let points = if call.unpublished_triplets(spline, points_key).is_some() {
+                None
+            } else {
+                let value = field(call, spline, POINTS)?;
+                Some(required_table(call, value)?)
+            };
+            call.with_roots(points.map(Value::Table).as_slice(), |call| {
                 if !offset && key == ZOOM {
                     return Ok(Some(baseline));
                 }
-                if !offset {
-                    return Ok(Some(point(call, points, 1)?[component]));
-                }
-                let witness = match component {
-                    0 => "__songlua_nonuniform_x",
-                    1 => "__songlua_nonuniform_y",
-                    _ => "__songlua_nonuniform_z",
+                let witness = if offset {
+                    uniform_witness(call, spline, witness_key)?
+                } else {
+                    None
                 };
-                let index = field(call, spline, witness)?;
-                if index != Value::Nil {
-                    let index = numeric(call, index, Numeric::Unsigned)? as usize;
-                    if index <= size {
-                        let first = point(call, points, 1).ok().map(|p| p[component]);
-                        let other = point(call, points, index).ok().map(|p| p[component]);
-                        if first.zip(other).is_some_and(|(a, b)| (a - b).abs() > 0.001) {
-                            return Ok(None);
-                        }
-                    }
+                let count = if offset { size } else { 1 };
+                let (result, changed) = if let Some(points) = points {
+                    uniform_points(count, component, witness, |index| point(call, points, index))?
+                } else {
+                    let read = call
+                        .unpublished_triplets(spline, points_key)
+                        .expect("unread spline points");
+                    uniform_points(count, component, witness, |index| {
+                        Ok(read(index).map(|n| n as f32))
+                    })?
+                };
+                if let Some(index) = changed {
+                    sprites::set(call, spline, witness_key, Value::Number(index as f64))?;
                 }
-                let mut first = None::<f32>;
-                for index in 1..=size {
-                    let value = point(call, points, index)?[component];
-                    if let Some(prior) = first {
-                        if (value - prior).abs() > 0.001 {
-                            sprites::set(call, spline, witness, Value::Number(index as f64))?;
-                            return Ok(None);
-                        }
-                    } else {
-                        first = Some(value);
-                    }
-                }
-                Ok(Some(baseline + first.unwrap_or(0.)))
+                Ok(if offset {
+                    result.map(|value| baseline + value)
+                } else {
+                    result
+                })
             })
         })
     })
@@ -260,6 +298,23 @@ fn x_offset(call: &mut HostCall<'_>, column: TableId) -> Result<Option<f32>, Err
             )
         }
     })
+}
+fn uniform_y(
+    size: usize,
+    mut read: impl FnMut(usize) -> Result<[f32; 3], Error>,
+) -> Result<Option<f32>, Error> {
+    let mut first = None::<f32>;
+    let mut valid = true;
+    for index in 1..=size {
+        let [x, y, _] = read(index)?;
+        valid &= x.is_finite() && y.is_finite();
+        if let Some(first) = first {
+            valid &= (y - first).abs() <= 0.001;
+        } else {
+            first = Some(y);
+        }
+    }
+    Ok(if valid { first } else { None })
 }
 fn y_offset(call: &mut HostCall<'_>, column: TableId) -> Result<Option<f32>, Error> {
     let handler = notefields::active_handler(call, column, POS)?;
@@ -283,21 +338,14 @@ fn y_offset(call: &mut HostCall<'_>, column: TableId) -> Result<Option<f32>, Err
             if size == 0 {
                 return Ok(Some(0.));
             }
+            let key = call.intern_static(POINTS.as_bytes())?;
+            if let Some(read) = call.unpublished_triplets(spline, key) {
+                return uniform_y(size, |index| Ok(read(index).map(|n| n as f32)));
+            }
             let points = field(call, spline, POINTS)?;
             let points = required_table(call, points)?;
             call.with_roots(&[Value::Table(points)], |call| {
-                let mut first = None::<f32>;
-                let mut valid = true;
-                for index in 1..=size {
-                    let [x, y, _] = point(call, points, index)?;
-                    valid &= x.is_finite() && y.is_finite();
-                    if let Some(first) = first {
-                        valid &= (y - first).abs() <= 0.001;
-                    } else {
-                        first = Some(y)
-                    }
-                }
-                Ok(if valid { first } else { None })
+                uniform_y(size, |index| point(call, points, index))
             })
         })
     })
@@ -321,12 +369,24 @@ fn position(
             if numeric(call, size, Numeric::Integer)? != 2. {
                 return Ok(None);
             }
-            let points = field(call, spline, POINTS)?;
-            let points = required_table(call, points)?;
-            call.with_roots(&[Value::Table(points)], |call| {
+            let key = call.intern_static(POINTS.as_bytes())?;
+            let numeric_rows = call
+                .unpublished_triplets(spline, key)
+                .map(|read| [read(1), read(2)].map(|row| row.map(|n| n as f32)));
+            let points = if numeric_rows.is_some() {
+                None
+            } else {
+                let value = field(call, spline, POINTS)?;
+                Some(required_table(call, value)?)
+            };
+            call.with_roots(points.map(Value::Table).as_slice(), |call| {
                 let mut out = [(Target::PositionEnabled, 0.); 10];
                 for p in 0..2u8 {
-                    let values = point(call, points, usize::from(p) + 1)?;
+                    let values = if let Some(rows) = numeric_rows {
+                        rows[usize::from(p)]
+                    } else {
+                        point(call, points.expect("Lua point rows"), usize::from(p) + 1)?
+                    };
                     for axis in 0..3u8 {
                         let value = values[usize::from(axis)];
                         if !value.is_finite() {

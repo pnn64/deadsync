@@ -1,7 +1,9 @@
 //! The existing three-axis NoteColumn spline API and shared gameplay solver.
 use super::*;
-use deadlib_lua::{IndexView, NativeStack};
+use deadlib_lua::{IndexView, NativeStack, StringId};
 use sprites::set;
+
+pub(super) const POINTS: &str = "__songlua_spline_points";
 
 #[derive(Default)]
 pub(super) struct Workspace {
@@ -102,10 +104,14 @@ fn spline(call: &mut HostCall<'_>) -> Result<TableId, Error> {
     call.with_roots(&[Value::Table(owner)], |call| {
         set(call, owner, "__songlua_spline_size", Value::Number(0.))?;
         set(call, owner, "__songlua_spline_loop", Value::Boolean(false))?;
-        for key in ["__songlua_spline_points", "__songlua_spline_coefficients"] {
-            let values = call.try_new_table()?;
-            set(call, owner, key, Value::Table(values))?;
-        }
+        call.set_empty_triplet_array(owner, POINTS.as_bytes())?;
+        let coefficients = call.try_new_table()?;
+        set(
+            call,
+            owner,
+            "__songlua_spline_coefficients",
+            Value::Table(coefficients),
+        )?;
         for (name, alias) in [
             ("evaluate", "Evaluate"),
             ("SetSize", "set_size"),
@@ -118,13 +124,13 @@ fn spline(call: &mut HostCall<'_>) -> Result<TableId, Error> {
         ] {
             let function = if name == "SetPoint" {
                 let size = call.intern_static(b"__songlua_spline_size")?;
-                let points = call.intern_static(b"__songlua_spline_points")?;
+                let points = call.intern_static(POINTS.as_bytes())?;
                 let function = call.new_host_function_with_data(
                     |call| named_spline_method(call, "SetPoint"),
                     &[Value::Table(owner)],
                     PointKeys { size, points },
                 )?;
-                call.set_triplet_resolver(function, resolve_numeric_point)?;
+                call.set_triplet_field_resolver(function, resolve_numeric_point)?;
                 function
             } else {
                 call.new_host_function_with_data(spline_method, &[Value::Table(owner)], name)?
@@ -236,7 +242,7 @@ fn named_spline_method(call: &mut HostCall<'_>, name: &str) -> Result<(), Error>
     }
     if name == "SetSize"
         && let Value::Table(table) = owner
-        && resize_unpublished_coefficients(call, table)?
+        && resize_numeric_spline(call, table)?
     {
         return Ok(());
     }
@@ -371,7 +377,7 @@ fn resolve_numeric_point(
     view: &IndexView<'_>,
     index: Value,
     coordinates: [f64; 3],
-) -> Option<(TableId, u32, [f64; 3])> {
+) -> Option<(TableId, StringId, u32, [f64; 3])> {
     let [Value::Table(owner)] = *view.captures() else {
         return None;
     };
@@ -386,17 +392,18 @@ fn resolve_numeric_point(
         return None;
     };
     let index = numeric_point_index(size, index)?;
-    let Value::Table(points) = view.raw_get(owner, keys.points) else {
+    let Value::String(points) = keys.points else {
         return None;
     };
     Some((
+        owner,
         points,
         index,
         coordinates.map(|value| f64::from(value as f32)),
     ))
 }
 
-fn resize_unpublished_coefficients(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Error> {
+fn resize_numeric_spline(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Error> {
     let [_, Value::Number(size)] = *call.arguments() else {
         return Ok(false);
     };
@@ -408,17 +415,34 @@ fn resize_unpublished_coefficients(call: &mut HostCall<'_>, owner: TableId) -> R
     let Value::Number(previous) = call.raw_table_get(owner, size_key)? else {
         return Ok(false);
     };
-    if !(0. ..=size).contains(&previous.trunc())
-        || !matches!(
-            get_static(call, owner, b"__songlua_spline_points")?,
-            Value::Table(_)
-        )
-    {
+    let previous = previous.trunc();
+    if !(0. ..=65536.).contains(&previous) {
         return Ok(false);
     }
-    let key = call.intern_static(b"__songlua_spline_coefficients")?;
-    if !call.has_unpublished_number_rows(owner, key) {
+    let points_key = call.intern_static(POINTS.as_bytes())?;
+    let coefficients_key = call.intern_static(b"__songlua_spline_coefficients")?;
+    let private_points = call.has_unpublished_triplets(owner, points_key);
+    let private_coefficients = call.has_unpublished_number_rows(owner, coefficients_key);
+    let shrink = size < previous;
+    if !(private_points || private_coefficients && !shrink) {
         return Ok(false);
+    }
+    if !private_points && !matches!(call.raw_table_get(owner, points_key)?, Value::Table(_)) {
+        return Ok(false);
+    }
+    if shrink || !private_coefficients {
+        let Value::Table(coefficients) = call.raw_table_get(owner, coefficients_key)? else {
+            return Ok(false);
+        };
+        if shrink {
+            let indices = size as u32 + 1..=previous as u32;
+            if !call.clear_unpublished_triplets(owner, points_key, indices.clone())? {
+                return Ok(false);
+            }
+            for index in indices {
+                call.raw_table_set(coefficients, Value::Number(f64::from(index)), Value::Nil)?;
+            }
+        }
     }
     call.raw_table_set(owner, size_key, Value::Number(size))?;
     call.push(Value::Table(owner))?;
@@ -440,9 +464,6 @@ fn set_numeric_point(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Er
     let Some(index) = numeric_point_index(size, index) else {
         return Ok(false);
     };
-    let Value::Table(points) = get_static(call, owner, b"__songlua_spline_points")? else {
-        return Ok(false);
-    };
     // Lua can supply sparse, wider, or coercible rows. Let the stack route
     // validate those with its original length and conversion rules.
     if call.raw_table_len(input)? != 3 {
@@ -454,7 +475,13 @@ fn set_numeric_point(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Er
         return Ok(false);
     };
     let values = [x as f32, y as f32, z as f32].map(f64::from);
-    call.raw_table_set_number_array(points, index, &values)?;
+    let key = call.intern_static(POINTS.as_bytes())?;
+    if !call.set_unpublished_triplet(owner, key, index, values)? {
+        let Value::Table(points) = call.raw_table_get(owner, key)? else {
+            return Ok(false);
+        };
+        call.raw_table_set_number_array(points, index, &values)?;
+    }
     call.push(Value::Table(owner))?;
     Ok(true)
 }
@@ -494,24 +521,37 @@ fn solve_numeric(
     if !(0.0..=65536.0).contains(&size) {
         return Ok(false);
     }
-    let Value::Table(points) = get_static(call, owner, b"__songlua_spline_points")? else {
-        return Ok(false);
+    let key = call.intern_static(POINTS.as_bytes())?;
+    let points = if call.unpublished_triplets(owner, key).is_some() {
+        None
+    } else {
+        let Value::Table(points) = call.raw_table_get(owner, key)? else {
+            return Ok(false);
+        };
+        Some(points)
     };
     workspace.points.clear();
     workspace
         .points
         .try_reserve_exact(size as usize)
         .map_err(|_| call.error(b"spline point allocation failed"))?;
-    let array = call.raw_table_array_values(points)?;
-    for index in 0..size as usize {
-        let row = match array.get(index) {
-            Some(&value) => value,
-            None => call.raw_table_get(points, Value::Number((index + 1) as f64))?,
-        };
-        let Some(point) = super::song_columns::raw_numeric_point(call, row)? else {
-            return Ok(false);
-        };
-        workspace.points.push(point);
+    if let Some(points) = points {
+        let array = call.raw_table_array_values(points)?;
+        for index in 0..size as usize {
+            let row = match array.get(index) {
+                Some(&value) => value,
+                None => call.raw_table_get(points, Value::Number((index + 1) as f64))?,
+            };
+            let Some(point) = super::song_columns::raw_numeric_point(call, row)? else {
+                return Ok(false);
+            };
+            workspace.points.push(point);
+        }
+    } else {
+        let copied = call.copy_unpublished_triplets(owner, key, size as usize, |row| {
+            workspace.points.push(row.map(|value| value as f32));
+        });
+        debug_assert!(copied);
     }
     let looping = get_static(call, owner, b"__songlua_spline_loop")?;
     if looping == Value::Nil {
@@ -578,10 +618,16 @@ fn evaluate(stack: &mut NativeStack<'_, '_>, owner: usize, t: f32) -> Result<[f3
     };
     let square = fraction * fraction;
     let cube = square * fraction;
-    stack.get_field(owner as isize, b"__songlua_spline_points")?;
-    table_at(stack, -1)?;
-    let table = stack.top();
-    let mut values = point(stack, table, index + 1)?;
+    let mut values = if let Some(row) =
+        stack.read_unpublished_triplet(owner as isize, POINTS.as_bytes(), index + 1)?
+    {
+        row.map(|value| value as f32)
+    } else {
+        stack.get_field(owner as isize, POINTS.as_bytes())?;
+        table_at(stack, -1)?;
+        let table = stack.top();
+        point(stack, table, index + 1)?
+    };
     stack.get_field(owner as isize, b"__songlua_spline_coefficients")?;
     table_at(stack, -1)?;
     let table = stack.top();

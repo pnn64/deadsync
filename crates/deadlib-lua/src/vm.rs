@@ -45,7 +45,7 @@ pub use host::{
     HostCall, HostFunction, HostThreadState, IndexResolver, IndexView, NativeBuiltinBody,
     NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString, NativeHook,
     NativeHookEvent, NativeHookInfo, NativeLoadStatus, NativeStack, NativeThreadStack,
-    TripletResolver,
+    TripletFieldResolver, TripletResolver,
 };
 pub use memory_limit::MemoryUsage;
 use native::format_number;
@@ -1358,6 +1358,19 @@ impl Vm {
     // without collection checkpoints or Lua reentry during construction.
     fn try_allocate_dense_table(&mut self, array: usize) -> Result<TableId, Error> {
         self.try_allocate_table(array, 0, false)
+    }
+
+    fn try_allocate_number_array(&mut self, numbers: &[f64]) -> Result<TableId, Error> {
+        let memory = self.tables.memory();
+        if self.lua51_table_order
+            && memory.allocator().is_none()
+            && let Some(table) = Table::with_shared_number_array(numbers, memory)
+        {
+            return self.try_insert_table(table, false);
+        }
+        let table = self.try_allocate_dense_table(numbers.len())?;
+        self.tables[slot_index(table.0)].initialize_number_array(numbers);
+        Ok(table)
     }
 
     #[inline]

@@ -2,6 +2,100 @@ use super::*;
 use crate::compile;
 
 #[test]
+fn shared_number_arrays_keep_identity_and_copy_on_write() {
+    let mut vm = Vm::try_new_with_lua51_table_order().unwrap();
+    let from_host = vm
+        .new_host_function(
+            |call| {
+                let table = call.try_new_number_array(&[1., 1., 1., 0.])?;
+                call.push(Value::Table(table))
+            },
+            &[],
+        )
+        .unwrap();
+    let from_stack = vm
+        .new_host_function(
+            |call| {
+                let mut stack = call.native_stack()?;
+                stack.create_number_array(&[0., 0., 0., 1.])?;
+                stack.finish(1)
+            },
+            &[],
+        )
+        .unwrap();
+    vm.set_global(b"from_host", from_host).unwrap();
+    vm.set_global(b"from_stack", from_stack).unwrap();
+    vm.execute(&compile(b"a,b=from_host(),from_host(); c,d=from_stack(),from_stack()").unwrap())
+        .unwrap();
+    let data = |vm: &mut Vm, name| {
+        let Value::Table(table) = vm.get_global(name).unwrap() else {
+            panic!("expected a vector table");
+        };
+        vm.tables[slot_index(table.0)].array_values().as_ptr()
+    };
+    assert_eq!(data(&mut vm, b"a"), data(&mut vm, b"b"));
+    assert_eq!(data(&mut vm, b"c"), data(&mut vm, b"d"));
+    vm.execute(
+        &compile(
+            br#"
+            assert(a~=b and c~=d and #a==4 and #c==4)
+            table.sort(a)
+            assert(a[1]==0 and a[4]==1 and b[1]==1 and b[4]==0)
+            c[1] = -1/math.huge
+            assert(1/c[1]==-math.huge and 1/d[1]==math.huge)
+            c[5] = 2
+            assert(#c==5 and #d==4 and d[5]==nil)
+            "#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_ne!(data(&mut vm, b"a"), data(&mut vm, b"b"));
+    assert_ne!(data(&mut vm, b"c"), data(&mut vm, b"d"));
+}
+
+#[test]
+fn triplet_writes_reuse_rows_until_the_field_is_read() {
+    let mut vm = Vm::try_new_with_lua51_table_order().unwrap();
+    let run = vm
+        .new_host_function(
+            |call| {
+                let owner = call.try_new_table()?;
+                let key = call.intern_static(b"points")?;
+                call.set_empty_triplet_array(owner, b"points")?;
+                for index in 1..32 {
+                    let name = call.try_intern(format!("field{index}").as_bytes())?;
+                    call.raw_table_set(owner, name, Value::Number(f64::from(index)))?;
+                }
+                assert!(call.set_unpublished_triplet(owner, key, 1, [1., 2., 3.])?);
+                let root = call
+                    .unpublished_number_rows(owner, key, NumberRows::Triplets)
+                    .unwrap();
+                let row = call.vm.tables[slot_index(root.0)].get_integer(1);
+                assert!(call.set_unpublished_triplet(owner, key, 1, [4., 5., 6.])?);
+                assert_eq!(call.vm.tables[slot_index(root.0)].get_integer(1), row);
+                assert_eq!(
+                    call.unpublished_triplets(owner, key).unwrap()(1),
+                    [4., 5., 6.]
+                );
+
+                assert_eq!(call.raw_table_get(owner, key)?, Value::Table(root));
+                for index in 32..128 {
+                    let name = call.try_intern(format!("field{index}").as_bytes())?;
+                    call.raw_table_set(owner, name, Value::Number(f64::from(index)))?;
+                }
+                assert!(!call.set_unpublished_triplet(owner, key, 1, [7., 8., 9.])?);
+                call.raw_table_set_number_array(root, 1, &[7., 8., 9.])?;
+                assert_ne!(call.vm.tables[slot_index(root.0)].get_integer(1), row);
+                Ok(())
+            },
+            &[],
+        )
+        .unwrap();
+    vm.call(run, &[]).unwrap();
+}
+
+#[test]
 fn ordinary_field_results_are_rooted_until_the_scratch_register_is_reused() {
     fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
         let target = call.arguments()[0];

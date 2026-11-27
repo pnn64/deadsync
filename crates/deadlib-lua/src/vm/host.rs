@@ -1,6 +1,7 @@
 //! Direct Rust function pointers over the native register call boundary.
 use super::*;
 use crate::memory::Shared;
+use crate::table::NumberRows;
 use std::any::Any;
 mod api;
 pub(in crate::vm) mod stack;
@@ -75,6 +76,18 @@ pub type IndexResolver = fn(&IndexView<'_>, TableId, Value) -> Option<Value>;
 /// The fast call is only used when the caller discards all results.
 pub type TripletResolver =
     fn(&IndexView<'_>, Value, [f64; 3]) -> Option<(TableId, u32, [f64; 3])>;
+
+/// Resolve a triplet write through a raw field on an owning table.
+/// Visits the same binding as [TripletResolver], but leaves the VM to
+/// resolve the destination and check whether it is still private.
+pub type TripletFieldResolver =
+    fn(&IndexView<'_>, Value, [f64; 3]) -> Option<(TableId, StringId, u32, [f64; 3])>;
+
+#[derive(Clone, Copy)]
+enum TripletResolution {
+    Table(TripletResolver),
+    Field(TripletFieldResolver),
+}
 
 /// Read-only access to VM tables for an [`IndexResolver`].
 pub struct IndexView<'a> {
@@ -156,7 +169,7 @@ pub(super) struct Function {
     callback: HostFunction,
     data: Option<Shared<dyn Any + Send + Sync>>,
     resolver: Option<IndexResolver>,
-    triplet_resolver: Option<TripletResolver>,
+    triplet_resolver: Option<TripletResolution>,
 }
 impl std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -400,6 +413,23 @@ impl Vm {
         function: Value,
         resolver: TripletResolver,
     ) -> Result<(), Error> {
+        self.register_triplet_resolver(function, TripletResolution::Table(resolver))
+    }
+
+    /// Register a triplet resolver that locates its array through a raw field.
+    pub fn set_triplet_field_resolver(
+        &mut self,
+        function: Value,
+        resolver: TripletFieldResolver,
+    ) -> Result<(), Error> {
+        self.register_triplet_resolver(function, TripletResolution::Field(resolver))
+    }
+
+    fn register_triplet_resolver(
+        &mut self,
+        function: Value,
+        resolver: TripletResolution,
+    ) -> Result<(), Error> {
         self.validate_value(function)?;
         if let Value::Native(id) = function
             && let Some(closure) = self.native_closures.get_mut(id)
@@ -424,7 +454,7 @@ impl Vm {
         callee: Value,
         index: Value,
         numbers: [f64; 3],
-    ) -> Option<(TableId, u32, [f64; 3])> {
+    ) -> Option<(TableId, u32, [f64; 3], bool)> {
         let Value::Native(id) = callee else {
             return None;
         };
@@ -432,18 +462,46 @@ impl Vm {
         let threads::NativeKind::Host(binding) = &closure.kind else {
             return None;
         };
-        let resolver = binding.triplet_resolver?;
-        resolver(
-            &IndexView::new(
-                &self.tables,
-                &self.strings.bytes,
-                self.meta_names[Meta::Index as usize],
-                &closure.captures,
-                binding.data(),
-            ),
-            index,
-            numbers,
-        )
+        let view = IndexView::new(
+            &self.tables,
+            &self.strings.bytes,
+            self.meta_names[Meta::Index as usize],
+            &closure.captures,
+            binding.data(),
+        );
+        match binding.triplet_resolver? {
+            TripletResolution::Table(resolve) => {
+                let (table, index, numbers) = resolve(&view, index, numbers)?;
+                Some((table, index, numbers, false))
+            }
+            TripletResolution::Field(resolve) => {
+                let (owner, key, index, numbers) = resolve(&view, index, numbers)?;
+                let owner = self.tables.get(owner.0)?;
+                if let Some(target) = owner.unpublished_rows(key, NumberRows::Triplets) {
+                    return Some((target, index, numbers, true));
+                }
+                let Value::Table(target) = owner.get_string(key) else {
+                    return None;
+                };
+                Some((target, index, numbers, false))
+            }
+        }
+    }
+
+    pub(super) fn watch_unpublished_rows(
+        &mut self,
+        owner: TableId,
+        key: StringId,
+        root: TableId,
+        kind: NumberRows,
+    ) {
+        let table = &mut self.tables[slot_index(owner.0)];
+        let before = table.heap_bytes();
+        // The assignment already succeeded. If reserving metadata fails,
+        // the field remains valid and uses the ordinary access path.
+        let _ = table.register_unpublished_rows(key, root, kind);
+        let after = table.heap_bytes();
+        self.note_table_resize(before, after);
     }
 
     // Host-initiated reads may use resolvers under the interpreter's condition:
@@ -1214,9 +1272,7 @@ impl HostCall<'_> {
 
     /// Fallibly create a dense array of numbers. Store, capture or return it before reentering Lua.
     pub fn try_new_number_array(&mut self, values: &[f64]) -> Result<TableId, Error> {
-        let table = self.vm.try_allocate_dense_table(values.len())?;
-        self.vm.tables[slot_index(table.0)].initialize_number_array(values);
-        Ok(table)
+        self.vm.try_allocate_number_array(values)
     }
 
     /// Store a fresh dense number array at a raw integer index.
@@ -1241,20 +1297,26 @@ impl HostCall<'_> {
             .raw_set(table, Value::Number(f64::from(index)), value)
     }
 
-    fn unpublished_number_rows(&self, owner: TableId, key: Value) -> Option<TableId> {
+    fn unpublished_number_rows(
+        &self,
+        owner: TableId,
+        key: Value,
+        kind: NumberRows,
+    ) -> Option<TableId> {
         let Value::String(key) = key else {
             return None;
         };
-        let table = self.vm.tables.get(owner.0)?;
-        if table.metatable().is_some() {
-            return None;
-        }
-        table.unpublished_rows(key)
+        self.vm.tables.get(owner.0)?.unpublished_rows(key, kind)
     }
 
-    fn writable_number_rows(&self, owner: TableId, key: Value) -> Option<TableId> {
+    fn writable_number_rows(
+        &self,
+        owner: TableId,
+        key: Value,
+        kind: NumberRows,
+    ) -> Option<TableId> {
         if self.vm.sort_fast_context() && self.vm.tables.memory().allocator().is_none() {
-            self.unpublished_number_rows(owner, key)
+            self.unpublished_number_rows(owner, key, kind)
         } else {
             None
         }
@@ -1263,7 +1325,122 @@ impl HostCall<'_> {
     /// Whether an unread field installed by [NativeStack::set_number_rows]
     /// can be reused under the current call, hook, and allocator settings.
     pub fn has_unpublished_number_rows(&self, owner: TableId, key: Value) -> bool {
-        self.writable_number_rows(owner, key).is_some()
+        self.writable_number_rows(owner, key, NumberRows::Nested)
+            .is_some()
+    }
+
+    /// Install a fresh empty array whose rows can only be written through
+    /// the triplet API until the field is read.
+    pub fn set_empty_triplet_array(
+        &mut self,
+        owner: TableId,
+        name: &'static [u8],
+    ) -> Result<(), Error> {
+        let key = self.intern_static(name)?;
+        let root = self.vm.try_new_table()?;
+        self.vm.raw_table_set(owner, key, Value::Table(root))?;
+        if let Value::String(key) = key
+            && self.vm.tables.memory().allocator().is_none()
+        {
+            self.vm
+                .watch_unpublished_rows(owner, key, root, NumberRows::Triplets);
+        }
+        Ok(())
+    }
+
+    /// Whether the field still owns an unread triplet array.
+    pub fn has_unpublished_triplets(&self, owner: TableId, key: Value) -> bool {
+        self.writable_number_rows(owner, key, NumberRows::Triplets)
+            .is_some()
+    }
+
+    /// Set a row on an unread triplet array. Returns false once Lua can
+    /// access the array, so the caller can use its ordinary assignment.
+    pub fn set_unpublished_triplet(
+        &mut self,
+        owner: TableId,
+        key: Value,
+        index: u32,
+        numbers: [f64; 3],
+    ) -> Result<bool, Error> {
+        let Some(root) = self.unpublished_number_rows(owner, key, NumberRows::Triplets) else {
+            return Ok(false);
+        };
+        if self.vm.sort_fast_context()
+            && self.vm.tables.memory().allocator().is_none()
+            && let Some(index) = index.checked_sub(1)
+            && self
+                .vm
+                .overwrite_private_triplet_at(root, index as usize, numbers)
+        {
+            return Ok(true);
+        }
+        self.raw_table_set_number_array(root, index, &numbers)?;
+        Ok(true)
+    }
+
+    /// Clear a range of rows without publishing the unread array.
+    pub fn clear_unpublished_triplets(
+        &mut self,
+        owner: TableId,
+        key: Value,
+        indices: std::ops::RangeInclusive<u32>,
+    ) -> Result<bool, Error> {
+        let Some(root) = self.writable_number_rows(owner, key, NumberRows::Triplets) else {
+            return Ok(false);
+        };
+        for index in indices {
+            self.vm
+                .raw_set(root, Value::Number(f64::from(index)), Value::Nil)?;
+        }
+        Ok(true)
+    }
+
+    /// Borrow indexed reads of an unread array. Indices are one-based and
+    /// absent rows read as zeros. The reader exposes coordinates only.
+    pub fn unpublished_triplets(
+        &self,
+        owner: TableId,
+        key: Value,
+    ) -> Option<impl Fn(usize) -> [f64; 3] + '_> {
+        let root = self.unpublished_number_rows(owner, key, NumberRows::Triplets)?;
+        let table = &self.vm.tables[slot_index(root.0)];
+        let array = table.array_values();
+        Some(move |index: usize| {
+            let value = array
+                .get(index.wrapping_sub(1))
+                .copied()
+                .unwrap_or_else(|| table.get_integer(index as i64));
+            match value {
+                Value::Nil => [0.; 3],
+                Value::Table(row) => {
+                    let [Value::Number(x), Value::Number(y), Value::Number(z)] =
+                        self.vm.tables[slot_index(row.0)].array_values()
+                    else {
+                        unreachable!("private numeric triplet");
+                    };
+                    [*x, *y, *z]
+                }
+                _ => unreachable!("private numeric row"),
+            }
+        })
+    }
+
+    /// Copy the numeric coordinates without publishing the table handles.
+    pub fn copy_unpublished_triplets(
+        &self,
+        owner: TableId,
+        key: Value,
+        count: usize,
+        mut row: impl FnMut([f64; 3]),
+    ) -> bool {
+        let Some(read) = self.unpublished_triplets(owner, key) else {
+            return false;
+        };
+        for index in 1..=count {
+            row(read(index));
+        }
+        true
     }
 
     // set_number_rows is the only constructor. No other Lua reference to an
@@ -1290,7 +1467,7 @@ impl HostCall<'_> {
         rows: &[T],
         encode: impl Fn(&T) -> [[f64; 3]; 3],
     ) -> bool {
-        let Some(root) = self.writable_number_rows(owner, key) else {
+        let Some(root) = self.writable_number_rows(owner, key, NumberRows::Nested) else {
             return false;
         };
         if self.vm.tables[slot_index(root.0)].array_values().len() != rows.len() {
@@ -1313,7 +1490,7 @@ impl HostCall<'_> {
         count: usize,
         mut row: impl FnMut(usize, [[f64; 3]; 3]),
     ) -> bool {
-        let Some(root) = self.unpublished_number_rows(owner, key) else {
+        let Some(root) = self.unpublished_number_rows(owner, key, NumberRows::Nested) else {
             return false;
         };
         let length = self.vm.tables[slot_index(root.0)].array_values().len();
@@ -1381,6 +1558,15 @@ impl HostCall<'_> {
         resolver: TripletResolver,
     ) -> Result<(), Error> {
         self.vm.set_triplet_resolver(function, resolver)
+    }
+
+    /// Register a triplet field resolver on a host function.
+    pub fn set_triplet_field_resolver(
+        &mut self,
+        function: Value,
+        resolver: TripletFieldResolver,
+    ) -> Result<(), Error> {
+        self.vm.set_triplet_field_resolver(function, resolver)
     }
 
     /// Keep temporary values alive across nested calls for the duration of `run`.

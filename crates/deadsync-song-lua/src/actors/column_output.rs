@@ -281,33 +281,56 @@ fn read_spline(
                 }
                 return Err(call.error(b"Position spline has an invalid beat conversion"));
             }
-            let points = field(call, spline, "__songlua_spline_points")?;
-            let points = table(call, points)?;
-            call.with_roots(&[Value::Table(points)], |call| {
+            let points_key = call.intern_static(splines::POINTS.as_bytes())?;
+            let points = if call.unpublished_triplets(spline, points_key).is_some() {
+                None
+            } else {
+                let points = field(call, spline, splines::POINTS)?;
+                Some(table(call, points)?)
+            };
+            call.with_roots(points.map(Value::Table).as_slice(), |call| {
                 scratch.points.clear();
                 scratch.points.reserve_exact(size);
                 let looping = field(call, spline, "__songlua_spline_loop")?.is_truthy();
-                // Borrow only the plain numeric prefix. The first coercion may
-                // enter Lua, so process the remaining rows in their old order.
-                for &point in call.raw_table_array_values(points)?.iter().take(size) {
-                    let Some(values) = raw_numeric_point(call, point)? else {
-                        break;
-                    };
-                    if values.iter().any(|value| !value.is_finite()) {
-                        break;
+                if let Some(points) = points {
+                    // Borrow only the plain numeric prefix. The first coercion may
+                    // enter Lua, so process the remaining rows in their old order.
+                    for &point in call.raw_table_array_values(points)?.iter().take(size) {
+                        let Some(values) = raw_numeric_point(call, point)? else {
+                            break;
+                        };
+                        if values.iter().any(|value| !value.is_finite()) {
+                            break;
+                        }
+                        scratch.points.push(values);
                     }
-                    scratch.points.push(values);
-                }
-                for index in scratch.points.len() + 1..=size {
-                    let values = point(call, points, index)?;
-                    if values.iter().any(|v| !v.is_finite()) {
-                        // Legacy Offset zoom uses -infinity as a binary note hide.
+                    for index in scratch.points.len() + 1..=size {
+                        let values = point(call, points, index)?;
+                        if values.iter().any(|v| !v.is_finite()) {
+                            // Legacy Offset zoom uses -infinity as a binary note hide.
+                            if !absolute {
+                                return Ok(None);
+                            }
+                            return Err(call.error(b"Position spline contains a nonfinite point"));
+                        }
+                        scratch.points.push(values);
+                    }
+                } else {
+                    let copied = call.copy_unpublished_triplets(spline, points_key, size, |row| {
+                        scratch.points.push(row.map(|value| value as f32));
+                    });
+                    debug_assert!(copied);
+                    if scratch
+                        .points
+                        .iter()
+                        .flatten()
+                        .any(|value| !value.is_finite())
+                    {
                         if !absolute {
                             return Ok(None);
                         }
                         return Err(call.error(b"Position spline contains a nonfinite point"));
                     }
-                    scratch.points.push(values);
                 }
                 let key = call.intern_static(b"__songlua_spline_coefficients")?;
                 scratch.coefficients.clear();
@@ -452,7 +475,22 @@ fn read_hides(
             let size = optional_integer(call, size)?
                 .and_then(|n| usize::try_from(n).ok())
                 .unwrap_or(0);
-            let points = field(call, spline, "__songlua_spline_points")?;
+            let key = call.intern_static(splines::POINTS.as_bytes())?;
+            if call.unpublished_triplets(spline, key).is_some() {
+                let mut hidden = Vec::with_capacity(size);
+                let copied = call.copy_unpublished_triplets(spline, key, size, |row| {
+                    hidden.push(row.into_iter().all(|point| {
+                        let point = point as f32;
+                        point.is_finite() && point <= -0.99
+                    }));
+                });
+                debug_assert!(copied);
+                out.extend(crate::note_hide_windows_from_flags(
+                    player, index, beats, &hidden,
+                ));
+                return Ok(());
+            }
+            let points = field(call, spline, splines::POINTS)?;
             let points = table(call, points)?;
             call.with_roots(&[Value::Table(points)],|call| {
                 let mut hidden=Vec::with_capacity(size);

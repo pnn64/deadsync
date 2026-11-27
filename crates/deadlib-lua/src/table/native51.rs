@@ -454,6 +454,12 @@ impl Table {
         }
         // The keys have settled into their Lua 5.1 positions. Index them once.
         replacement.native_build_index();
+        if let Some(part) = replacement.hash.as_deref_mut() {
+            part.unpublished_rows = self
+                .hash
+                .as_deref_mut()
+                .and_then(|old| old.unpublished_rows.take());
+        }
         self.array = replacement.array;
         self.hash = replacement.hash;
         if let Some(part) = self.hash.as_deref_mut() {

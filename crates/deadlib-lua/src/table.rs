@@ -215,9 +215,10 @@ enum ArrayStorage {
         memory: Memory,
         values: [Value; 3],
     },
-    SharedSequence {
+    SharedScalars {
         memory: Memory,
         values: &'static [Value],
+        sorted: bool,
     },
 }
 
@@ -256,7 +257,7 @@ impl ArrayStorage {
     fn memory(&self) -> &Memory {
         match self {
             Self::Heap { values, .. } => values.memory(),
-            Self::Triplet { memory, .. } | Self::SharedSequence { memory, .. } => memory,
+            Self::Triplet { memory, .. } | Self::SharedScalars { memory, .. } => memory,
         }
     }
 
@@ -275,21 +276,21 @@ impl ArrayStorage {
     fn allocated_capacity(&self) -> usize {
         match self {
             Self::Heap { values, .. } => values.capacity(),
-            Self::Triplet { .. } | Self::SharedSequence { .. } => 0,
+            Self::Triplet { .. } | Self::SharedScalars { .. } => 0,
         }
     }
 
     fn try_make_writable(&mut self, capacity: usize) -> Result<(), Error> {
-        if matches!(self, Self::SharedSequence { .. }) {
-            return self.copy_shared_sequence(capacity);
+        if matches!(self, Self::SharedScalars { .. }) {
+            return self.copy_shared_scalars(capacity);
         }
         Ok(())
     }
 
     #[cold]
     #[inline(never)]
-    fn copy_shared_sequence(&mut self, capacity: usize) -> Result<(), Error> {
-        let Self::SharedSequence { memory, values } = self else {
+    fn copy_shared_scalars(&mut self, capacity: usize) -> Result<(), Error> {
+        let Self::SharedScalars { memory, values, .. } = self else {
             unreachable!("only shared arrays require a copy");
         };
         let mut copy = Buffer::new_in(memory.clone());
@@ -307,7 +308,7 @@ impl std::ops::Deref for ArrayStorage {
         match self {
             Self::Heap { values, .. } => values,
             Self::Triplet { values, .. } => values,
-            Self::SharedSequence { values, .. } => values,
+            Self::SharedScalars { values, .. } => values,
         }
     }
 }
@@ -323,7 +324,7 @@ impl std::ops::DerefMut for ArrayStorage {
                 values
             }
             Self::Triplet { values, .. } => values,
-            Self::SharedSequence { .. } => unreachable!("array must be made writable first"),
+            Self::SharedScalars { .. } => unreachable!("array must be made writable first"),
         }
     }
 }
@@ -335,6 +336,24 @@ struct UnpublishedRows {
     observed: AtomicBool,
 }
 
+impl UnpublishedRows {
+    fn unread(&self) -> bool {
+        !self.observed.load(Ordering::Relaxed)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum NumberRows {
+    Triplets,
+    Nested,
+}
+
+#[derive(Debug, Default)]
+struct UnpublishedFields {
+    triplets: Option<UnpublishedRows>,
+    nested: Option<UnpublishedRows>,
+}
+
 #[derive(Debug)]
 struct HashPart {
     entries: Buffer<Entry>,
@@ -343,17 +362,24 @@ struct HashPart {
     last_free: u32,
     // Two one-based indices. Keys are checked before using either hint.
     next_hash_hint: AtomicU64,
-    unpublished_rows: Option<Unique<UnpublishedRows>>,
+    unpublished_rows: Option<Unique<UnpublishedFields>>,
 }
 
 impl HashPart {
     #[inline]
     fn read_value(&self, entry: &Entry) -> Value {
-        if let Some(watch) = &self.unpublished_rows
-            && matches!(entry.key, Key::String(key) if key == watch.key)
-            && entry.value == Value::Table(watch.root)
+        if let Value::Table(root) = entry.value
+            && let Some(fields) = &self.unpublished_rows
+            && let Key::String(key) = entry.key
         {
-            watch.observed.store(true, Ordering::Relaxed);
+            for watch in [fields.triplets.as_ref(), fields.nested.as_ref()]
+                .into_iter()
+                .flatten()
+            {
+                if key == watch.key && root == watch.root {
+                    watch.observed.store(true, Ordering::Relaxed);
+                }
+            }
         }
         entry.value
     }
@@ -491,15 +517,45 @@ impl Table {
     }
     pub(crate) fn with_dense_sequence(len: usize, native51: bool, memory: Memory) -> Option<Self> {
         Some(Self {
-            array: ArrayStorage::SharedSequence {
+            array: ArrayStorage::SharedScalars {
                 memory,
                 values: ARRAY_SEQUENCE.get(..len)?,
+                sorted: true,
             },
             native51,
             fields_version: u32::from(native51),
             ..Self::default()
         })
     }
+    // Fresh native tables retain distinct identities while their common
+    // scalar values can share immutable storage until the first write.
+    pub(crate) fn with_shared_number_array(numbers: &[f64], memory: &Memory) -> Option<Self> {
+        const ZERO: u64 = 0.0f64.to_bits();
+        const ONE: u64 = 1.0f64.to_bits();
+        static ZEROS: [Value; 4] = [Value::Number(0.); 4];
+        static ONES: [Value; 4] = [Value::Number(1.); 4];
+        static QUATERNION: [Value; 4] = [ZEROS[0], ZEROS[0], ZEROS[0], ONES[0]];
+        static TRANSPARENT_WHITE: [Value; 4] = [ONES[0], ONES[0], ONES[0], ZEROS[0]];
+        let numbers: &[f64; 4] = numbers.try_into().ok()?;
+        let (values, sorted) = match numbers.map(f64::to_bits) {
+            [ZERO, ZERO, ZERO, ZERO] => (&ZEROS, true),
+            [ONE, ONE, ONE, ONE] => (&ONES, true),
+            [ZERO, ZERO, ZERO, ONE] => (&QUATERNION, true),
+            [ONE, ONE, ONE, ZERO] => (&TRANSPARENT_WHITE, false),
+            _ => return None,
+        };
+        Some(Self {
+            array: ArrayStorage::SharedScalars {
+                memory: memory.clone(),
+                values,
+                sorted,
+            },
+            native51: true,
+            fields_version: 1,
+            ..Self::default()
+        })
+    }
+
     #[inline]
     fn hash_part(&self) -> &HashPart {
         self.hash.as_deref().unwrap_or(&EMPTY_HASH)
@@ -532,6 +588,7 @@ impl Table {
         &mut self,
         key: StringId,
         root: TableId,
+        kind: NumberRows,
     ) -> Result<(), Error> {
         let watch = UnpublishedRows {
             key,
@@ -540,17 +597,24 @@ impl Table {
         };
         let memory = self.array.memory().clone();
         let part = self.hash_part_mut();
-        if let Some(previous) = &mut part.unpublished_rows {
-            **previous = watch;
-        } else {
-            part.unpublished_rows = Some(Unique::try_new_in(watch, memory)?);
+        if part.unpublished_rows.is_none() {
+            part.unpublished_rows = Some(Unique::try_new_in(UnpublishedFields::default(), memory)?);
+        }
+        let fields = part.unpublished_rows.as_mut().unwrap();
+        match kind {
+            NumberRows::Triplets => fields.triplets = Some(watch),
+            NumberRows::Nested => fields.nested = Some(watch),
         }
         Ok(())
     }
 
-    pub(crate) fn unpublished_rows(&self, key: StringId) -> Option<TableId> {
-        let watch = self.hash.as_ref()?.unpublished_rows.as_ref()?;
-        if key != watch.key || watch.observed.load(Ordering::Relaxed) {
+    pub(crate) fn unpublished_rows(&self, key: StringId, kind: NumberRows) -> Option<TableId> {
+        let fields = self.hash.as_ref()?.unpublished_rows.as_ref()?;
+        let watch = match kind {
+            NumberRows::Triplets => fields.triplets.as_ref(),
+            NumberRows::Nested => fields.nested.as_ref(),
+        }?;
+        if key != watch.key || !watch.unread() || self.metatable().is_some() {
             return None;
         }
         let (_, index) = self.slot(Key::String(key))?;
@@ -639,7 +703,7 @@ impl Table {
                 part.heap_bytes()
                     + part.entries.capacity() * size_of::<Entry>()
                     + part.slots.capacity() * size_of::<u32>()
-                    + usize::from(part.unpublished_rows.is_some()) * size_of::<UnpublishedRows>()
+                    + usize::from(part.unpublished_rows.is_some()) * size_of::<UnpublishedFields>()
             })
     }
     pub(crate) fn parser_pristine(&self) -> bool {
@@ -846,7 +910,7 @@ impl Table {
     }
     pub(crate) fn is_scalar_array_only(&self) -> bool {
         self.hash_part().entries.is_empty()
-            && (matches!(self.array, ArrayStorage::SharedSequence { .. })
+            && (matches!(self.array, ArrayStorage::SharedScalars { .. })
                 || (self.array.len() <= 4 && self.array.iter().copied().all(array_scalar)))
     }
 
@@ -860,6 +924,15 @@ impl Table {
         for (slot, &number) in self.array.iter_mut().zip(values) {
             *slot = Value::Number(number);
         }
+    }
+
+    // The caller proved that Lua has never received the row or its owner array.
+    pub(crate) fn overwrite_private_triplet(&mut self, numbers: [f64; 3]) -> bool {
+        let ArrayStorage::Triplet { values, .. } = &mut self.array else {
+            return false;
+        };
+        *values = numbers.map(Value::Number);
+        true
     }
 
     fn take_hash(&mut self, key: Key) -> Option<Value> {
@@ -876,7 +949,7 @@ impl Table {
     // Equal finite numbers have identical bits after excluding negative zero,
     // so an unstable numeric sort cannot expose a changed tie permutation.
     pub(crate) fn scalar_sort_values(&mut self, len: usize, numbers: bool) -> Option<&mut [Value]> {
-        if self.metatable().is_some() || matches!(self.array, ArrayStorage::SharedSequence { .. }) {
+        if self.metatable().is_some() || matches!(self.array, ArrayStorage::SharedScalars { .. }) {
             return None;
         }
         let values = self.array.get(..len)?;
@@ -891,8 +964,8 @@ impl Table {
         Some(&mut self.array[..len])
     }
     pub(crate) fn sort_finite_numbers(&mut self, len: usize) -> bool {
-        if matches!(self.array, ArrayStorage::SharedSequence { .. }) {
-            return len <= self.array.len();
+        if let ArrayStorage::SharedScalars { values, sorted, .. } = &self.array {
+            return *sorted && len <= values.len();
         }
         let Some(values) = self.array.get(..len) else {
             return false;
@@ -959,7 +1032,7 @@ impl Table {
         last: i64,
         insert: Option<Value>,
     ) -> Option<Value> {
-        if matches!(self.array, ArrayStorage::SharedSequence { .. }) {
+        if matches!(self.array, ArrayStorage::SharedScalars { .. }) {
             return None;
         }
         let array = self.array.get_mut(array_range(first, last)?)?;
@@ -1084,13 +1157,17 @@ impl Table {
         }
     }
     pub(crate) fn can_replace_array_value(&self, index: usize) -> bool {
-        !matches!(self.array, ArrayStorage::SharedSequence { .. }) && index < self.array.len()
+        !matches!(self.array, ArrayStorage::SharedScalars { .. }) && index < self.array.len()
     }
 
     #[inline]
     pub(crate) fn replace_array_value(&mut self, index: usize, value: Value) -> bool {
-        if matches!(self.array, ArrayStorage::SharedSequence { .. }) {
-            return self.array.get(index).is_some_and(|&old| old == value);
+        if matches!(self.array, ArrayStorage::SharedScalars { .. }) {
+            return matches!(
+                (self.array.get(index), value),
+                (Some(Value::Number(old)), Value::Number(new))
+                    if old.to_bits() == new.to_bits()
+            );
         }
         let Some(slot) = self.array.get_mut(index) else {
             return false;
@@ -1112,9 +1189,10 @@ impl Table {
         {
             return false;
         }
-        self.array = ArrayStorage::SharedSequence {
+        self.array = ArrayStorage::SharedScalars {
             memory: self.array.memory().clone(),
             values,
+            sorted: true,
         };
         self.touch_array();
         true
@@ -1129,7 +1207,7 @@ impl Table {
     ) -> Option<(usize, usize)> {
         if self.metatable != 0
             || !self.hash_part().slots.is_empty()
-            || matches!(self.array, ArrayStorage::SharedSequence { .. })
+            || matches!(self.array, ArrayStorage::SharedScalars { .. })
             || start > self.array.len()
         {
             return None;
@@ -1451,7 +1529,7 @@ impl Table {
     // in SETLIST order. A same-size copy leaves the array's shape intact.
     #[inline]
     pub(crate) fn set_scalar_list_in_place(&mut self, start: usize, values: &[Value]) -> bool {
-        if matches!(self.array, ArrayStorage::SharedSequence { .. }) {
+        if matches!(self.array, ArrayStorage::SharedScalars { .. }) {
             return false;
         }
         let Some(slots) = self.array.get_mut(start..start + values.len()) else {

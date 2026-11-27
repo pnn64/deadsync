@@ -117,6 +117,61 @@ fn observed_coefficient_rows_keep_their_old_identity_and_values() {
 }
 
 #[test]
+fn observed_spline_points_keep_their_old_rows_across_writes_and_resize() {
+    let readers = [
+        "return spline.__songlua_spline_points",
+        "return spline[key]",
+        "return rawget(spline, key)",
+        "for k, v in pairs(spline) do if k == key then return v end end",
+        "local k, v = next(spline); while k and k ~= key do k, v = next(spline, k) end; return v",
+    ];
+    for live in [false, true] {
+        for reader in readers {
+            let mut context = SongLuaCompileContext::new(Path::new("."), "Spline point aliases");
+            context.live = live;
+            let mut runtime = SongRuntime::new(&context).unwrap();
+            let scene = test_support::note_field(&mut runtime, 1, "single").unwrap();
+            let field = runtime.actor_scene_root(scene).unwrap();
+            let vm = runtime.vm_mut();
+            vm.set_global(b"nf", field).unwrap();
+            let source = r#"
+                local s = nf:GetColumnActors()[1]:GetPosHandler():GetSpline()
+                local function read(spline, key)
+                    READ_POINTS
+                end
+                s:SetSize(3)
+                s:SetPoint(1, {1, 2, 3})
+                s:SetPoint(2, {4, 5, 6})
+                s:SetPoint(3, {7, 8, 9})
+                s:Solve()
+                s:SetSize(2)
+                s:SetPoint(1, {-1, -2, -3})
+                s:Solve()
+                assert(s:evaluate(0)[1] == -1)
+                local points = read(s, '__songlua_spline_points')
+                assert(points[3] == nil)
+                local old_first, old_second = points[1], points[2]
+                s:SetPoint(1, {10, 20, 30})
+                local input = {40, 50, 60}
+                s:SetPoint(2, input)
+                assert(points[1] ~= old_first and points[2] ~= old_second)
+                assert(old_first[1] == -1 and old_first[2] == -2 and old_first[3] == -3)
+                assert(old_second[1] == 4 and old_second[2] == 5 and old_second[3] == 6)
+                old_first[1], input[1] = 100, 200
+                assert(points[1][1] == 10 and points[2][1] == 40)
+                assert(read(s, '__songlua_spline_points') == points)
+                s:SetSize(1)
+                assert(points[2] == nil and old_second[1] == 4)
+                "#
+            .replace("READ_POINTS", reader);
+            let program =
+                compile_named(source.as_bytes(), b"@/fixture/spline_point_aliases.lua").unwrap();
+            vm.execute(&program).unwrap();
+        }
+    }
+}
+
+#[test]
 fn construction_eagerly_owns_style_columns_board_and_spline_handlers() {
     for style in ["single", "double", "solo", "pump-single", "pump-double"] {
         for live in [false, true] {
