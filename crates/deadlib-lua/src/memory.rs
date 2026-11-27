@@ -18,6 +18,7 @@ mod buffer;
 pub(crate) use buffer::Buffer;
 pub(crate) mod bytes;
 mod shared;
+pub(crate) mod short_strings;
 mod unique;
 pub(crate) use unique::Unique;
 pub(crate) mod text;

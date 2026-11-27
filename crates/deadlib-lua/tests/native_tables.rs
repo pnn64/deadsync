@@ -755,3 +755,46 @@ fn filtered_string_keys_respect_the_modulo_binding_and_table_metatable() {
         [Value::Boolean(true)]
     );
 }
+
+#[test]
+fn filtered_string_keys_recheck_native_bindings_after_a_finalizer() {
+    let mut vm = Vm::new();
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+        local original = math.mod
+        collectgarbage('collect')
+        collectgarbage('setpause', 140)
+        collectgarbage('stop')
+        local finalized = 0
+        local proxy = newproxy(true)
+        getmetatable(proxy).__gc = function()
+            finalized = finalized + 1
+            math.mod = function() return 1 end
+        end
+        proxy = nil
+        collectgarbage('restart')
+        local target = {}
+        for i = 0, 49999 do
+            if math.mod(i, 3) ~= 1 then
+                target['record.' .. i] = i
+            end
+        end
+        assert(finalized == 1)
+        assert(target['record.0'] == 0 and target['record.49998'] == nil)
+        local last = 0
+        for key, value in pairs(target) do
+            assert(key == 'record.' .. value and original(value, 3) ~= 1)
+            if value > last then last = value end
+        end
+        for i = 0, last do
+            if original(i, 3) ~= 1 then assert(target['record.' .. i] == i) end
+        end
+        math.mod = original
+        return true
+    "#,
+        ),
+        [Value::Boolean(true)]
+    );
+}

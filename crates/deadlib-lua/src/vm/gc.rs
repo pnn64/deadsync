@@ -736,7 +736,8 @@ impl Vm {
         let mut payload = self.strings.payload_bytes
             + self.strings.buckets.capacity() * 4
             + self.strings.packed_bytes
-            + self.strings.packed.capacity() * size_of::<Shared<Buffer<u8>>>();
+            + self.strings.packed.capacity() * size_of::<Shared<Buffer<u8>>>()
+            + self.strings.short.heap_bytes();
         payload += self.object_payload_bytes;
         payload += self.io.heap_bytes();
         let mut control = self.registers.capacity() * std::mem::size_of::<Value>()

@@ -42,7 +42,10 @@ mod threads;
 mod traces;
 mod userdata;
 use crate::arena::{Arena, index as slot_index};
-use crate::memory::{Buffer, Memory, Shared};
+use crate::memory::{
+    Buffer, Memory, Shared,
+    short_strings::{ShortString, ShortStrings},
+};
 pub use gc::{GcOperation, HeapStats, Root};
 pub use host::{
     HostCall, HostFunction, HostThreadState, IndexResolver, IndexView, NativeBuiltinBody,
@@ -76,6 +79,7 @@ struct ByteString {
 enum StringStorage {
     Owned(Buffer<u8>),
     Packed(Shared<[u8]>),
+    Short(ShortString),
 }
 
 impl ByteString {
@@ -98,12 +102,13 @@ impl ByteString {
         match &self.storage {
             StringStorage::Owned(storage) => storage,
             StringStorage::Packed(storage) => storage,
+            StringStorage::Short(storage) => storage.c_bytes(),
         }
     }
     fn storage_bytes(&self) -> usize {
         match &self.storage {
             StringStorage::Owned(storage) => storage.capacity(),
-            StringStorage::Packed(_) => 0,
+            StringStorage::Packed(_) | StringStorage::Short(_) => 0,
         }
     }
 }
@@ -130,6 +135,7 @@ struct Strings {
     // during sweep. Each interned string retains its own terminated view.
     packed: Buffer<Shared<Buffer<u8>>>,
     packed_bytes: usize,
+    short: ShortStrings,
 }
 
 impl Strings {
@@ -143,8 +149,9 @@ impl Strings {
             reclaimed_epoch: 0,
             buckets: Buffer::new_in(memory.clone()),
             payload_bytes: 0,
-            packed: Buffer::new_in(memory),
+            packed: Buffer::new_in(memory.clone()),
             packed_bytes: 0,
+            short: ShortStrings::new_in(memory),
         }
     }
     fn hash(bytes: &[u8]) -> usize {
@@ -254,8 +261,20 @@ impl Strings {
                 Ok(id)
             }
             Err(vacant) => {
-                let owned = ByteString::try_new(bytes, hash, self.bytes.memory().clone())?;
-                self.try_add(owned, vacant)
+                let string = if self.bytes.memory().uses_global_allocator()
+                    && self.bytes.live_len() >= 512
+                    && ShortStrings::fits(bytes)
+                {
+                    let (storage, growth) = self.short.insert(bytes)?;
+                    self.bytes.note_alloc(growth);
+                    ByteString {
+                        storage: StringStorage::Short(storage),
+                        hash,
+                    }
+                } else {
+                    ByteString::try_new(bytes, hash, self.bytes.memory().clone())?
+                };
+                self.try_add(string, vacant)
             }
         }
     }
@@ -373,6 +392,7 @@ impl Strings {
     }
 
     fn sweep_packed(&mut self) {
+        self.short.sweep();
         let retained = &mut self.packed_bytes;
         self.packed.retain(|block| {
             if block.is_sole_owner() {
