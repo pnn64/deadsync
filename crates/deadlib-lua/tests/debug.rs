@@ -370,3 +370,52 @@ fn compare(source: &[u8]) {
 #[allow(dead_code)]
 #[path = "../src/reference_test.rs"]
 mod reference_test;
+
+#[test]
+fn closed_source_keeps_native_hook_boundaries() {
+    let program = compile(
+        br#"
+        function identity(v) return v end
+        local cases = {
+          {
+            "if true then\n  if false then OUTPUT = false end\nelse OUTPUT = true end",
+            "nil", "2,3", "C2,L2,C2,C3,L3",
+          },
+          {
+            "local a = [[one\ntwo\nthree]]\nOUTPUT = a == [[one\ntwo\nthree]]",
+            "true", "3,6", "C3,L3,C6,L6,C6,C6,C6",
+          },
+          {
+            "local a = (\n  identity(\n   nil\n  )\n )\nOUTPUT = not a",
+            "true", "2,4,6", "C2,L2,C4,L4,C2,L2,C6,L6,C6,C6",
+          },
+        }
+        local name = "=closed-hook-boundaries"
+        local events
+        local function hook(event, line)
+          local frame = debug.getinfo(2, "Sl")
+          if frame.source == name then
+            events[#events + 1] = (event == "count" and "C" or "L") .. (line or frame.currentline)
+          end
+        end
+        for _, case in ipairs(cases) do
+          local chunk = assert(loadstring(case[1] .. "\n--" .. string.rep(" ", 128), name))
+          local active = {}
+          for line in pairs(debug.getinfo(chunk, "L").activelines) do
+            active[#active + 1] = line
+          end
+          table.sort(active)
+          assert(table.concat(active, ",") == case[3])
+          OUTPUT, events = nil, {}
+          debug.sethook(hook, "l", 1)
+          local ok, err = pcall(chunk)
+          debug.sethook()
+          assert(ok, err)
+          assert(tostring(OUTPUT) == case[2])
+          assert(table.concat(events, ",") == case[4])
+        end
+        "#,
+    )
+    .unwrap();
+    Vm::new().execute(&program).unwrap();
+}

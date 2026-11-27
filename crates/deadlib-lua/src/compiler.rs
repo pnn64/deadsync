@@ -15,11 +15,13 @@ use crate::{
 
 mod boolean;
 mod constants;
+mod direct;
 mod expressions;
 mod numeric_templates;
 mod statements;
 mod tasks;
 mod templates;
+pub(crate) use direct::compile_direct;
 use tasks::Task;
 
 /// Bytes of a local or upvalue name in the compiler's name pool.
@@ -68,6 +70,11 @@ enum TargetKey {
     Constant(u32),
 }
 
+enum CallName<'a> {
+    Constant(u32),
+    Text(&'a [u8]),
+}
+
 #[derive(Clone, Copy)]
 enum LineUse {
     Operand,
@@ -98,6 +105,8 @@ impl std::ops::DerefMut for Emission {
 #[derive(Default)]
 struct Function {
     code: Vec<Emission>,
+    /// The direct parser can redirect these exits through a source jump.
+    pending_jumps: boolean::List,
     jump_targets: Vec<u32>,
     jump_path: Vec<usize>,
     // An empty dense table keeps the function in consecutive-prefix mode.
@@ -134,6 +143,7 @@ impl Function {
     /// Restore the default state while keeping every buffer's capacity.
     fn reset(&mut self) {
         self.code.clear();
+        self.pending_jumps = boolean::List::default();
         self.gc_maps.clear();
         self.gc_prefix_start = 0;
         self.gc_prefix_len = 0;
@@ -430,6 +440,9 @@ impl<'a> Compiler<'a> {
             if instruction.op != Op::Close {
                 previous = Some(instruction);
             }
+            if instruction.op == Op::Jump && instruction.b == direct::HOOK_JUMP {
+                instruction.b = 0;
+            }
             code.push(instruction);
             metadata.push(InstructionMetadata {
                 line: emitted.line,
@@ -720,6 +733,10 @@ impl<'a> Compiler<'a> {
             }
         }
         let pc = self.function.code.len();
+        if !self.function.pending_jumps.is_empty() {
+            let pending = std::mem::take(&mut self.function.pending_jumps);
+            self.list_patch(pending, pc);
+        }
         if pc >= u32::MAX as usize {
             return Err(self.error(ErrorKind::Limit, "function has too many instructions"));
         }
@@ -970,6 +987,16 @@ impl<'a> Compiler<'a> {
                 _ => (b"".as_slice(), NameKind::Unknown),
             }
         };
+        let name = constant.map_or(CallName::Text(name), CallName::Constant);
+        self.record_call_site(name, kind, base)
+    }
+
+    fn record_call_site(
+        &mut self,
+        name: CallName<'_>,
+        kind: NameKind,
+        base: u8,
+    ) -> Result<(), Error> {
         let start = u32::try_from(self.function.debug_temporaries.len())
             .map_err(|_| self.error(ErrorKind::Limit, "too many debug temporaries"))?;
         let base = u32::from(base);
@@ -990,10 +1017,9 @@ impl<'a> Compiler<'a> {
         }
         let end = u32::try_from(self.function.debug_temporaries.len())
             .map_err(|_| self.error(ErrorKind::Limit, "too many debug temporaries"))?;
-        let name = if let Some(constant) = constant {
-            DebugName::constant(constant)
-        } else {
-            DebugName::store(&mut self.function.debug_names, name)?
+        let name = match name {
+            CallName::Constant(id) => DebugName::constant(id),
+            CallName::Text(text) => DebugName::store(&mut self.function.debug_names, text)?,
         };
         self.function.debug_calls.try_push(DebugCall {
             pc: self.function.code.len() as u32,

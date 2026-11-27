@@ -72,6 +72,10 @@ impl<'a> Key<'a> {
 }
 
 impl Constants {
+    pub(super) fn len(&self) -> usize {
+        self.values.len()
+    }
+
     /// Publish the exact-size pools, keeping their work buffers for reuse.
     pub fn finish(&mut self) -> Result<PackedConstants, Error> {
         let strings = self.strings.try_boxed()?;

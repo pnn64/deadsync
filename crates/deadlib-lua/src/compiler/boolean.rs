@@ -55,6 +55,28 @@ pub(super) struct List {
     tail: u32,
 }
 impl List {
+    pub(super) fn join(&mut self, code: &mut [Emission], right: Self) {
+        if right.is_empty() {
+            return;
+        }
+        if self.is_empty() {
+            self.head = right.head;
+        } else {
+            code[self.tail as usize - 1].c = right.head;
+        }
+        self.tail = right.tail;
+    }
+
+    pub(super) fn is_empty(self) -> bool {
+        self.head == 0
+    }
+
+    pub(super) fn take(&mut self, code: &[Emission]) -> Option<usize> {
+        let pc = self.head.checked_sub(1)? as usize;
+        self.head = code[pc].c;
+        Some(pc)
+    }
+
     pub(super) fn push(&mut self, code: &mut [Emission], pc: usize) {
         let link = pc as u32 + 1;
         if self.tail != 0 {
@@ -95,16 +117,8 @@ impl Compiler<'_> {
     pub(super) fn list_push(&mut self, list: &mut List, pc: usize) {
         list.push(&mut self.function.code, pc);
     }
-    fn list_join(&mut self, left: &mut List, right: List) {
-        if right.head == 0 {
-            return;
-        }
-        if left.tail != 0 {
-            self.function.code[left.tail as usize - 1].c = right.head;
-        } else {
-            left.head = right.head;
-        }
-        left.tail = right.tail;
+    pub(super) fn list_join(&mut self, left: &mut List, right: List) {
+        left.join(&mut self.function.code, right);
     }
     pub(super) fn list_patch(&mut self, mut list: List, target: usize) {
         while list.head != 0 {

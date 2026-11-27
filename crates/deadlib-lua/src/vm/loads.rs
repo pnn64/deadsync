@@ -302,6 +302,13 @@ pub(super) fn compile(
     if let Some(program) = spare.find_text(source, name, depth, parse_locale, preamble.as_ref()) {
         return program;
     }
+    // Bound the work of trying direct emission before a full parse.
+    if (128..=2048).contains(&source.len())
+        && depth <= 96
+        && let Some(program) = crate::compiler::compile_direct(source, name, &mut spare.compiler)?
+    {
+        return Ok(program);
+    }
     let mut parser = crate::parser::Parser::try_new_in(&mut spare.parser, depth)?;
     let parsed = parser.resume(source, true);
     let candidate = if parsed.is_ok() {
