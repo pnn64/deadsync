@@ -1,0 +1,12 @@
+[package]
+name = "deadlib-video-hevc"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+description = "Dependency-free H.265/HEVC video decoder"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/pnn64/deadsync"
+keywords = ["hevc", "h265", "video", "decoder"]
+categories = ["multimedia::video"]
+
+[workspace]
