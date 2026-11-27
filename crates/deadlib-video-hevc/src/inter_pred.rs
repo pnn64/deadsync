@@ -340,6 +340,20 @@ fn filter_px<'a, P: Pixel, const N: usize>(
 ) {
     let w = out.len();
     let rows: [&[P]; N] = std::array::from_fn(|k| &src(k)[..w]);
+    #[cfg(target_arch = "x86_64")]
+    if P::BITS == 8 && w >= 4 && std::arch::is_x86_feature_detected!("ssse3") {
+        // The decoder instantiates byte planes as u8 and word planes as u16.
+        // Each checked row covers w samples, and the SIMD path writes full chunks.
+        let processed = unsafe { filter_byte_rows_ssse3(out, rows, f, shift) };
+        for i in processed..w {
+            let mut sum = 0i16;
+            for k in 0..N {
+                sum += f[k] * rows[k][i].to_i32() as i16;
+            }
+            out[i] = sum >> shift;
+        }
+        return;
+    }
     // Tap-major over fixed 8-lane chunks: the accumulators stay in
     // registers (no per-row array to initialise) and each tap is one
     // multiply-add across the chunk; the tail handles narrow chroma
@@ -391,6 +405,53 @@ fn filter_px<'a, P: Pixel, const N: usize>(
             out[i] = (a >> shift) as i16;
         }
     }
+}
+
+/// Combines pairs of byte taps into eight or four signed 16-bit results.
+/// Each pair and the full sum fit without saturation by MAX_FILTER_ABS_SUM.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "ssse3")]
+unsafe fn filter_byte_rows_ssse3<P: Pixel, const N: usize>(
+    out: &mut [i16],
+    rows: [&[P]; N],
+    taps: &[i16; N],
+    shift: u32,
+) -> usize {
+    use core::arch::x86_64::*;
+    let coeffs: [__m128i; N] = core::array::from_fn(|i| {
+        let low = taps[i] as u8;
+        let high = taps.get(i + 1).copied().unwrap_or(0) as u8;
+        _mm_set1_epi16(i16::from_le_bytes([low, high]))
+    });
+    let complete = out.len() / 4 * 4;
+    let shift = _mm_cvtsi32_si128(shift as i32);
+    let mut x = 0;
+    while x < complete {
+        let wide = x + 8 <= complete;
+        let load = |row: &[P]| {
+            let ptr = unsafe { row.as_ptr().add(x) };
+            if wide {
+                unsafe { _mm_loadl_epi64(ptr.cast()) }
+            } else {
+                _mm_cvtsi32_si128(unsafe { ptr.cast::<i32>().read_unaligned() })
+            }
+        };
+        let mut value = _mm_setzero_si128();
+        for tap in (0..N).step_by(2) {
+            let samples = _mm_unpacklo_epi8(load(rows[tap]), load(rows[tap + 1]));
+            value = _mm_add_epi16(value, _mm_maddubs_epi16(samples, coeffs[tap]));
+        }
+        value = _mm_sra_epi16(value, shift);
+        let dst = unsafe { out.as_mut_ptr().add(x) };
+        if wide {
+            unsafe { _mm_storeu_si128(dst.cast(), value) };
+            x += 8;
+        } else {
+            unsafe { _mm_storel_epi64(dst.cast(), value) };
+            x += 4;
+        }
+    }
+    complete
 }
 
 /// Horizontal N-tap filter of one row: `out[i] = (Σ f[k] * src[i + k]) >> shift`.

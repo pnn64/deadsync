@@ -394,8 +394,37 @@ fn edge_offset_row<P: Pixel>(
     // so the loop runs in 16-bit lanes: twice the samples per vector
     // instruction of i32.
     let [o_m2, o_m1, _, o_p1, o_p2] = off_by_sum.map(|o| o as i16);
+    let mut start = 0;
+    #[cfg(not(target_arch = "x86_64"))]
+    let _ = &mut start;
+    #[cfg(target_arch = "x86_64")]
+    if P::BITS == 8
+        && bit_depth == 8
+        && out.len() >= 16
+        && std::arch::is_x86_feature_detected!("ssse3")
+        && [o_m2, o_m1, o_p1, o_p2]
+            .iter()
+            .all(|&o| i8::try_from(o).is_ok())
+    {
+        // Byte planes use u8 samples. The four equal-length rows cover every
+        // vector read and write, and the offsets fit in signed byte lanes.
+        start = unsafe {
+            edge_offset_u8_ssse3(
+                out,
+                cur,
+                a,
+                b,
+                [o_m2 as i8, o_m1 as i8, o_p1 as i8, o_p2 as i8],
+            )
+        };
+    }
     let max = ((1i32 << bit_depth) - 1) as i16;
-    for (((o, &c), &a), &b) in out.iter_mut().zip(cur).zip(a).zip(b) {
+    for (((o, &c), &a), &b) in out[start..]
+        .iter_mut()
+        .zip(&cur[start..])
+        .zip(&a[start..])
+        .zip(&b[start..])
+    {
         let v = edge_offset_px(
             c.to_i32() as i16,
             a.to_i32() as i16,
@@ -405,6 +434,40 @@ fn edge_offset_row<P: Pixel>(
         );
         *o = P::from_i32_clamped(v as i32, bit_depth);
     }
+}
+
+/// Applies the five HEVC edge categories to sixteen byte samples at a time.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "ssse3")]
+unsafe fn edge_offset_u8_ssse3<P: Pixel>(
+    out: &mut [P],
+    cur: &[P],
+    a: &[P],
+    b: &[P],
+    [m2, m1, p1, p2]: [i8; 4],
+) -> usize {
+    use core::arch::x86_64::*;
+    let end = out.len() / 16 * 16;
+    let bias = _mm_set1_epi8(i8::MIN);
+    let two = _mm_set1_epi8(2);
+    let zero = _mm_setzero_si128();
+    let table = _mm_setr_epi8(m2, m1, 0, p1, p2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    for x in (0..end).step_by(16) {
+        let c = unsafe { _mm_loadu_si128(cur.as_ptr().add(x).cast()) };
+        let a = _mm_xor_si128(unsafe { _mm_loadu_si128(a.as_ptr().add(x).cast()) }, bias);
+        let b = _mm_xor_si128(unsafe { _mm_loadu_si128(b.as_ptr().add(x).cast()) }, bias);
+        let biased_c = _mm_xor_si128(c, bias);
+        let ca = _mm_sub_epi8(_mm_cmpgt_epi8(a, biased_c), _mm_cmpgt_epi8(biased_c, a));
+        let cb = _mm_sub_epi8(_mm_cmpgt_epi8(b, biased_c), _mm_cmpgt_epi8(biased_c, b));
+        let category = _mm_add_epi8(_mm_add_epi8(ca, cb), two);
+        let offset = _mm_shuffle_epi8(table, category);
+        let negative = _mm_cmpgt_epi8(zero, offset);
+        let add = _mm_andnot_si128(negative, offset);
+        let sub = _mm_and_si128(negative, _mm_abs_epi8(offset));
+        let filtered = _mm_subs_epu8(_mm_adds_epu8(c, add), sub);
+        unsafe { _mm_storeu_si128(out.as_mut_ptr().add(x).cast(), filtered) };
+    }
+    end
 }
 
 /// One edge-offset sample: `clip(c + offset)`, the offset picked by
