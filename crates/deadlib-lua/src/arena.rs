@@ -86,6 +86,22 @@ pub(crate) fn index(key: u64) -> usize {
     key as u32 as usize
 }
 impl<T> Arena<T> {
+    pub(crate) fn has_insertion_space(&self) -> bool {
+        !self.free.is_empty()
+            || (self.values.len() < u32::MAX as usize
+                && self.has_reserved_slots(self.values.len() + 1))
+    }
+
+    fn has_reserved_slots(&self, total: usize) -> bool {
+        total <= self.values.capacity()
+            && total <= self.generations.capacity()
+            && total <= self.free.capacity()
+            && total.div_ceil(64) <= self.marks.capacity()
+            && self.identities.as_ref().is_none_or(|identities| {
+                total.div_ceil(IDENTITY_PAGE) <= identities.pages.len()
+            })
+    }
+
     pub fn insert(&mut self, value: T) -> u64 {
         self.try_insert(value).expect("allocate Lua arena slot")
     }
@@ -105,15 +121,7 @@ impl<T> Arena<T> {
             return Err(Error::memory());
         }
         let marks = total.div_ceil(64);
-        if total <= self.values.capacity()
-            && total <= self.generations.capacity()
-            && total <= self.free.capacity()
-            && marks <= self.marks.capacity()
-            && self
-                .identities
-                .as_ref()
-                .is_none_or(|identities| total.div_ceil(IDENTITY_PAGE) <= identities.pages.len())
-        {
+        if self.has_reserved_slots(total) {
             return Ok(());
         }
         self.grow_slots(additional, total, marks)

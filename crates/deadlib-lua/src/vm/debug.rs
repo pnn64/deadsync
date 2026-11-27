@@ -42,6 +42,8 @@ const INFO_UPVALUES: u8 = 1 << 4;
 const INFO_ACTIVE_LINES: u8 = 1 << 5;
 const INFO_INVALID: u8 = 1 << 6;
 const INFO_DEFAULT: u8 = INFO_FUNC | INFO_LINE | INFO_NAME | INFO_SOURCE | INFO_UPVALUES;
+static NAME_FIELD: &[u8] = b"name";
+static NAME_KIND_FIELD: &[u8] = b"namewhat";
 
 fn info_flags(bytes: &[u8]) -> u8 {
     let mut flags = 0;
@@ -93,6 +95,69 @@ pub(super) fn integer(value: f64) -> i32 {
 }
 
 impl Vm {
+    /// Read an immediately consumed field of a name-only stack query.
+    /// The caller proves that the lookup overwrites the fresh result table.
+    #[cold]
+    pub(super) fn try_debug_name_field(
+        &mut self,
+        call: usize,
+        frame: usize,
+        key: Value,
+    ) -> bool {
+        let (Value::Number(1.0), Value::String(options), Value::String(key)) = (
+            self.registers[call + 1],
+            self.registers[call + 2],
+            key,
+        ) else {
+            return false;
+        };
+        let key = self.strings.bytes[slot_index(key.0)].as_ref();
+        if !matches!(key, b"name" | b"namewhat")
+            || self.strings.bytes[slot_index(options.0)].as_ref() != b"n"
+            || !self.has_numeric_call_space(0)
+            || !self.registers.memory().uses_global_allocator()
+            || !self.sort_fast_context()
+            || !self.can_skip_gc_checkpoint()
+            // Keep the ordinary checkpoint when its two-field result table
+            // could cross the threshold or grow the arena.
+            || !self.tables.has_insertion_space()
+            || self.dense_array_gc_growth().is_none_or(|growth| growth < 4096)
+        {
+            return false;
+        }
+        // Warm keys and values leave only the bounded table storage as a
+        // possible allocation in the ordinary name query.
+        let frame_name = self.debug_name_ref(self.thread, frame);
+        if self.static_strings.find(NAME_KIND_FIELD).is_none()
+            || frame_name.is_some() && self.static_strings.find(NAME_FIELD).is_none()
+        {
+            return false;
+        }
+        let (name, kind) = match frame_name {
+            Some((name, kind)) => {
+                let Some(name) = self.strings.find(name) else {
+                    return false;
+                };
+                (Some(name), kind)
+            }
+            None => (None, b"".as_slice()),
+        };
+        let Some(kind) = self.strings.find(kind) else {
+            return false;
+        };
+        let id = if key == b"name" { name } else { Some(kind) };
+        let value = if let Some(id) = id {
+            self.strings.bytes.preserve_new_reference(id.0);
+            Value::String(id)
+        } else {
+            Value::Nil
+        };
+        self.registers[call] = value;
+        self.top = call + 1;
+        self.gc.pending = false;
+        true
+    }
+
     pub(super) fn debug_frames(&self, thread: ThreadId) -> &[Frame] {
         if thread == self.thread {
             &self.frames
@@ -287,13 +352,13 @@ impl Vm {
                     .strings
                     .try_intern(name)
                     .map_err(|_| self.memory_failure())?;
-                self.debug_field(table, b"name", Value::String(name))?;
-                self.debug_string(table, b"namewhat", kind)?;
+                self.debug_field(table, NAME_FIELD, Value::String(name))?;
+                self.debug_string(table, NAME_KIND_FIELD, kind)?;
             } else {
                 if tail {
-                    self.debug_string(table, b"name", b"")?;
+                    self.debug_string(table, NAME_FIELD, b"")?;
                 }
-                self.debug_string(table, b"namewhat", b"")?;
+                self.debug_string(table, NAME_KIND_FIELD, b"")?;
             }
         }
         if options & INFO_FUNC != 0 {

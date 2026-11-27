@@ -30,6 +30,7 @@ mod numeric_leaf;
 mod os;
 mod package;
 mod reductions;
+mod return_argument;
 mod simple;
 mod standalone;
 mod strings;
@@ -2124,6 +2125,7 @@ impl Vm {
         // atomic reference count.
         let mut held: Option<crate::memory::Shared<ProgramData>> = None;
         let mut numeric_call_cache = numeric_leaf::Cache::default();
+        let mut return_argument_cache = return_argument::Cache::default();
         let mut forwarding_cache = forwarding::Cache::default();
         let mut table_literal_cache = table_literals::Cache::default();
         let mut triplet_sites = fresh_triplet::Sites::default();
@@ -2786,6 +2788,38 @@ impl Vm {
                         }
                     }
                     Op::Call | Op::TailCall | Op::CallIter => {
+                        if i.op == Op::Call
+                            && i.b == 2
+                            && i.c == 1
+                            && self.registers[a] == Value::Native(debug::GET_INFO)
+                            && let Some(get) = prototype.code.get(pc)
+                            && get.op == Op::GetTable
+                            && get.a == i.a
+                            && usize::from(get.b) == usize::from(i.a)
+                            && get.c >= crate::bytecode::RK
+                            && self.try_debug_name_field(
+                                a,
+                                frame_index,
+                                self.programs[program_index].bound_constants(proto_index)
+                                    [(get.c - crate::bytecode::RK) as usize],
+                            )
+                        {
+                            *error_line = prototype.instruction_line(pc);
+                            pc += 1;
+                            self.frames[frame_index].pc = pc as u32;
+                            continue;
+                        }
+                        if i.op == Op::Call
+                            && (i.c <= 1 || i.c == OPEN)
+                            && let Value::Function(callee) = self.registers[a]
+                            && let Some(projection) = return_argument_cache.get(self, callee)
+                            && self.try_return_argument(
+                                projection, a, i.b, i.c, checkpoint_ready, error_line,
+                            )
+                        {
+                            numeric_checkpoint_ready = self.open_upvalues.is_empty();
+                            continue;
+                        }
                         if i.op == Op::Call && i.b != OPEN_ARGS {
                             let completed = match self.registers[a] {
                                 Value::Native(0) if i.b == 1 && i.c <= 1 => {
