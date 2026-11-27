@@ -57,6 +57,66 @@ impl Pair {
 }
 
 #[test]
+fn observed_coefficient_rows_keep_their_old_identity_and_values() {
+    for live in [false, true] {
+        let mut context = SongLuaCompileContext::new(Path::new("."), "Spline coefficient aliases");
+        context.live = live;
+        let mut runtime = SongRuntime::new(&context).unwrap();
+        let scene = test_support::note_field(&mut runtime, 1, "single").unwrap();
+        let field = runtime.actor_scene_root(scene).unwrap();
+        let vm = runtime.vm_mut();
+        vm.set_global(b"nf", field).unwrap();
+        let program = compile_named(
+            br#"
+            local s = nf:GetColumnActors()[1]:GetPosHandler():GetSpline()
+            local key = '__songlua_spline_coefficients'
+            local readers = {
+                function() return s.__songlua_spline_coefficients end,
+                function() return s[key] end,
+                function() return rawget(s, key) end,
+                function()
+                    for field, value in pairs(s) do
+                        if field == key then return value end
+                    end
+                end,
+                function()
+                    local field, value = next(s)
+                    while field and field ~= key do field, value = next(s, field) end
+                    return value
+                end,
+            }
+            s:SetSize(2)
+            s:SetPoint(1, {0, 0, 0})
+            s:SetPoint(2, {4, 0, 0})
+            s:Solve()
+            s:SetSize(2)
+            s:SetPoint(2, {5, 0, 0})
+            s:Solve()
+            assert(s:evaluate(0.5)[1] == 2.5)
+            for index, read in ipairs(readers) do
+                local before = 2 * index
+                s:SetPoint(2, {before, 0, 0})
+                s:Solve()
+                local old = read()
+                local row, axis = old[1], old[1][1]
+                assert(axis[1] == before)
+                s:SetSize(2)
+                s:SetPoint(2, {before + 1, 0, 0})
+                s:Solve()
+                assert(old[1] == row and row[1] == axis and axis[1] == before)
+                local current = read()
+                assert(current ~= old and current[1] ~= row and current[1][1] ~= axis)
+                assert(current[1][1][1] == before + 1)
+            end
+            "#,
+            b"@/fixture/spline_coefficients.lua",
+        )
+        .unwrap();
+        vm.execute(&program).unwrap();
+    }
+}
+
+#[test]
 fn construction_eagerly_owns_style_columns_board_and_spline_handlers() {
     for style in ["single", "double", "solo", "pump-single", "pump-double"] {
         for live in [false, true] {

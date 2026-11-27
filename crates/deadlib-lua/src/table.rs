@@ -7,7 +7,7 @@ use crate::memory::{Buffer, Memory, Unique};
 use crate::{
     Error, ErrorKind, FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value,
 };
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 #[derive(Clone, Copy, Debug)]
 enum Key {
@@ -329,6 +329,13 @@ impl std::ops::DerefMut for ArrayStorage {
 }
 
 #[derive(Debug)]
+struct UnpublishedRows {
+    key: StringId,
+    root: TableId,
+    observed: AtomicBool,
+}
+
+#[derive(Debug)]
 struct HashPart {
     entries: Buffer<Entry>,
     slots: Buffer<u32>,
@@ -336,6 +343,20 @@ struct HashPart {
     last_free: u32,
     // Two one-based indices. Keys are checked before using either hint.
     next_hash_hint: AtomicU64,
+    unpublished_rows: Option<Unique<UnpublishedRows>>,
+}
+
+impl HashPart {
+    #[inline]
+    fn read_value(&self, entry: &Entry) -> Value {
+        if let Some(watch) = &self.unpublished_rows
+            && matches!(entry.key, Key::String(key) if key == watch.key)
+            && entry.value == Value::Table(watch.root)
+        {
+            watch.observed.store(true, Ordering::Relaxed);
+        }
+        entry.value
+    }
 }
 
 static EMPTY_HASH: HashPart = HashPart {
@@ -344,6 +365,7 @@ static EMPTY_HASH: HashPart = HashPart {
     native_dead_keys: 0,
     last_free: 0,
     next_hash_hint: AtomicU64::new(0),
+    unpublished_rows: None,
 };
 
 /// The physical table layout at a parser replay boundary. The VM validates
@@ -497,10 +519,43 @@ impl Table {
                 native_dead_keys: 0,
                 last_free: 0,
                 next_hash_hint: AtomicU64::new(0),
+                unpublished_rows: None,
             };
             self.hash = Some(Unique::try_new_in(part, memory)?);
         }
         Ok(self.hash_part_mut())
+    }
+
+    // Only the VM's fresh number-row constructor may register a root. A
+    // Lua-visible read freezes that graph even when the script drops its alias.
+    pub(crate) fn register_unpublished_rows(
+        &mut self,
+        key: StringId,
+        root: TableId,
+    ) -> Result<(), Error> {
+        let watch = UnpublishedRows {
+            key,
+            root,
+            observed: AtomicBool::new(false),
+        };
+        let memory = self.array.memory().clone();
+        let part = self.hash_part_mut();
+        if let Some(previous) = &mut part.unpublished_rows {
+            **previous = watch;
+        } else {
+            part.unpublished_rows = Some(Unique::try_new_in(watch, memory)?);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn unpublished_rows(&self, key: StringId) -> Option<TableId> {
+        let watch = self.hash.as_ref()?.unpublished_rows.as_ref()?;
+        if key != watch.key || watch.observed.load(Ordering::Relaxed) {
+            return None;
+        }
+        let (_, index) = self.slot(Key::String(key))?;
+        let entry = &self.hash_part().entries[index?];
+        (entry.value == Value::Table(watch.root)).then_some(watch.root)
     }
 
     pub fn metatable(&self) -> Option<TableId> {
@@ -584,6 +639,7 @@ impl Table {
                 part.heap_bytes()
                     + part.entries.capacity() * size_of::<Entry>()
                     + part.slots.capacity() * size_of::<u32>()
+                    + usize::from(part.unpublished_rows.is_some()) * size_of::<UnpublishedRows>()
             })
     }
     pub(crate) fn parser_pristine(&self) -> bool {
@@ -798,7 +854,7 @@ impl Table {
         &self.array
     }
 
-    // This runs only while constructing a fresh table containing no references.
+    // Callers only use this with fresh or unread scalar arrays.
     pub(crate) fn initialize_number_array(&mut self, values: &[f64]) {
         debug_assert_eq!(self.array.len(), values.len());
         for (slot, &number) in self.array.iter_mut().zip(values) {
@@ -935,14 +991,15 @@ impl Table {
     /// load the current value so overwrites, removal and compaction remain visible.
     #[inline]
     pub(crate) fn get_string_cached(&self, key: StringId, hint: &mut u32) -> Value {
-        if self.hash_part().entries.is_empty() {
+        let part = self.hash_part();
+        if part.entries.is_empty() {
             return Value::Nil;
         }
-        if let Some(entry) = self.hash_part().entries.get(hint.wrapping_sub(1) as usize)
+        if let Some(entry) = part.entries.get(hint.wrapping_sub(1) as usize)
             && matches!(entry.key, Key::String(id) if id == key)
             && entry.value != Value::Nil
         {
-            return entry.value;
+            return part.read_value(entry);
         }
         self.find_string_entry(Key::String(key), hint)
     }
@@ -950,7 +1007,8 @@ impl Table {
     #[cold]
     fn find_string_entry(&self, key: Key, hint: &mut u32) -> Value {
         if let Some((_, Some(index))) = self.slot(key) {
-            let value = self.hash_part().entries[index].value;
+            let part = self.hash_part();
+            let value = part.read_value(&part.entries[index]);
             if value != Value::Nil {
                 *hint = (index + 1) as u32;
             }
@@ -979,7 +1037,7 @@ impl Table {
             if word & !index == tag {
                 let entry = &part.entries[(word & index) as usize - 1];
                 if entry.key == key {
-                    return entry.value;
+                    return part.read_value(entry);
                 }
             }
             slot = (slot + 1) & mask;
@@ -1610,7 +1668,7 @@ impl Table {
         // avoids a read-modify-write on each key.
         part.next_hash_hint
             .store((index + 1) as u64, Ordering::Relaxed);
-        Ok(Some((entry.key.value(), entry.value)))
+        Ok(Some((entry.key.value(), part.read_value(entry))))
     }
 }
 #[cfg(test)]

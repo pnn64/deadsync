@@ -309,43 +309,58 @@ fn read_spline(
                     }
                     scratch.points.push(values);
                 }
-                let encoded = get_static(call, spline, b"__songlua_spline_coefficients")?;
+                let key = call.intern_static(b"__songlua_spline_coefficients")?;
                 scratch.coefficients.clear();
-                with_table(call, encoded, |call, encoded| {
-                    if let Some(encoded) = encoded
-                        && call.raw_table_get(encoded, Value::Number(1.0))? != Value::Nil
-                    {
-                        for (&entry, &values) in call
-                            .raw_table_array_values(encoded)?
-                            .iter()
-                            .zip(&scratch.points)
-                        {
-                            let Some(coefficients) =
-                                read_numeric_coefficients(call, entry, values)?
-                            else {
-                                break;
-                            };
-                            scratch.coefficients.push(coefficients);
+                let copied = call.copy_unpublished_number_rows(
+                    spline,
+                    key,
+                    scratch.points.len(),
+                    |index, coordinates| {
+                        let mut row = scratch.points[index].map(|a| [a, 0., 0., 0.]);
+                        for (axis, values) in row.iter_mut().zip(coordinates) {
+                            axis[1..].copy_from_slice(&values.map(|value| value as f32));
                         }
-                        for (index, values) in scratch
-                            .points
-                            .iter()
-                            .enumerate()
-                            .skip(scratch.coefficients.len())
+                        scratch.coefficients.push(row);
+                    },
+                );
+                if !copied {
+                    let encoded = call.raw_table_get(spline, key)?;
+                    with_table(call, encoded, |call, encoded| {
+                        if let Some(encoded) = encoded
+                            && call.raw_table_get(encoded, Value::Number(1.0))? != Value::Nil
                         {
-                            let entry =
-                                call.raw_table_get(encoded, Value::Number((index + 1) as f64))?;
-                            let coefficients = read_coefficients(call, entry, *values)?;
-                            scratch.coefficients.push(coefficients);
+                            for (&entry, &values) in call
+                                .raw_table_array_values(encoded)?
+                                .iter()
+                                .zip(&scratch.points)
+                            {
+                                let Some(coefficients) =
+                                    read_numeric_coefficients(call, entry, values)?
+                                else {
+                                    break;
+                                };
+                                scratch.coefficients.push(coefficients);
+                            }
+                            for (index, values) in scratch
+                                .points
+                                .iter()
+                                .enumerate()
+                                .skip(scratch.coefficients.len())
+                            {
+                                let entry =
+                                    call.raw_table_get(encoded, Value::Number((index + 1) as f64))?;
+                                let coefficients = read_coefficients(call, entry, *values)?;
+                                scratch.coefficients.push(coefficients);
+                            }
+                        } else {
+                            // Keep the implicit fit for legacy curves that never called Solve.
+                            scratch.coefficients.extend_from_slice(
+                                scratch.solver.solve_with_loop(&scratch.points, looping),
+                            );
                         }
-                    } else {
-                        // Keep the implicit fit for legacy curves that never called Solve.
-                        scratch.coefficients.extend_from_slice(
-                            scratch.solver.solve_with_loop(&scratch.points, looping),
-                        );
-                    }
-                    Ok(())
-                })?;
+                        Ok(())
+                    })?;
+                }
                 let constant = scratch.coefficients.first().is_none_or(|first| {
                     scratch.coefficients.iter().all(|row| {
                         row.iter()

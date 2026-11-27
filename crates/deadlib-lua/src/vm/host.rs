@@ -1241,6 +1241,99 @@ impl HostCall<'_> {
             .raw_set(table, Value::Number(f64::from(index)), value)
     }
 
+    fn unpublished_number_rows(&self, owner: TableId, key: Value) -> Option<TableId> {
+        let Value::String(key) = key else {
+            return None;
+        };
+        let table = self.vm.tables.get(owner.0)?;
+        if table.metatable().is_some() {
+            return None;
+        }
+        table.unpublished_rows(key)
+    }
+
+    fn writable_number_rows(&self, owner: TableId, key: Value) -> Option<TableId> {
+        if self.vm.sort_fast_context() && self.vm.tables.memory().allocator().is_none() {
+            self.unpublished_number_rows(owner, key)
+        } else {
+            None
+        }
+    }
+
+    /// Whether an unread field installed by [NativeStack::set_number_rows]
+    /// can be reused under the current call, hook, and allocator settings.
+    pub fn has_unpublished_number_rows(&self, owner: TableId, key: Value) -> bool {
+        self.writable_number_rows(owner, key).is_some()
+    }
+
+    // set_number_rows is the only constructor. No other Lua reference to an
+    // inner table can exist before the sole reference to the root is read.
+    fn number_row_axes(&self, root: TableId, row: usize) -> [TableId; 3] {
+        let Value::Table(row) = self.vm.tables[slot_index(root.0)].array_values()[row] else {
+            unreachable!("fresh number row");
+        };
+        let [Value::Table(x), Value::Table(y), Value::Table(z)] =
+            self.vm.tables[slot_index(row.0)].array_values()
+        else {
+            unreachable!("three fresh axis tables");
+        };
+        [*x, *y, *z]
+    }
+
+    /// Update the numerical contents of an unread field installed by
+    /// [NativeStack::set_number_rows] when it already holds this many rows.
+    /// Returns false if the caller needs to create new tables.
+    pub fn overwrite_unpublished_number_rows<T>(
+        &mut self,
+        owner: TableId,
+        key: Value,
+        rows: &[T],
+        encode: impl Fn(&T) -> [[f64; 3]; 3],
+    ) -> bool {
+        let Some(root) = self.writable_number_rows(owner, key) else {
+            return false;
+        };
+        if self.vm.tables[slot_index(root.0)].array_values().len() != rows.len() {
+            return false;
+        }
+        for (index, row) in rows.iter().enumerate() {
+            for (axis, numbers) in self.number_row_axes(root, index).into_iter().zip(encode(row)) {
+                self.vm.tables[slot_index(axis.0)].initialize_number_array(&numbers);
+            }
+        }
+        true
+    }
+
+    /// Read the coordinates of a verified private graph without publishing
+    /// any Lua table handles.
+    pub fn copy_unpublished_number_rows(
+        &self,
+        owner: TableId,
+        key: Value,
+        count: usize,
+        mut row: impl FnMut(usize, [[f64; 3]; 3]),
+    ) -> bool {
+        let Some(root) = self.unpublished_number_rows(owner, key) else {
+            return false;
+        };
+        let length = self.vm.tables[slot_index(root.0)].array_values().len();
+        if length == 0 || length < count {
+            return false;
+        }
+        for index in 0..count {
+            let numbers = self.number_row_axes(root, index).map(|axis| {
+                let [Value::Number(x), Value::Number(y), Value::Number(z)] =
+                    self.vm.tables[slot_index(axis.0)].array_values()
+                else {
+                    unreachable!("fresh numeric triplet");
+                };
+                [*x, *y, *z]
+            });
+            row(index, numbers);
+        }
+        true
+    }
+
     /// Create a Rust callback with traced Lua captures in this VM.
     /// Store, capture or return the result before reentering Lua.
     pub fn new_host_function(

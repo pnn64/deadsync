@@ -50,6 +50,54 @@ impl NativeStack<'_, '_> {
         Ok(())
     }
 
+    /// Assign fresh numeric row tables to a field of a plain table. Its
+    /// storage can be reused until Lua or the host reads the field.
+    /// Leaves the native stack at its original height on success.
+    ///
+    /// # Errors
+    /// Rejects an invalid index or a target with a metatable. Propagates
+    /// table assignment, stack and allocation errors.
+    pub fn set_number_rows<T>(
+        &mut self,
+        index: usize,
+        name: &'static [u8],
+        rows: &[T],
+        encode: impl Fn(&T) -> [[f64; 3]; 3],
+    ) -> Result<(), Error> {
+        let index = isize::try_from(index)
+            .ok()
+            .filter(|index| *index > 0)
+            .ok_or_else(|| self.error(b"invalid native stack index"))?;
+        let Value::Table(owner) = self.indexed_value(index)? else {
+            return Err(self.error(b"number rows require a table"));
+        };
+        let vm = &self.call.vm;
+        if vm.table(Value::Table(owner))?.metatable().is_some() {
+            return Err(self.error(b"number rows require a table without a metatable"));
+        }
+        let watch = vm.sort_fast_context() && vm.tables.memory().allocator().is_none();
+        self.create_nested_number_arrays(rows.iter().map(encode))?;
+        let value = self.indexed_value(-1)?;
+        self.push_bytes(name)?;
+        let key = self.indexed_value(-1)?;
+        self.push(value)?;
+        self.set_table(index, true)?;
+        self.set_top(self.top() - 1)?;
+        if watch && let (Value::String(key), Value::Table(root)) = (key, value) {
+            // No Lua or host code received the root from the construction
+            // stack. The raw field assignment is its only reference.
+            let vm = &mut self.call.vm;
+            let table = &mut vm.tables[slot_index(owner.0)];
+            let before = table.heap_bytes();
+            // The assignment already succeeded. If reserving the optional
+            // tracking record fails, leave the assigned field untracked.
+            let _ = table.register_unpublished_rows(key, root);
+            let after = table.heap_bytes();
+            vm.note_table_resize(before, after);
+        }
+        Ok(())
+    }
+
     fn push_new_table(
         &mut self,
         allocate: impl FnOnce(&mut Vm) -> Result<TableId, Error>,

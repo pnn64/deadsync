@@ -234,6 +234,12 @@ fn named_spline_method(call: &mut HostCall<'_>, name: &str) -> Result<(), Error>
     {
         return Ok(());
     }
+    if name == "SetSize"
+        && let Value::Table(table) = owner
+        && resize_unpublished_coefficients(call, table)?
+    {
+        return Ok(());
+    }
     // Reserve argument slots before adding temporaries. Native spline methods
     // always use argument two, even for detached or non-table receiver calls.
     let mut stack = call.native_stack()?;
@@ -390,6 +396,35 @@ fn resolve_numeric_point(
     ))
 }
 
+fn resize_unpublished_coefficients(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Error> {
+    let [_, Value::Number(size)] = *call.arguments() else {
+        return Ok(false);
+    };
+    let size = size.trunc();
+    if !(0. ..=65536.).contains(&size) || call.raw_metatable(owner)?.is_some() {
+        return Ok(false);
+    }
+    let size_key = call.intern_static(b"__songlua_spline_size")?;
+    let Value::Number(previous) = call.raw_table_get(owner, size_key)? else {
+        return Ok(false);
+    };
+    if !(0. ..=size).contains(&previous.trunc())
+        || !matches!(
+            get_static(call, owner, b"__songlua_spline_points")?,
+            Value::Table(_)
+        )
+    {
+        return Ok(false);
+    }
+    let key = call.intern_static(b"__songlua_spline_coefficients")?;
+    if !call.has_unpublished_number_rows(owner, key) {
+        return Ok(false);
+    }
+    call.raw_table_set(owner, size_key, Value::Number(size))?;
+    call.push(Value::Table(owner))?;
+    Ok(true)
+}
+
 fn set_numeric_point(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Error> {
     let [_, Value::Number(index), Value::Table(input)] = call.arguments() else {
         return Ok(false);
@@ -485,15 +520,30 @@ fn solve_numeric(
     let coefficients = workspace
         .solver
         .solve_with_loop(&workspace.points, looping.is_truthy());
+    let key = call.intern_static(b"__songlua_spline_coefficients")?;
+    if call.arguments().len() <= 3
+        && call.overwrite_unpublished_number_rows(owner, key, coefficients, encode_coefficients)
+    {
+        call.push(Value::Table(owner))?;
+        return Ok(true);
+    }
     let mut stack = call.native_stack()?;
     stack.set_top(stack.top().max(3))?;
     let owner = Value::Table(owner);
     stack.push(owner)?;
-    let target = stack.top();
-    write_coefficients(&mut stack, target, coefficients)?;
+    stack.set_number_rows(
+        stack.top(),
+        b"__songlua_spline_coefficients",
+        coefficients,
+        encode_coefficients,
+    )?;
     stack.push(owner)?;
     stack.finish(1)?;
     Ok(true)
+}
+
+fn encode_coefficients(point: &deadsync_gameplay::SongLuaSplinePointCoefficients) -> [[f64; 3]; 3] {
+    point.map(|[_, b, c, d]| [b, c, d].map(f64::from))
 }
 
 fn write_coefficients(
@@ -501,11 +551,7 @@ fn write_coefficients(
     owner: usize,
     coefficients: &[deadsync_gameplay::SongLuaSplinePointCoefficients],
 ) -> Result<(), Error> {
-    stack.create_nested_number_arrays(
-        coefficients
-            .iter()
-            .map(|point| point.map(|[_, b, c, d]| [b, c, d].map(f64::from))),
-    )?;
+    stack.create_nested_number_arrays(coefficients.iter().map(encode_coefficients))?;
     let value = stack.value(-1).unwrap();
     assign(stack, owner, b"__songlua_spline_coefficients", value)
 }
