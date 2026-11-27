@@ -52,13 +52,7 @@ impl Dpb {
         }
     }
 
-    pub fn get(&self, idx: u8) -> Option<&RefFrameData> {
-        self.slots.get(idx as usize)?.as_deref()
-    }
-
-    /// Same slot as [`Dpb::get`], but returns a cheap `Arc` clone rather than a borrow, for
-    /// callers that need to hold onto the data past `self`'s lifetime (e.g. resolving a
-    /// frame's reference set for `TileDecoder`, which outlives the per-frame `&Dpb` borrow).
+    /// Shares the picture in one reference slot.
     pub fn get_arc(&self, idx: u8) -> Option<Arc<RefFrameData>> {
         self.slots.get(idx as usize)?.clone()
     }
@@ -95,20 +89,26 @@ impl Dpb {
         })
     }
 
-    /// Refreshes reference slots and collects any uniquely held evicted frames for reuse.
-    pub(crate) fn update_and_recycle(
+    /// Takes the replaced slots before constructing the next reference picture.
+    pub(crate) fn retire(
         &mut self,
         refresh_frame_flags: u8,
-        data: &Arc<RefFrameData>,
     ) -> [Option<RefFrameData>; NUM_REF_FRAMES] {
         core::array::from_fn(|slot| {
             if refresh_frame_flags & (1 << slot) != 0 {
-                self.slots[slot]
-                    .replace(Arc::clone(data))
-                    .and_then(Arc::into_inner)
+                self.slots[slot].take().and_then(Arc::into_inner)
             } else {
                 None
             }
         })
+    }
+
+    pub(crate) fn store(&mut self, refresh_frame_flags: u8, data: &Arc<RefFrameData>) {
+        for (slot, entry) in self.slots.iter_mut().enumerate() {
+            if refresh_frame_flags & (1 << slot) != 0 {
+                debug_assert!(entry.is_none());
+                *entry = Some(Arc::clone(data));
+            }
+        }
     }
 }

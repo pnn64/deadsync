@@ -180,31 +180,6 @@ impl Plane {
         &self.pixels
     }
 
-    /// Returns a row-major sample sequence cropped to the display size `(crop_width, crop_height)`.
-    pub fn crop(&self, crop_width: usize, crop_height: usize) -> Vec<u16> {
-        debug_assert_eq!(self.x0, 0, "crop is only meaningful on a whole-frame plane");
-        let data = self.as_slice();
-        if crop_width == self.stride {
-            return data[..crop_width * crop_height].to_vec();
-        }
-        let mut out = Vec::with_capacity(crop_width * crop_height);
-        for y in 0..crop_height {
-            let row_start = y * self.stride;
-            out.extend_from_slice(&data[row_start..row_start + crop_width]);
-        }
-        out
-    }
-
-    /// Same as [`Plane::crop`], narrowed to `u8` (for `PlaneData::U8` output when
-    /// `BitDepth == 8`, where every sample is already known to fit in `0..=255`).
-    pub fn crop_u8(&self, crop_width: usize, crop_height: usize) -> Vec<u8> {
-        let mut out = Vec::new();
-        self.narrow_u8_into(crop_width, crop_height, &mut out);
-        out
-    }
-
-    /// Narrows the cropped `(crop_width, crop_height)` region of this plane to `u8` into `out`,
-    /// reusing `out`'s allocation when its capacity already suffices.
     pub(crate) fn narrow_u8_into(&self, crop_width: usize, crop_height: usize, out: &mut Vec<u8>) {
         assert_eq!(self.x0, 0, "crop is only meaningful on a whole-frame plane");
         let data = self.as_slice();
@@ -307,6 +282,32 @@ pub struct RefPlane {
 }
 
 impl RefPlane {
+    /// Returns the visible rows for an 8-bit plane.
+    pub fn rows_u8(&self) -> Option<impl ExactSizeIterator<Item = &[u8]>> {
+        let RefPlaneData::U8(pixels) = &self.data else {
+            return None;
+        };
+        Some(
+            pixels
+                .chunks_exact(self.stride)
+                .take(self.height)
+                .map(|row| &row[..self.width]),
+        )
+    }
+
+    /// Returns the visible rows for a 10- or 12-bit plane.
+    pub fn rows_u16(&self) -> Option<impl ExactSizeIterator<Item = &[u16]>> {
+        let RefPlaneData::U16(pixels) = &self.data else {
+            return None;
+        };
+        Some(
+            pixels
+                .chunks_exact(self.stride)
+                .take(self.height)
+                .map(|row| &row[..self.width]),
+        )
+    }
+
     /// Wraps a tightly packed `width x height` 8-bit reference plane (`stride == width`).
     pub(crate) fn from_u8_cropped(width: usize, height: usize, data: Vec<u8>) -> Self {
         debug_assert_eq!(data.len(), width * height);

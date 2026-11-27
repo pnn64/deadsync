@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use core::{fmt, ops::Range};
 
-use crate::{DecodeError, Decoder, Frame};
+use crate::{DecodeError, Decoder, Frame, Picture};
 
 /// Errors from the VP9 track reader or decoder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -409,6 +409,11 @@ fn track_id(track: &[u8]) -> Result<u32> {
 ///
 /// Frames are emitted in VP9 display order. Audio and container timing are ignored.
 pub fn decode_mp4(file: &[u8], mut output: impl FnMut(Frame)) -> Result<()> {
+    decode_mp4_pictures(file, |picture| output(picture.to_owned_frame()))
+}
+
+/// Decodes the first VP9 video track in an MP4 with shared output planes.
+pub fn decode_mp4_pictures(file: &[u8], mut output: impl FnMut(Picture)) -> Result<()> {
     let mut top = file;
     let mut movie = None;
     let mut media = Vec::new();
@@ -442,7 +447,7 @@ pub fn decode_mp4(file: &[u8], mut output: impl FnMut(Frame)) -> Result<()> {
             let mut decoder = Decoder::new();
             let mut shown = false;
             let mut push = |sample: &[u8]| {
-                if let Some(frame) = decoder.push_packet(sample).map_err(Mp4Error::Decode)? {
+                if let Some(frame) = decoder.push_picture(sample).map_err(Mp4Error::Decode)? {
                     output(frame);
                     shown = true;
                 }

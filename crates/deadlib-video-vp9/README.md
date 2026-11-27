@@ -11,6 +11,9 @@ in VP9 display order. For IVF or another container, feed complete packets in
 bitstream order to `Decoder::push_packet`. `ivf::IvfReader` exposes packets
 from IVF files.
 
+Use `Decoder::push_picture` and `decode_mp4_pictures` to share decoded planes
+with the decoder. A `Picture` can be retained after decoding later packets.
+
 ```sh
 cargo run --release --example decode -- Countdown.mp4 Countdown.yuv
 cargo run --release --example decode -- video.ivf video.yuv

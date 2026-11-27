@@ -35,8 +35,9 @@ use core::fmt;
 
 pub use bool_coder::BoolCoderError;
 pub use compressed_header::CompressedHeaderError;
+pub use framebuffer::RefPlane as PicturePlane;
 pub use header::HeaderError;
-pub use mp4::{decode_mp4, Mp4Error};
+pub use mp4::{decode_mp4, decode_mp4_pictures, Mp4Error};
 pub use tile::TileError;
 
 use compressed_header::{parse_compressed_header, FrameContext, FrameContextStore};
@@ -163,38 +164,36 @@ pub struct Frame {
     pub v: PlaneData,
 }
 
-/// Crops one plane to `(w, h)` and narrows to `PlaneData::U8`/`U16` depending on `bit_depth`
-/// (8-bit output stays byte-sized; 10/12-bit needs the full `u16` range).
-fn plane_to_plane_data(plane: &framebuffer::Plane, w: usize, h: usize, bit_depth: u8) -> PlaneData {
-    if bit_depth == 8 {
-        PlaneData::U8(plane.crop_u8(w, h))
-    } else {
-        PlaneData::U16(plane.crop(w, h))
+/// A read-only decoded picture shared with the decoder's reference slots.
+#[derive(Clone, Debug)]
+pub struct Picture(Arc<RefFrameData>);
+
+impl Picture {
+    pub fn width(&self) -> u32 {
+        self.0.width
     }
-}
 
-/// Crops the frame buffer (`planes`) to the display size and builds a [`Frame`].
-fn crop_to_frame(
-    planes: &[framebuffer::Plane; 3],
-    width: u32,
-    height: u32,
-    color_config: &ColorConfig,
-) -> Frame {
-    let sub_x = color_config.subsampling_x as u32;
-    let sub_y = color_config.subsampling_y as u32;
-    let uv_width = ((width + sub_x) >> sub_x) as usize;
-    let uv_height = ((height + sub_y) >> sub_y) as usize;
-    let bit_depth = color_config.bit_depth;
+    pub fn height(&self) -> u32 {
+        self.0.height
+    }
 
-    Frame {
-        width,
-        height,
-        bit_depth,
-        subsampling_x: sub_x,
-        subsampling_y: sub_y,
-        y: plane_to_plane_data(&planes[0], width as usize, height as usize, bit_depth),
-        u: plane_to_plane_data(&planes[1], uv_width, uv_height, bit_depth),
-        v: plane_to_plane_data(&planes[2], uv_width, uv_height, bit_depth),
+    pub fn bit_depth(&self) -> u8 {
+        self.0.bit_depth
+    }
+
+    /// Chroma subsampling shifts along the horizontal and vertical axes.
+    pub fn subsampling(&self) -> [u32; 2] {
+        [self.0.subsampling_x, self.0.subsampling_y]
+    }
+
+    /// The Y, U and V planes in that order.
+    pub fn planes(&self) -> [&PicturePlane; 3] {
+        [&self.0.y, &self.0.u, &self.0.v]
+    }
+
+    /// Copies the visible samples into tightly packed, owned planes.
+    pub fn to_owned_frame(&self) -> Frame {
+        ref_frame_data_to_frame(&self.0)
     }
 }
 
@@ -305,6 +304,8 @@ pub struct Decoder {
     last_color_config: Option<ColorConfig>,
     /// The actual pixel data of reference frames (spec §8.10 `FrameStore`).
     dpb: Dpb,
+    /// Retains the most recent display-only picture for buffer recycling.
+    display_only: Option<Arc<RefFrameData>>,
     /// `PrevSegmentIds` (spec §6.4.14), row-major `MiRows x MiCols` (unpadded).
     /// Cleared to all-zero on the first frame and whenever the frame size changes
     /// (spec §7.2.6), updated after decoding only when
@@ -334,9 +335,8 @@ pub struct Decoder {
     counts_pool: Option<Box<counts::Counts>>,
 }
 
-/// Cap on pooled frame-buffer sets held by [`Decoder`] (at most one per active geometry,
-/// covering up to 3-layer spatial SVC without retaining stale resolutions).
-const MAX_POOLED_PLANE_SETS: usize = 3;
+/// Cap on pooled frames. Reserve enough slots to recycle a complete reference map.
+const MAX_POOLED_PLANE_SETS: usize = prob_tables::NUM_REF_FRAMES + 1;
 
 type PlaneGeom = ((usize, usize), (usize, usize));
 
@@ -361,6 +361,14 @@ impl Decoder {
     /// Hidden frames update the reference frames without producing a picture.
     /// If a superframe contains more than one shown frame, the last one is returned.
     pub fn push_packet(&mut self, packet: &[u8]) -> Result<Option<Frame>, DecodeError> {
+        self.push_picture(packet)
+            .map(|picture| picture.map(|picture| picture.to_owned_frame()))
+    }
+
+    /// Decodes a packet and shares the shown picture without copying its planes.
+    ///
+    /// A packet can update decoder state without producing a shown picture.
+    pub fn push_picture(&mut self, packet: &[u8]) -> Result<Option<Picture>, DecodeError> {
         let mut shown = None;
         for data in superframe::split_superframe(packet) {
             if let Some(frame) = self.decode_one_frame(data)? {
@@ -381,6 +389,7 @@ impl Decoder {
             prev_mi_grid: None,
             last_color_config: None,
             dpb: Dpb::new(),
+            display_only: None,
             prev_segment_ids: Arc::new(Vec::new()),
             prev_segment_ids_dims: None,
             last_frame_type: None,
@@ -438,7 +447,7 @@ impl Decoder {
         Some(self.ref_u8_pool.swap_remove(idx))
     }
 
-    /// Recycles `item` into `pool` (at most one entry per active geometry, pruning stale ones).
+    /// Recycles buffers from active geometries into a bounded pool.
     fn recycle_by_geom<T, G: Copy + Eq>(
         pool: &mut Vec<T>,
         item: T,
@@ -451,10 +460,7 @@ impl Decoder {
             let g = geom_of(entry);
             g == active_geom || in_dpb(g)
         });
-        if (geom == active_geom || in_dpb(geom))
-            && pool.len() < MAX_POOLED_PLANE_SETS
-            && !pool.iter().any(|entry| geom_of(entry) == geom)
-        {
+        if (geom == active_geom || in_dpb(geom)) && pool.len() < MAX_POOLED_PLANE_SETS {
             pool.push(item);
         }
     }
@@ -544,84 +550,28 @@ impl Decoder {
         }
     }
 
-    /// Reference frame update process (spec §8.10) + optional shown-frame construction.
-    ///
-    /// - For **8-bit** frames (`bit_depth == 8`), narrows the cropped pixels once into packed
-    ///   `u8` DPB planes (`RefPlaneData::U8`), immediately returns the working `u16` `[Plane; 3]`
-    ///   back to `plane_pool`, and clones the compact `u8` planes if `show_frame` is set (so only
-    ///   a single working `u16` buffer is ever needed and DPB slots use half the memory).
-    /// - For **10/12-bit** frames, crops the `u16` planes in-place into the DPB with zero copy
-    ///   and recycles evicted slots back into `plane_pool`.
+    /// Shares the displayed and reference pictures and recycles retired planes.
     fn output_and_refresh_refs(
         &mut self,
         header: &header::NewFrameHeader,
         color_config: &ColorConfig,
         planes: [framebuffer::Plane; 3],
-    ) -> Option<Frame> {
+    ) -> Option<Picture> {
         let active_geom = plane_set_geom(&planes);
-        let sub_x = color_config.subsampling_x as u32;
-        let sub_y = color_config.subsampling_y as u32;
+        let sub_x = u32::from(color_config.subsampling_x);
+        let sub_y = u32::from(color_config.subsampling_y);
         let y_w = header.width as usize;
         let y_h = header.height as usize;
         let uv_w = ((header.width + sub_x) >> sub_x) as usize;
         let uv_h = ((header.height + sub_y) >> sub_y) as usize;
-
-        if header.refresh_frame_flags == 0 {
-            let frame = header
-                .show_frame
-                .then(|| crop_to_frame(&planes, header.width, header.height, color_config));
-            self.recycle_planes(planes, active_geom);
-            return frame;
-        }
-
-        let (frame, ref_data) = if color_config.bit_depth == 8 {
-            let mut bufs = self
-                .take_matching_ref_u8(y_w * y_h, uv_w * uv_h)
-                .unwrap_or_else(|| [Vec::new(), Vec::new(), Vec::new()]);
-            planes[0].narrow_u8_into(y_w, y_h, &mut bufs[0]);
-            planes[1].narrow_u8_into(uv_w, uv_h, &mut bufs[1]);
-            planes[2].narrow_u8_into(uv_w, uv_h, &mut bufs[2]);
-            let [y_u8, u_u8, v_u8] = bufs;
-            let frame = header.show_frame.then(|| Frame {
-                width: header.width,
-                height: header.height,
-                bit_depth: 8,
-                subsampling_x: sub_x,
-                subsampling_y: sub_y,
-                y: PlaneData::U8(y_u8.clone()),
-                u: PlaneData::U8(u_u8.clone()),
-                v: PlaneData::U8(v_u8.clone()),
-            });
-            self.recycle_planes(planes, active_geom);
-            let ref_data = Arc::new(RefFrameData {
-                width: header.width,
-                height: header.height,
-                subsampling_x: sub_x,
-                subsampling_y: sub_y,
-                bit_depth: 8,
-                y: framebuffer::RefPlane::from_u8_cropped(y_w, y_h, y_u8),
-                u: framebuffer::RefPlane::from_u8_cropped(uv_w, uv_h, u_u8),
-                v: framebuffer::RefPlane::from_u8_cropped(uv_w, uv_h, v_u8),
-            });
-            (frame, ref_data)
-        } else {
-            let frame = header
-                .show_frame
-                .then(|| crop_to_frame(&planes, header.width, header.height, color_config));
-            let ref_data = Arc::new(build_ref_frame_data_u16_in_place(
-                planes,
-                header.width,
-                header.height,
-                color_config,
-            ));
-            (frame, ref_data)
-        };
-
         let active_u8_geom = (y_w * y_h, uv_w * uv_h);
-        let evicted = self
-            .dpb
-            .update_and_recycle(header.refresh_frame_flags, &ref_data);
-        for old in evicted.into_iter().flatten() {
+        let flags = header.refresh_frame_flags;
+
+        // Reconstruction is complete, so the replaced slots can be retired
+        // before getting buffers for this frame's reference picture.
+        let evicted = self.dpb.retire(flags);
+        let display = self.display_only.take().and_then(Arc::into_inner);
+        for old in evicted.into_iter().chain([display]).flatten() {
             match (
                 old.y.into_backing(),
                 old.u.into_backing(),
@@ -632,7 +582,47 @@ impl Decoder {
                 _ => {}
             }
         }
-        // Prune stale geometries and oversized working-plane capacities after the DPB update.
+        if flags == 0 && !header.show_frame {
+            self.recycle_planes(planes, active_geom);
+            return None;
+        }
+
+        let picture = if color_config.bit_depth == 8 {
+            let mut bufs = self
+                .take_matching_ref_u8(y_w * y_h, uv_w * uv_h)
+                .unwrap_or_default();
+            planes[0].narrow_u8_into(y_w, y_h, &mut bufs[0]);
+            planes[1].narrow_u8_into(uv_w, uv_h, &mut bufs[1]);
+            planes[2].narrow_u8_into(uv_w, uv_h, &mut bufs[2]);
+            let [y, u, v] = bufs;
+            self.recycle_planes(planes, active_geom);
+            RefFrameData {
+                width: header.width,
+                height: header.height,
+                subsampling_x: sub_x,
+                subsampling_y: sub_y,
+                bit_depth: 8,
+                y: framebuffer::RefPlane::from_u8_cropped(y_w, y_h, y),
+                u: framebuffer::RefPlane::from_u8_cropped(uv_w, uv_h, u),
+                v: framebuffer::RefPlane::from_u8_cropped(uv_w, uv_h, v),
+            }
+        } else {
+            build_ref_frame_data_u16_in_place(planes, header.width, header.height, color_config)
+        };
+
+        let picture = Arc::new(picture);
+        if flags == 0 {
+            self.display_only = Some(Arc::clone(&picture));
+        } else {
+            self.dpb.store(flags, &picture);
+        }
+        for (slot, size) in self.persist.ref_frame_sizes.iter_mut().enumerate() {
+            if flags & (1 << slot) != 0 {
+                *size = (header.width, header.height);
+            }
+        }
+
+        // Drop free buffers from geometries no longer used by the decoder.
         let dpb = &self.dpb;
         let (max_y, max_uv) = dpb.max_sb_plane_elems();
         let max_y = max_y.max(active_geom.0 .1);
@@ -648,12 +638,7 @@ impl Decoder {
             let g = (b[0].len(), b[1].len());
             g == active_u8_geom || dpb.has_u8_geometry(g)
         });
-        for (slot, size) in self.persist.ref_frame_sizes.iter_mut().enumerate() {
-            if (header.refresh_frame_flags >> slot) & 1 == 1 {
-                *size = (header.width, header.height);
-            }
-        }
-        frame
+        header.show_frame.then_some(Picture(picture))
     }
 
     /// Resolves this frame's effective [`ColorConfig`] without mutating decoder state.
@@ -760,7 +745,7 @@ impl Decoder {
         }
     }
 
-    fn decode_one_frame(&mut self, frame_data: &[u8]) -> Result<Option<Frame>, DecodeError> {
+    fn decode_one_frame(&mut self, frame_data: &[u8]) -> Result<Option<Picture>, DecodeError> {
         let (parsed, consumed) = { parse_uncompressed_header(frame_data, &self.persist)? };
         let header = match parsed {
             FrameHeader::New(h) => h,
@@ -769,9 +754,9 @@ impl Decoder {
             } => {
                 let data = self
                     .dpb
-                    .get(frame_to_show_map_idx)
+                    .get_arc(frame_to_show_map_idx)
                     .ok_or(DecodeError::MissingReferenceFrame)?;
-                return Ok(Some(ref_frame_data_to_frame(data)));
+                return Ok(Some(Picture(data)));
             }
         };
 

@@ -4,14 +4,17 @@ use std::{
     path::Path,
 };
 
-use deadlib_video_vp9::{decode_mp4, ivf::IvfReader, Decoder, Frame, PlaneData};
+use deadlib_video_vp9::{decode_mp4_pictures, ivf::IvfReader, Decoder, Picture};
 
-fn write_frame(output: &mut impl Write, frame: &Frame) -> io::Result<()> {
-    for plane in [&frame.y, &frame.u, &frame.v] {
-        match plane {
-            PlaneData::U8(samples) => output.write_all(samples)?,
-            PlaneData::U16(samples) => {
-                for sample in samples {
+fn write_frame(output: &mut impl Write, frame: &Picture) -> io::Result<()> {
+    for plane in frame.planes() {
+        if let Some(rows) = plane.rows_u8() {
+            for row in rows {
+                output.write_all(row)?;
+            }
+        } else if let Some(rows) = plane.rows_u16() {
+            for row in rows {
+                for sample in row {
                     output.write_all(&sample.to_le_bytes())?;
                 }
             }
@@ -40,14 +43,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let mut decoder = Decoder::new();
         for packet in packets {
-            if let Some(frame) = decoder.push_packet(packet?.data)? {
+            if let Some(frame) = decoder.push_picture(packet?.data)? {
                 write_frame(&mut file, &frame)?;
                 count += 1;
             }
         }
     } else {
         let mut result = Ok(());
-        let decode_result = decode_mp4(&input, |frame| {
+        let decode_result = decode_mp4_pictures(&input, |frame| {
             if result.is_ok() {
                 result = write_frame(&mut file, &frame);
                 count += 1;

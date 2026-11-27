@@ -1,4 +1,6 @@
-use deadlib_video_vp9::{decode_mp4, DecodeError, Decoder, Frame, Mp4Error, PlaneData};
+use deadlib_video_vp9::{
+    decode_mp4, decode_mp4_pictures, DecodeError, Decoder, Frame, Mp4Error, PlaneData,
+};
 
 const FRAGMENTED: &[u8] = include_bytes!("fixtures/fragmented.mp4");
 const INDEXED: &[u8] = include_bytes!("fixtures/indexed.mp4");
@@ -42,6 +44,17 @@ fn decodes_indexed_and_fragmented_mp4_with_inter_frames() {
         decode_mp4(file, |frame| hashes.push(fingerprint(frame))).unwrap();
         assert_eq!(hashes, EXPECTED);
     }
+}
+
+#[test]
+fn retained_pictures_keep_their_samples_after_reference_refresh() {
+    let mut pictures = Vec::new();
+    decode_mp4_pictures(FRAGMENTED, |picture| pictures.push(picture)).unwrap();
+    let hashes: Vec<_> = pictures
+        .into_iter()
+        .map(|picture| fingerprint(picture.to_owned_frame()))
+        .collect();
+    assert_eq!(hashes, EXPECTED);
 }
 
 #[test]
