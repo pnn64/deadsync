@@ -712,3 +712,46 @@ return true
         [Value::Boolean(true)]
     );
 }
+
+#[test]
+fn filtered_string_keys_respect_the_modulo_binding_and_table_metatable() {
+    let mut vm = Vm::new();
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+        local function populate(target, first, last)
+            for i = first, last do
+                if math.mod(i, 3) ~= 1 then
+                    target['key.' .. i] = i
+                end
+            end
+        end
+        local t = {}
+        populate(t, 0, 3201)
+        for i = 0, 3201 do
+            local expected = nil
+            if i % 3 ~= 1 then expected = i end
+            assert(t['key.' .. i] == expected)
+        end
+        local writes = 0
+        local proxy = setmetatable({}, {__newindex = function(_, key, value)
+            assert(key == 'key.' .. value)
+            writes = writes + 1
+        end})
+        populate(proxy, 0, 20)
+        assert(writes == 14)
+        local original = math.mod
+        math.mod = function() return 1 end
+        t = {}
+        populate(t, 0, 20)
+        assert(next(t) == nil)
+        math.mod = original
+        populate(t, 4294967260, 4294967295)
+        assert(t['key.4294967295'] == 4294967295 and t['key.4294967293'] == nil)
+        return true
+    "#,
+        ),
+        [Value::Boolean(true)]
+    );
+}

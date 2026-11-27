@@ -2758,6 +2758,17 @@ impl Vm {
                         self.registers[a] = Value::Number(start - step);
                         self.registers[a + 1] = Value::Number(limit);
                         self.registers[a + 2] = Value::Number(step);
+                        if c.checked_sub(pc) == Some(12)
+                            && let Some(next) = self
+                                .reduce_filtered_string_keys(prototype, base, pc, c, error_line)?
+                        {
+                            self.frames[frame_index].pc = next as u32;
+                            if self.frames.len() != frame_index + 1 {
+                                continue 'frames;
+                            }
+                            pc = next;
+                            continue;
+                        }
                         match self.reduce_numeric_loop(
                             base,
                             usize::from(i.a),

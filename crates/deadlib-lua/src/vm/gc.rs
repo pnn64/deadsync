@@ -883,6 +883,31 @@ impl Vm {
             .saturating_add(self.io.files.allocated)
             .saturating_add(self.gc.control_allocated)
     }
+
+    /// The only debt that a primitive string store can change before a poll.
+    #[inline]
+    pub(in crate::vm) fn string_store_debt(&self) -> usize {
+        self.strings
+            .bytes
+            .allocated
+            .saturating_add(self.tables.allocated)
+            .saturating_add(self.gc.control_allocated)
+    }
+
+    /// Exclusive limit for string-store debt while other arenas are unchanged.
+    /// Recompute after a collector step, which can change every arena's debt.
+    pub(in crate::vm) fn string_store_limit(&self) -> usize {
+        if self.gc.running != 0 || self.gc.closing {
+            return 0;
+        }
+        if self.gc.stopped {
+            return usize::MAX;
+        }
+        let total = self.gc.last_live.saturating_add(self.gc_debt());
+        self.gc
+            .threshold
+            .saturating_sub(total.saturating_sub(self.string_store_debt()))
+    }
     fn mark_barrier_value(&mut self, value: Value) -> bool {
         match value {
             Value::String(id) => {
@@ -2013,7 +2038,8 @@ impl Vm {
                         })
                     };
                     if recycle {
-                        self.compile_spare.collect_with_load_buffers(|pool| collect(Some(pool)))
+                        self.compile_spare
+                            .collect_with_load_buffers(|pool| collect(Some(pool)))
                     } else {
                         collect(None)
                     }
