@@ -10,7 +10,7 @@ use crate::cu_tree::{MvField, PictureState, RecycledBuffers};
 use crate::dpb::{
     DecodedPicture, DecodedPictureBuffer, PictureReferenceStatus, ReferencePictureSets,
     apply_ref_pic_list_modification, build_ref_pic_list_temp0, build_ref_pic_list_temp1,
-    resolve_ref_pics,
+    resolve_ref_pics_into,
 };
 use crate::error::DecodeError;
 use crate::nal::{NalUnit, NalUnitType};
@@ -21,8 +21,6 @@ use crate::shared::SharedTable;
 use crate::slice::{SliceHeader, SliceType, parse_slice_segment_header};
 use crate::sps::{ShortTermRps, Sps, parse_sps};
 
-/// Reference picture lists L0 and L1 of one slice.
-type RefPicLists = (Vec<Arc<DecodedPicture>>, Vec<Arc<DecodedPicture>>);
 use crate::vps::{Vps, parse_vps};
 
 /// A reconstructed video frame with cropped planar Y, Cb and Cr samples.
@@ -100,28 +98,47 @@ struct PictureInProgress {
     /// Where the picture decodes: on the calling thread, or on its own
     /// thread (frame threading).
     side: PictureSide,
-    /// Header of the most recently decoded slice segment. Phase 3c-1 uses
-    /// it for deblock/SAO finalization — in the common case all slices in a
-    /// picture share the same filter flags, which this approximation
-    /// matches.
-    last_slice_header: SliceHeader,
-    /// Phase 3c-4: header of the most recent *independent* slice segment
-    /// in this picture. A dependent slice segment inherits `slice_type`,
-    /// `slice_qp_y`, `slice_sao_*`, and the deblock filter fields from
-    /// this header; the parser leaves those fields at default values on
-    /// dependent slices and the decoder copies them in from here. For a
-    /// picture that doesn't use dependent slice segments this is simply a
-    /// copy of `last_slice_header` after every slice.
-    last_independent_slice_header: SliceHeader,
+    output: PictureOutput,
+    /// Header inherited by dependent slices when the PPS enables them.
+    independent_header: Option<SliceHeader>,
     /// Total CTBs in the picture = `pic_width_in_ctbs * pic_height_in_ctbs`.
     total_ctbs: u32,
     /// Reference POC lists of each independent slice, keyed by its slice
     /// address (the value `tab_slice_addr_rs` holds for its CTBs). Stored in
     /// the decoded picture for temporal MV prediction by later pictures.
-    slice_ref_pocs: Vec<(i32, crate::dpb::SliceRefLists)>,
+    slice_ref_pocs: crate::dpb::SliceRefHistory,
     /// NAL unit type of the picture's first slice; every slice of a picture
     /// has the same one (spec 7.4.2.4.4).
     nal_unit_type: NalUnitType,
+}
+
+impl PictureInProgress {
+    fn independent_header(&self) -> Result<&SliceHeader, DecodeError> {
+        self.independent_header
+            .as_ref()
+            .ok_or(DecodeError::InvalidSyntax(
+                "dependent slice segment has no independent header",
+            ))
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PictureOutput {
+    poc: i32,
+    pic_output_flag: bool,
+    temporal_id: u8,
+    nal_unit_type: NalUnitType,
+}
+
+impl From<&SliceHeader> for PictureOutput {
+    fn from(sh: &SliceHeader) -> Self {
+        Self {
+            poc: sh.poc,
+            pic_output_flag: sh.pic_output_flag,
+            temporal_id: sh.temporal_id,
+            nal_unit_type: sh.nal_unit_type,
+        }
+    }
 }
 
 /// Tile scan derivation tables for a given (SPS, PPS) pair (spec 6.5.1).
@@ -151,13 +168,11 @@ struct PictureDecode {
 
 impl PictureDecode {
     /// The end of the picture's decode: grey out CTBs no slice decoded,
-    /// run the loop filters (with the flags of the picture's last slice
-    /// header `last_sh`) and determine the visible picture geometry.
+    /// run the loop filters and determine the visible picture geometry.
     fn finish(
         &mut self,
         sps: &Sps,
         pps: &Pps,
-        last_sh: &SliceHeader,
         threads: usize,
     ) -> Result<PictureLayout, DecodeError> {
         with_picture_state!(&mut self.state, |state| fill_undecoded_ctbs(state));
@@ -168,7 +183,7 @@ impl PictureDecode {
                 // Frame threading: the rest of the rows (after the grey fill).
                 filter.finish(state);
             } else {
-                crate::deblock::deblock_picture(state, sps, pps, last_sh, threads);
+                crate::deblock::deblock_picture(state, sps, pps, threads);
                 crate::sao::apply_sao_picture(state, sps, threads);
             }
         });
@@ -195,13 +210,10 @@ struct PictureThread {
 
 enum PictureMessage {
     Slice(Box<ThreadSliceJob>),
-    /// No more slices: finish the picture (loop filters, crop) with these
-    /// parameter sets and the picture's last slice header, as a sequential
-    /// decode does.
+    /// Finish the picture with the active parameter sets.
     Finish {
         sps: Arc<Sps>,
         pps: Arc<Pps>,
-        last_sh: Box<SliceHeader>,
     },
 }
 
@@ -248,21 +260,25 @@ fn picture_thread(
                 // References are read as their rows become final (motion
                 // compensation and temporal MV prediction wait for the rows
                 // they need).
-                if let Err(e) =
-                    decode.decode_slice(&job.syntax, &job.rbsp, &job.epb_positions, threads)
-                {
+                if let Err(e) = decode.decode_slice(
+                    &job.syntax,
+                    &job.header,
+                    &job.rbsp,
+                    &job.epb_positions,
+                    threads,
+                ) {
                     errors.push(e);
                 }
             }
-            PictureMessage::Finish { sps, pps, last_sh } => {
-                finish = Some((sps, pps, last_sh));
+            PictureMessage::Finish { sps, pps } => {
+                finish = Some((sps, pps));
                 break;
             }
         }
     }
     let frame = match finish {
-        Some((sps, pps, last_sh)) => decode
-            .finish(&sps, &pps, &last_sh, threads)
+        Some((sps, pps)) => decode
+            .finish(&sps, &pps, threads)
             .map(|layout| Picture::new(Arc::clone(&guard.0), layout)),
         None => Err(DecodeError::InvalidSyntax(
             "picture abandoned before its end",
@@ -350,7 +366,6 @@ fn start_picture_thread(
 
 /// One slice segment's parsed syntax and references.
 struct SliceJob {
-    sh: SliceHeader,
     sps: Arc<Sps>,
     pps: Arc<Pps>,
     tile_tables: Arc<TileScanTables>,
@@ -372,6 +387,7 @@ struct SliceJob {
 /// A worker holds its packet buffers until the slice has been decoded.
 struct ThreadSliceJob {
     syntax: SliceJob,
+    header: SliceHeader,
     rbsp: Vec<u8>,
     epb_positions: Vec<u32>,
 }
@@ -382,11 +398,12 @@ impl PictureDecode {
     fn decode_slice(
         &mut self,
         job: &SliceJob,
+        sh: &SliceHeader,
         rbsp: &[u8],
         epb_positions: &[u32],
         threads: usize,
     ) -> Result<(), DecodeError> {
-        let (sps, pps, sh) = (&*job.sps, &*job.pps, &job.sh);
+        let (sps, pps) = (&*job.sps, &*job.pps);
         let tile_tables = &*job.tile_tables;
         let pic_width_in_ctbs_for_init = sps.pic_width_in_ctbs_y();
         let wpp_for_init = pps.entropy_coding_sync_enabled_flag;
@@ -1083,7 +1100,7 @@ fn generated_reference<P: Pixel>(
         log2_min_pu_size,
         min_pu_width,
         log2_ctb_size,
-        [Vec::new(), Vec::new()],
+        Default::default(),
     );
     dp.y_stride = y_stride;
     dp.uv_stride = uv_stride;
@@ -1519,7 +1536,7 @@ impl Decoder {
                 .ok_or(DecodeError::InvalidSyntax(
                     "dependent slice segment without an active picture",
                 ))?;
-            let parent = &pic.last_independent_slice_header;
+            let parent = pic.independent_header()?;
             sh.slice_type = parent.slice_type;
             sh.pic_output_flag = parent.pic_output_flag;
             sh.slice_pic_order_cnt_lsb = parent.slice_pic_order_cnt_lsb;
@@ -1605,7 +1622,7 @@ impl Decoder {
             // as the rest of the picture; just take it from the current
             // picture in progress.
             if let Some(pic) = self.current_picture.as_ref() {
-                sh.poc = pic.last_independent_slice_header.poc;
+                sh.poc = pic.output.poc;
             }
         }
 
@@ -1834,10 +1851,10 @@ impl Decoder {
             };
             self.current_picture = Some(PictureInProgress {
                 side,
-                last_slice_header: sh.clone(),
-                last_independent_slice_header: sh.clone(),
+                output: PictureOutput::from(&sh),
+                independent_header: None,
                 total_ctbs,
-                slice_ref_pocs: Vec::new(),
+                slice_ref_pocs: Default::default(),
                 nal_unit_type: nut,
             });
         } else {
@@ -1870,20 +1887,33 @@ impl Decoder {
                     Some(PictureSide::Thread(t)) => Some(&t.picture),
                     _ => None,
                 };
-                let (l0, l1) =
-                    Self::build_ref_pic_lists(&self.current_rps, &self.dpb, &sh, current)?;
+                if let Err(error) = Self::build_ref_pic_lists(
+                    &self.current_rps,
+                    &self.dpb,
+                    &sh,
+                    current,
+                    &mut self.current_ref_list_l0,
+                    &mut self.current_ref_list_l1,
+                ) {
+                    self.current_ref_list_l0.clear();
+                    self.current_ref_list_l1.clear();
+                    return Err(error);
+                }
                 // The DPB is cleared when the picture geometry changes, and
                 // missing references are generated with the current SPS.
-                debug_assert!(l0.iter().chain(&l1).all(|p| {
-                    (p.width, p.height, p.log2_ctb_size)
-                        == (
-                            sps.pic_width_in_luma_samples,
-                            sps.pic_height_in_luma_samples,
-                            sps.ctb_log2_size_y,
-                        )
-                }));
-                self.current_ref_list_l0 = l0;
-                self.current_ref_list_l1 = l1;
+                debug_assert!(
+                    self.current_ref_list_l0
+                        .iter()
+                        .chain(&self.current_ref_list_l1)
+                        .all(|p| {
+                            (p.width, p.height, p.log2_ctb_size)
+                                == (
+                                    sps.pic_width_in_luma_samples,
+                                    sps.pic_height_in_luma_samples,
+                                    sps.ctb_log2_size_y,
+                                )
+                        })
+                );
             }
             let entry = (
                 sh.slice_segment_address as i32,
@@ -1929,8 +1959,10 @@ impl Decoder {
         // Phase 3d-3/3d-5: construct SliceParams for the CU tree.
         // Include POC information so the AMVP candidate list builder can
         // check same-ref and compute MV scaling.
-        let ref_list_l0_pocs: Vec<i32> = self.current_ref_list_l0.iter().map(|p| p.poc).collect();
-        let ref_list_l1_pocs: Vec<i32> = self.current_ref_list_l1.iter().map(|p| p.poc).collect();
+        let ref_list_l0_pocs: crate::dpb::PocList =
+            self.current_ref_list_l0.iter().map(|p| p.poc).collect();
+        let ref_list_l1_pocs: crate::dpb::PocList =
+            self.current_ref_list_l1.iter().map(|p| p.poc).collect();
         // Phase 3e: derive the collocated reference picture for temporal MVP.
         let collocated_ref = if sh.slice_temporal_mvp_enabled_flag && sh.slice_type != SliceType::I
         {
@@ -1962,9 +1994,9 @@ impl Decoder {
                 &self.current_ref_list_l1,
             )
             .is_long_term,
-            picture_slice_ref_lists: pic.slice_ref_pocs.clone(),
-            ref_frames_l0: self.current_ref_list_l0.clone(),
-            ref_frames_l1: self.current_ref_list_l1.clone(),
+            picture_slice_ref_lists: Default::default(),
+            ref_frames_l0: Vec::new(),
+            ref_frames_l1: Vec::new(),
             collocated_ref,
             slice_temporal_mvp_enabled_flag: sh.slice_temporal_mvp_enabled_flag,
             collocated_from_l0_flag: sh.collocated_from_l0_flag,
@@ -1979,7 +2011,7 @@ impl Decoder {
 
         // Pre-compute the recorded_slice_addr for use in the CTB loop.
         let recorded_slice_addr = if sh.dependent_slice_segment_flag {
-            pic.last_independent_slice_header.slice_segment_address as i32
+            pic.independent_header()?.slice_segment_address as i32
         } else {
             sh.slice_segment_address as i32
         };
@@ -1988,7 +2020,7 @@ impl Decoder {
         // generic PictureState<P>. Dispatch once via the enum variant and
         // execute the entire inner body monomorphized for the right P.
 
-        let job = SliceJob {
+        let mut job = SliceJob {
             sps: Arc::clone(sps),
             pps: Arc::clone(pps),
             tile_tables: Arc::clone(tile_tables),
@@ -2000,15 +2032,11 @@ impl Decoder {
             segment_starts_qp_chain,
             cabac_byte_offset,
             nal_slice_data_start,
-            sh: sh.clone(),
         };
-        // The picture's latest slice header, and the one dependent segments
-        // inherit from, whether or not this segment's data decodes: with
-        // frame threading the data decodes later, on the picture's thread.
-        if !sh.dependent_slice_segment_flag {
-            pic.last_independent_slice_header = sh.clone();
+        if pps.dependent_slice_segments_enabled_flag && !sh.dependent_slice_segment_flag {
+            pic.independent_header = Some(sh.clone());
         }
-        pic.last_slice_header = sh;
+        pic.output = PictureOutput::from(&sh);
         // The picture ends when the next one starts (or at flush), with any
         // thread count: a picture thread cannot tell the calling thread in
         // time that its CTBs are complete, and a slice segment arriving
@@ -2016,17 +2044,29 @@ impl Decoder {
         // (it may not rewrite complete CTB rows).
         match &mut pic.side {
             PictureSide::Local(decode) => {
-                decode
+                let params = &mut job.slice_params;
+                params.picture_slice_ref_lists = std::mem::take(&mut pic.slice_ref_pocs);
+                params.ref_frames_l0 = std::mem::take(&mut self.current_ref_list_l0);
+                params.ref_frames_l1 = std::mem::take(&mut self.current_ref_list_l1);
+                let result = decode
                     .as_mut()
                     .as_mut()
                     .expect("local picture is present")
-                    .decode_slice(&job, &nal.rbsp, &nal.epb_positions, self.threads)?;
+                    .decode_slice(&job, &sh, &nal.rbsp, &nal.epb_positions, self.threads);
+                pic.slice_ref_pocs = job.slice_params.picture_slice_ref_lists;
+                self.current_ref_list_l0 = job.slice_params.ref_frames_l0;
+                self.current_ref_list_l1 = job.slice_params.ref_frames_l1;
+                result?;
             }
             PictureSide::Thread(t) => {
+                job.slice_params.picture_slice_ref_lists = pic.slice_ref_pocs.clone();
+                job.slice_params.ref_frames_l0 = self.current_ref_list_l0.clone();
+                job.slice_params.ref_frames_l1 = self.current_ref_list_l1.clone();
                 // A send fails only if the thread panicked, which joining
                 // it reports.
                 let _ = t.jobs.send(PictureMessage::Slice(Box::new(ThreadSliceJob {
                     syntax: job,
+                    header: sh,
                     rbsp: nal.rbsp.to_vec(),
                     epb_positions: nal.epb_positions.clone(),
                 })));
@@ -2039,7 +2079,7 @@ impl Decoder {
     /// that is not RASL/RADL/sub-layer non-reference. IRAP pictures qualify
     /// like any other, so store their actual POC (a mid-stream CRA keeps a
     /// non-zero POC; a BLA's POC is its LSB).
-    fn update_prev_tid0(&mut self, last_sh: &SliceHeader) {
+    fn update_prev_tid0(&mut self, last_sh: PictureOutput) {
         let is_tid0 = last_sh.temporal_id == 0
             && !matches!(
                 last_sh.nal_unit_type,
@@ -2063,8 +2103,8 @@ impl Decoder {
     /// already.
     fn finish_threaded_picture(
         &mut self,
-        last_sh: SliceHeader,
-        slice_ref_pocs: Vec<(i32, crate::dpb::SliceRefLists)>,
+        last_sh: PictureOutput,
+        slice_ref_pocs: crate::dpb::SliceRefHistory,
         thread: PictureThread,
     ) -> Result<Option<Picture>, DecodeError> {
         let sps = self
@@ -2077,12 +2117,8 @@ impl Decoder {
             .ok_or(DecodeError::InvalidSyntax("picture without active PPS"))?;
         let _ = thread.picture.slice_ref_pic_list_pocs.set(slice_ref_pocs);
         let limits = crate::output::OutputLimits::from_sps(&sps);
-        let _ = thread.jobs.send(PictureMessage::Finish {
-            sps,
-            pps,
-            last_sh: Box::new(last_sh.clone()),
-        });
-        self.update_prev_tid0(&last_sh);
+        let _ = thread.jobs.send(PictureMessage::Finish { sps, pps });
+        self.update_prev_tid0(last_sh);
         let output = last_sh.pic_output_flag;
         if self.display_order {
             if output {
@@ -2156,11 +2192,7 @@ impl Decoder {
         let mut slot = match pic.side {
             PictureSide::Local(slot) => slot,
             PictureSide::Thread(thread) => {
-                return self.finish_threaded_picture(
-                    pic.last_slice_header,
-                    pic.slice_ref_pocs,
-                    *thread,
-                );
+                return self.finish_threaded_picture(pic.output, pic.slice_ref_pocs, *thread);
             }
         };
         let decode = slot.as_mut().as_mut().expect("local picture is present");
@@ -2173,8 +2205,8 @@ impl Decoder {
             .pps
             .as_ref()
             .ok_or(DecodeError::InvalidSyntax("picture without active PPS"))?;
-        let last_sh = &pic.last_slice_header;
-        let layout = decode.finish(sps, pps, last_sh, threads)?;
+        let last_sh = pic.output;
+        let layout = decode.finish(sps, pps, threads)?;
         let picture_poc = last_sh.poc;
         let pic_width = sps.pic_width_in_luma_samples;
         let pic_height = sps.pic_height_in_luma_samples;
@@ -2186,8 +2218,10 @@ impl Decoder {
         self.update_prev_tid0(last_sh);
 
         // Insert the fresh picture into the DPB.
-        let ref_list_l0_pocs: Vec<i32> = self.current_ref_list_l0.iter().map(|p| p.poc).collect();
-        let ref_list_l1_pocs: Vec<i32> = self.current_ref_list_l1.iter().map(|p| p.poc).collect();
+        let ref_list_l0_pocs: crate::dpb::PocList =
+            self.current_ref_list_l0.iter().map(|p| p.poc).collect();
+        let ref_list_l1_pocs: crate::dpb::PocList =
+            self.current_ref_list_l1.iter().map(|p| p.poc).collect();
 
         let decoded_pic = with_picture_state!(&mut decode.state, |state| {
             // The planes keep the CTU-aligned stride and chroma geometry of
@@ -2526,11 +2560,12 @@ impl Decoder {
         l0: &[Arc<DecodedPicture>],
         l1: &[Arc<DecodedPicture>],
     ) -> crate::dpb::SliceRefLists {
-        let pocs = |l: &[Arc<DecodedPicture>]| l.iter().map(|p| p.poc).collect::<Vec<i32>>();
+        let pocs =
+            |l: &[Arc<DecodedPicture>]| l.iter().map(|p| p.poc).collect::<crate::dpb::PocList>();
         let lt = |l: &[Arc<DecodedPicture>]| {
             l.iter()
                 .map(|p| p.reference_status() == PictureReferenceStatus::LongTerm)
-                .collect::<Vec<bool>>()
+                .collect::<crate::dpb::FlagList>()
         };
         crate::dpb::SliceRefLists {
             pocs: [pocs(l0), pocs(l1)],
@@ -2543,7 +2578,9 @@ impl Decoder {
         dpb: &DecodedPictureBuffer,
         sh: &SliceHeader,
         current: Option<&Arc<DecodedPicture>>,
-    ) -> Result<RefPicLists, DecodeError> {
+        l0: &mut Vec<Arc<DecodedPicture>>,
+        l1: &mut Vec<Arc<DecodedPicture>>,
+    ) -> Result<(), DecodeError> {
         let num_poc_total_curr = rps.num_poc_total_curr();
         let active_l0 = sh.num_ref_idx_l0_active_minus1 as usize + 1;
         let num_rps_curr_temp_list0 = active_l0.max(num_poc_total_curr);
@@ -2555,9 +2592,9 @@ impl Decoder {
             &sh.ref_pic_list_modification.list_entry_l0,
             active_l0,
         )?;
-        let l0 = resolve_ref_pics(dpb, &l0_pocs, current)?;
+        resolve_ref_pics_into(dpb, &l0_pocs, current, l0)?;
 
-        let l1 = if sh.slice_type == SliceType::B {
+        if sh.slice_type == SliceType::B {
             let active_l1 = sh.num_ref_idx_l1_active_minus1 as usize + 1;
             let num_rps_curr_temp_list1 = active_l1.max(num_poc_total_curr);
             let temp1 = build_ref_pic_list_temp1(rps, num_rps_curr_temp_list1);
@@ -2568,12 +2605,10 @@ impl Decoder {
                 &sh.ref_pic_list_modification.list_entry_l1,
                 active_l1,
             )?;
-            resolve_ref_pics(dpb, &l1_pocs, current)?
-        } else {
-            Vec::new()
-        };
+            resolve_ref_pics_into(dpb, &l1_pocs, current, l1)?;
+        }
 
-        Ok((l0, l1))
+        Ok(())
     }
 
     /// Phase 3d-1: walk the RPS and mark each referenced picture in the DPB

@@ -20,7 +20,6 @@
 use crate::cu_tree::PictureState;
 use crate::pixel::Pixel;
 use crate::pps::Pps;
-use crate::slice::SliceHeader;
 use crate::sps::Sps;
 
 /// HEVC β table indexed by clipped QP, spec table 8-13.
@@ -496,7 +495,6 @@ pub fn deblock_picture<P: Pixel>(
     state: &mut PictureState<P>,
     sps: &Sps,
     pps: &Pps,
-    _sh: &SliceHeader,
     threads: usize,
 ) {
     let pic_h = state.height as usize;

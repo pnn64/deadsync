@@ -130,14 +130,14 @@ pub struct SliceParams {
     pub poc: i32,
     /// POC values of RefPicList0 entries (one per active L0 reference).
     /// `ref_pic_list_pocs[0][i]` is the POC of the picture at L0 index `i`.
-    pub ref_pic_list_pocs: [Vec<i32>; 2],
+    pub ref_pic_list_pocs: [crate::dpb::PocList; 2],
     /// Whether each reference list entry is a long-term reference picture.
-    pub ref_pic_list_is_lt: [Vec<bool>; 2],
+    pub ref_pic_list_is_lt: [crate::dpb::FlagList; 2],
     /// Reference lists of every slice of the current picture decoded so
     /// far, keyed by slice address (SliceAddrRs). Deblocking compares the
     /// reference pictures of a block in an earlier slice through that
     /// slice's lists, not the current slice's.
-    pub picture_slice_ref_lists: Vec<(i32, crate::dpb::SliceRefLists)>,
+    pub picture_slice_ref_lists: crate::dpb::SliceRefHistory,
     /// Phase 3d-6: actual reference frame pixel data for L0 MC.
     pub ref_frames_l0: Vec<Arc<DecodedPicture>>,
     /// Phase 3d-6: actual reference frame pixel data for L1 MC.
@@ -2651,8 +2651,8 @@ fn decode_mvd_sign(cabac: &mut CabacReader) -> i32 {
 fn inter_boundary_strength(
     curr: &MvField,
     neigh: &MvField,
-    curr_ref_pocs: &[Vec<i32>; 2],
-    neigh_ref_pocs: &[Vec<i32>; 2],
+    curr_ref_pocs: &[crate::dpb::PocList; 2],
+    neigh_ref_pocs: &[crate::dpb::PocList; 2],
 ) -> u8 {
     if curr == neigh && std::ptr::eq(curr_ref_pocs, neigh_ref_pocs) {
         0
@@ -2665,8 +2665,8 @@ fn inter_boundary_strength(
 fn inter_boundary_strength_full(
     curr: &MvField,
     neigh: &MvField,
-    curr_ref_pocs: &[Vec<i32>; 2],
-    neigh_ref_pocs: &[Vec<i32>; 2],
+    curr_ref_pocs: &[crate::dpb::PocList; 2],
+    neigh_ref_pocs: &[crate::dpb::PocList; 2],
 ) -> u8 {
     // Both bi-pred
     if curr.pred_flag == 3 && neigh.pred_flag == 3 {
@@ -2821,7 +2821,7 @@ fn compute_deblocking_boundary_strengths<P: Pixel>(
         state.tab_slice_addr_rs[(y as usize >> log2_ctb) * ctb_w + (x as usize >> log2_ctb)]
     };
     let curr_slice = slice_at(x0, y0);
-    let ref_pocs_at = |x: u32, y: u32| -> &[Vec<i32>; 2] {
+    let ref_pocs_at = |x: u32, y: u32| -> &[crate::dpb::PocList; 2] {
         let addr = slice_at(x, y);
         if addr == curr_slice {
             return curr_ref_pocs;

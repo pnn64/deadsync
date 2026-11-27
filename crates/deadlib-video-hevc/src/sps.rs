@@ -7,6 +7,7 @@
 //! either rejected or skipped.
 
 use crate::bitstream::BitstreamReader;
+use crate::dpb::{FlagList, PocList};
 use crate::error::DecodeError;
 use crate::profile_tier_level::{ProfileTierLevel, parse_profile_tier_level};
 use crate::scaling_list::{ScalingList, parse_scaling_list_data};
@@ -32,16 +33,16 @@ pub struct ShortTermRps {
     pub num_positive_pics: usize,
     /// Signed POC delta for each negative reference (all entries < 0).
     /// Length `num_negative_pics`, sorted closest-first.
-    pub delta_poc_s0: Vec<i32>,
+    pub delta_poc_s0: PocList,
     /// Signed POC delta for each positive reference (all entries > 0).
     /// Length `num_positive_pics`, sorted closest-first.
-    pub delta_poc_s1: Vec<i32>,
+    pub delta_poc_s1: PocList,
     /// `used_by_curr_pic_s0_flag[i]` — if true, the matching ST-ref is
     /// "used by the current picture" (goes into RefPicSetStCurrBefore).
-    pub used_by_curr_pic_s0_flag: Vec<bool>,
+    pub used_by_curr_pic_s0_flag: FlagList,
     /// `used_by_curr_pic_s1_flag[i]` — if true, the matching ST-ref is
     /// "used by the current picture" (goes into RefPicSetStCurrAfter).
-    pub used_by_curr_pic_s1_flag: Vec<bool>,
+    pub used_by_curr_pic_s1_flag: FlagList,
 }
 
 impl ShortTermRps {
@@ -151,10 +152,10 @@ pub fn parse_st_ref_pic_set(
         // the added delta_rps entry, then the reference RPS's positive
         // pictures in forward order; each entry that's either used or
         // includes a use_delta_flag becomes a delta POC in the new RPS.
-        let mut delta_poc_s0: Vec<i32> = Vec::new();
-        let mut delta_poc_s1: Vec<i32> = Vec::new();
-        let mut used_s0: Vec<bool> = Vec::new();
-        let mut used_s1: Vec<bool> = Vec::new();
+        let mut delta_poc_s0 = PocList::default();
+        let mut delta_poc_s1 = PocList::default();
+        let mut used_s0 = FlagList::default();
+        let mut used_s1 = FlagList::default();
 
         // Negative pictures: for j = num_negative_pics - 1 .. 0, the
         // reference RPS's negative delta[j], plus delta_rps. If the result
@@ -173,7 +174,7 @@ pub fn parse_st_ref_pic_set(
         //
         // Build a flat list [all s0 in ascending order, all s1 in ascending
         // order] to mirror FFmpeg's layout.
-        let mut ref_flat: Vec<i32> = Vec::with_capacity(ref_num_delta_pocs);
+        let mut ref_flat = PocList::default();
         // s0 is stored closest-first (e.g. [-1, -3, -5]); we want ascending
         // (most-negative-first): [-5, -3, -1]. Reverse it.
         for d in ref_rps.delta_poc_s0.iter().rev() {
@@ -276,8 +277,8 @@ pub fn parse_st_ref_pic_set(
             ));
         }
 
-        let mut delta_poc_s0 = Vec::with_capacity(num_negative_pics);
-        let mut used_by_curr_pic_s0_flag = Vec::with_capacity(num_negative_pics);
+        let mut delta_poc_s0 = PocList::default();
+        let mut used_by_curr_pic_s0_flag = FlagList::default();
         let mut prev: i32 = 0;
         for _ in 0..num_negative_pics {
             let delta_poc_s0_minus1 = r.read_ue()?;
@@ -291,8 +292,8 @@ pub fn parse_st_ref_pic_set(
             used_by_curr_pic_s0_flag.push(r.read_bit()? == 1);
         }
 
-        let mut delta_poc_s1 = Vec::with_capacity(num_positive_pics);
-        let mut used_by_curr_pic_s1_flag = Vec::with_capacity(num_positive_pics);
+        let mut delta_poc_s1 = PocList::default();
+        let mut used_by_curr_pic_s1_flag = FlagList::default();
         let mut prev: i32 = 0;
         for _ in 0..num_positive_pics {
             let delta_poc_s1_minus1 = r.read_ue()?;

@@ -34,10 +34,14 @@ pub enum PictureReferenceStatus {
 /// One slice's reference picture lists as seen by temporal MV prediction:
 /// the POC of every entry and whether it was a long-term reference when the
 /// slice was decoded (spec 8.5.3.2.8 compares long-term status).
+pub(crate) type PocList = crate::small_list::SmallList<i32, 8>;
+pub(crate) type FlagList = crate::small_list::SmallList<bool, 8>;
+pub(crate) type SliceRefHistory = crate::small_list::SmallList<(i32, SliceRefLists), 1>;
+
 #[derive(Debug, Clone, Default)]
 pub struct SliceRefLists {
-    pub pocs: [Vec<i32>; 2],
-    pub is_long_term: [Vec<bool>; 2],
+    pub pocs: [PocList; 2],
+    pub is_long_term: [FlagList; 2],
 }
 
 /// A picture's luma, Cb and Cr planes, in its sample type.
@@ -180,7 +184,7 @@ pub struct DecodedPicture {
     /// per-list reference POCs at the time this picture was decoded.
     /// Used to compute POC distances for temporal MV scaling.
     /// `ref_pic_list_pocs[0]` = L0 POCs, `ref_pic_list_pocs[1]` = L1 POCs.
-    pub ref_pic_list_pocs: [Vec<i32>; 2],
+    pub ref_pic_list_pocs: [PocList; 2],
 
     /// Row stride of `y` in samples. Planes keep the CTU-aligned stride of
     /// the `PictureState` they came from, which is wider than `width` when
@@ -199,7 +203,7 @@ pub struct DecodedPicture {
     /// Set once the picture's last slice is known (with frame threading,
     /// when its thread has all its slices; before any later picture reads
     /// it).
-    pub slice_ref_pic_list_pocs: OnceLock<Vec<(i32, SliceRefLists)>>,
+    pub slice_ref_pic_list_pocs: OnceLock<SliceRefHistory>,
     /// Slice address of every CTB in raster order (`tab_slice_addr_rs` of
     /// the decoded picture).
     pub ctb_slice_addr: SharedTable<i32>,
@@ -226,7 +230,7 @@ impl DecodedPicture {
             log2_min_pu_size: 2,
             min_pu_width: 0,
             log2_ctb_size: 0,
-            ref_pic_list_pocs: [Vec::new(), Vec::new()],
+            ref_pic_list_pocs: Default::default(),
             y_stride: width as usize,
             uv_stride: (width / 2) as usize,
             chroma_shift_w: 1,
@@ -250,7 +254,7 @@ impl DecodedPicture {
         log2_min_pu_size: u8,
         min_pu_width: usize,
         log2_ctb_size: u8,
-        ref_pic_list_pocs: [Vec<i32>; 2],
+        ref_pic_list_pocs: [PocList; 2],
     ) -> Self {
         Self {
             planes: PicturePlanes::from_pixel_data(y, u, v),
@@ -301,7 +305,7 @@ impl DecodedPicture {
             log2_min_pu_size,
             min_pu_width,
             log2_ctb_size,
-            ref_pic_list_pocs: [Vec::new(), Vec::new()],
+            ref_pic_list_pocs: Default::default(),
             y_stride,
             uv_stride,
             chroma_shift_w,
@@ -449,27 +453,27 @@ impl DecodedPictureBuffer {
 pub struct ReferencePictureSets {
     /// Short-term "before current picture" references that the current
     /// picture itself uses (used_by_curr_pic_s0_flag = 1).
-    pub st_curr_before: Vec<i32>,
+    pub st_curr_before: PocList,
     /// Short-term "after current picture" references that the current
     /// picture itself uses.
-    pub st_curr_after: Vec<i32>,
+    pub st_curr_after: PocList,
     /// Short-term references that the current picture does NOT use but
     /// which must still be kept around (they're referenced by later
     /// pictures according to the RPS).
-    pub st_foll: Vec<i32>,
+    pub st_foll: PocList,
     /// Long-term references that the current picture uses. Each entry is
     /// a full POC (when `lt_poc_msb_present` is true for that index) or a
     /// POC LSB (when false).
-    pub lt_curr: Vec<i32>,
+    pub lt_curr: PocList,
     /// Long-term references that the current picture does not use but
     /// which later pictures will.
-    pub lt_foll: Vec<i32>,
+    pub lt_foll: PocList,
     /// Per-entry flag for `lt_curr` ++ `lt_foll` (in that order) indicating
     /// whether `delta_poc_msb_present_flag` was set. When true, the
     /// corresponding entry in `lt_curr`/`lt_foll` is a full POC and DPB
     /// matching uses exact POC. When false, it's a POC LSB and DPB matching
     /// uses `poc % MaxPicOrderCntLsb`.
-    pub lt_poc_msb_present: Vec<bool>,
+    pub lt_poc_msb_present: FlagList,
 }
 
 impl ReferencePictureSets {
@@ -491,7 +495,7 @@ impl ReferencePictureSets {
 pub fn build_ref_pic_list_temp0(
     rps: &ReferencePictureSets,
     num_rps_curr_temp_list: usize,
-) -> Vec<i32> {
+) -> PocList {
     build_ref_pic_list_temp(
         &[&rps.st_curr_before, &rps.st_curr_after, &rps.lt_curr],
         num_rps_curr_temp_list,
@@ -505,7 +509,7 @@ pub fn build_ref_pic_list_temp0(
 pub fn build_ref_pic_list_temp1(
     rps: &ReferencePictureSets,
     num_rps_curr_temp_list: usize,
-) -> Vec<i32> {
+) -> PocList {
     build_ref_pic_list_temp(
         &[&rps.st_curr_after, &rps.st_curr_before, &rps.lt_curr],
         num_rps_curr_temp_list,
@@ -515,8 +519,8 @@ pub fn build_ref_pic_list_temp1(
 /// Shared helper for L0 / L1 temp list construction. Takes a list of
 /// sub-lists in visit order and concatenates them (wrapping around) until
 /// the result has at least `target_len` entries.
-fn build_ref_pic_list_temp(sub_lists: &[&Vec<i32>], target_len: usize) -> Vec<i32> {
-    let mut out: Vec<i32> = Vec::with_capacity(target_len);
+fn build_ref_pic_list_temp(sub_lists: &[&[i32]], target_len: usize) -> PocList {
+    let mut out = PocList::default();
     if target_len == 0 {
         return out;
     }
@@ -553,8 +557,8 @@ pub fn apply_ref_pic_list_modification(
     modification_flag: bool,
     list_entry: &[u32],
     num_active: usize,
-) -> Result<Vec<i32>, crate::error::DecodeError> {
-    let mut out: Vec<i32> = Vec::with_capacity(num_active);
+) -> Result<PocList, crate::error::DecodeError> {
+    let mut out = PocList::default();
     if modification_flag {
         if list_entry.len() < num_active {
             return Err(crate::error::DecodeError::InvalidSyntax(
@@ -576,7 +580,7 @@ pub fn apply_ref_pic_list_modification(
                 "temp list shorter than active ref count",
             ));
         }
-        out.extend_from_slice(&temp_list[..num_active]);
+        return Ok(temp_list[..num_active].iter().copied().collect());
     }
     Ok(out)
 }
@@ -590,17 +594,19 @@ pub fn apply_ref_pic_list_modification(
 /// sequential decode (where it enters the DPB once finished) even for a
 /// damaged RPS naming the current POC. A picture listing itself would wait
 /// forever for its own final rows.
-pub fn resolve_ref_pics(
+pub fn resolve_ref_pics_into(
     dpb: &DecodedPictureBuffer,
     pocs: &[i32],
     current: Option<&Arc<DecodedPicture>>,
-) -> Result<Vec<Arc<DecodedPicture>>, crate::error::DecodeError> {
+    out: &mut Vec<Arc<DecodedPicture>>,
+) -> Result<(), crate::error::DecodeError> {
     let candidates = |poc: i32| {
         dpb.pictures()
             .iter()
             .filter(move |p| p.poc == poc && !current.is_some_and(|c| Arc::ptr_eq(c, p)))
     };
-    let mut out: Vec<Arc<DecodedPicture>> = Vec::with_capacity(pocs.len());
+    out.clear();
+    out.reserve(pocs.len());
     for &poc in pocs {
         let pic = candidates(poc)
             .find(|p| p.reference_status() == PictureReferenceStatus::ShortTerm)
@@ -617,6 +623,17 @@ pub fn resolve_ref_pics(
             }
         }
     }
+    Ok(())
+}
+
+#[cfg(test)]
+fn resolve_ref_pics(
+    dpb: &DecodedPictureBuffer,
+    pocs: &[i32],
+    current: Option<&Arc<DecodedPicture>>,
+) -> Result<Vec<Arc<DecodedPicture>>, crate::error::DecodeError> {
+    let mut out = Vec::new();
+    resolve_ref_pics_into(dpb, pocs, current, &mut out)?;
     Ok(out)
 }
 
@@ -728,12 +745,12 @@ mod tests {
     #[test]
     fn num_poc_total_curr_sums_three_sets() {
         let rps = ReferencePictureSets {
-            st_curr_before: vec![-1, -2],
-            st_curr_after: vec![1],
-            st_foll: vec![-4],
-            lt_curr: vec![100],
-            lt_foll: vec![],
-            lt_poc_msb_present: vec![],
+            st_curr_before: vec![-1, -2].into_iter().collect(),
+            st_curr_after: vec![1].into_iter().collect(),
+            st_foll: vec![-4].into_iter().collect(),
+            lt_curr: vec![100].into_iter().collect(),
+            lt_foll: vec![].into_iter().collect(),
+            lt_poc_msb_present: vec![].into_iter().collect(),
         };
         assert_eq!(rps.num_poc_total_curr(), 4);
     }
@@ -743,12 +760,12 @@ mod tests {
         // Spec 8.3.2: RefPicListTemp0 concatenates st_curr_before,
         // st_curr_after, lt_curr — in that order.
         let rps = ReferencePictureSets {
-            st_curr_before: vec![3, 2],
-            st_curr_after: vec![5, 6],
-            st_foll: vec![],
-            lt_curr: vec![100],
-            lt_foll: vec![],
-            lt_poc_msb_present: vec![],
+            st_curr_before: vec![3, 2].into_iter().collect(),
+            st_curr_after: vec![5, 6].into_iter().collect(),
+            st_foll: vec![].into_iter().collect(),
+            lt_curr: vec![100].into_iter().collect(),
+            lt_foll: vec![].into_iter().collect(),
+            lt_poc_msb_present: vec![].into_iter().collect(),
         };
         // NumPocTotalCurr = 5, so with num_rps_curr_temp_list = 5 we expect
         // exactly the concatenation, no wrap.
@@ -761,12 +778,12 @@ mod tests {
         // Spec 8.3.2: RefPicListTemp1 concatenates st_curr_after,
         // st_curr_before, lt_curr — note After comes BEFORE Before.
         let rps = ReferencePictureSets {
-            st_curr_before: vec![3, 2],
-            st_curr_after: vec![5, 6],
-            st_foll: vec![],
-            lt_curr: vec![100],
-            lt_foll: vec![],
-            lt_poc_msb_present: vec![],
+            st_curr_before: vec![3, 2].into_iter().collect(),
+            st_curr_after: vec![5, 6].into_iter().collect(),
+            st_foll: vec![].into_iter().collect(),
+            lt_curr: vec![100].into_iter().collect(),
+            lt_foll: vec![].into_iter().collect(),
+            lt_poc_msb_present: vec![].into_iter().collect(),
         };
         let temp = build_ref_pic_list_temp1(&rps, 5);
         assert_eq!(temp, vec![5, 6, 3, 2, 100]);
@@ -777,12 +794,12 @@ mod tests {
         // `num_ref_idx_l0_active > NumPocTotalCurr` → temp list wraps.
         // RPS = [3, 2], active = 5 → temp = [3, 2, 3, 2, 3].
         let rps = ReferencePictureSets {
-            st_curr_before: vec![3, 2],
-            st_curr_after: vec![],
-            st_foll: vec![],
-            lt_curr: vec![],
-            lt_foll: vec![],
-            lt_poc_msb_present: vec![],
+            st_curr_before: vec![3, 2].into_iter().collect(),
+            st_curr_after: vec![].into_iter().collect(),
+            st_foll: vec![].into_iter().collect(),
+            lt_curr: vec![].into_iter().collect(),
+            lt_foll: vec![].into_iter().collect(),
+            lt_poc_msb_present: vec![].into_iter().collect(),
         };
         let temp = build_ref_pic_list_temp0(&rps, 5);
         assert_eq!(temp, vec![3, 2, 3, 2, 3]);
@@ -944,12 +961,12 @@ mod tests {
 
         // RPS: only POC 0 and 8 are ST refs. POC 4 is not referenced.
         let mut rps = ReferencePictureSets {
-            st_curr_before: vec![0],
-            st_curr_after: vec![8],
-            st_foll: vec![],
-            lt_curr: vec![],
-            lt_foll: vec![],
-            lt_poc_msb_present: vec![],
+            st_curr_before: vec![0].into_iter().collect(),
+            st_curr_after: vec![8].into_iter().collect(),
+            st_foll: vec![].into_iter().collect(),
+            lt_curr: vec![].into_iter().collect(),
+            lt_foll: vec![].into_iter().collect(),
+            lt_poc_msb_present: vec![].into_iter().collect(),
         };
         Decoder::apply_rps_marking(&mut rps, &dpb, 8);
 
@@ -988,12 +1005,12 @@ mod tests {
         dpb.insert(p19.clone());
 
         let mut rps = ReferencePictureSets {
-            st_curr_before: vec![3],
-            st_curr_after: vec![],
-            st_foll: vec![],
-            lt_curr: vec![3], // LSB=3, matches both POC 3 and POC 19 (19%16=3)
-            lt_foll: vec![],
-            lt_poc_msb_present: vec![false, false], // LSB-based matching for both
+            st_curr_before: vec![3].into_iter().collect(),
+            st_curr_after: vec![].into_iter().collect(),
+            st_foll: vec![].into_iter().collect(),
+            lt_curr: vec![3].into_iter().collect(), // LSB=3, matches both POC 3 and POC 19 (19%16=3)
+            lt_foll: vec![].into_iter().collect(),
+            lt_poc_msb_present: vec![false, false].into_iter().collect(), // LSB-based matching for both
         };
         // log2_max_poc_lsb=4 → max_poc_lsb=16
         Decoder::apply_rps_marking(&mut rps, &dpb, 4);
@@ -1034,12 +1051,12 @@ mod tests {
         // LT ref with poc_msb_present=true and full POC=19 → should match
         // only POC 19, not POC 3 (even though both have LSB=3).
         let mut rps = ReferencePictureSets {
-            st_curr_before: vec![],
-            st_curr_after: vec![],
-            st_foll: vec![],
-            lt_curr: vec![19], // full POC (msb_present=true)
-            lt_foll: vec![],
-            lt_poc_msb_present: vec![true],
+            st_curr_before: vec![].into_iter().collect(),
+            st_curr_after: vec![].into_iter().collect(),
+            st_foll: vec![].into_iter().collect(),
+            lt_curr: vec![19].into_iter().collect(), // full POC (msb_present=true)
+            lt_foll: vec![].into_iter().collect(),
+            lt_poc_msb_present: vec![true].into_iter().collect(),
         };
         Decoder::apply_rps_marking(&mut rps, &dpb, 4);
 
@@ -1069,12 +1086,12 @@ mod tests {
 
         // LT ref with poc_msb_present=false and LSB=3 → matches POC 19
         let mut rps = ReferencePictureSets {
-            st_curr_before: vec![],
-            st_curr_after: vec![],
-            st_foll: vec![],
-            lt_curr: vec![3], // POC LSB (msb_present=false)
-            lt_foll: vec![],
-            lt_poc_msb_present: vec![false],
+            st_curr_before: vec![].into_iter().collect(),
+            st_curr_after: vec![].into_iter().collect(),
+            st_foll: vec![].into_iter().collect(),
+            lt_curr: vec![3].into_iter().collect(), // POC LSB (msb_present=false)
+            lt_foll: vec![].into_iter().collect(),
+            lt_poc_msb_present: vec![false].into_iter().collect(),
         };
         Decoder::apply_rps_marking(&mut rps, &dpb, 4);
 
