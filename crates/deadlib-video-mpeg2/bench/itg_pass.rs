@@ -231,9 +231,30 @@ fn main() {
         unsafe { SetThreadAffinityMask(GetCurrentThread(), 1usize << cpu) },
         0
     );
+    #[cfg(any(itg_kernels, itg_flags, itg_motion, itg_prediction))]
+    let kernel_repeats = args.get(6).map(|value| {
+        let repeats: usize = value.parse().expect("invalid kernel repetition count");
+        assert!(repeats > 0, "kernel repetition count must be positive");
+        repeats
+    });
     #[cfg(itg_kernels)]
     if mode == "kernels" {
-        kernels(rounds, &args[4], &args[5]);
+        kernels(rounds, &args[4], &args[5], kernel_repeats.unwrap_or(64));
+        return;
+    }
+    #[cfg(itg_flags)]
+    if mode == "kernels" {
+        flag_kernels(rounds, &args[4], kernel_repeats.unwrap_or(256));
+        return;
+    }
+    #[cfg(itg_motion)]
+    if mode == "kernels" {
+        motion_kernels(rounds, &args[4], kernel_repeats.unwrap_or(256));
+        return;
+    }
+    #[cfg(itg_prediction)]
+    if mode == "kernels" {
+        prediction_kernels(rounds, &args[4], kernel_repeats.unwrap_or(256));
         return;
     }
     let list = std::fs::read_to_string(&args[4]).unwrap();
@@ -369,8 +390,137 @@ fn main() {
     }
 }
 
+#[cfg(itg_prediction)]
+fn prediction_kernels(rounds: usize, directory: &str, repeats: usize) {
+    let raw = std::fs::read(Path::new(directory).join("predictions.bin")).unwrap();
+    let mut a = baseline::PerfPredictions::new(&raw);
+    let mut b = candidate::PerfPredictions::new(&raw);
+    a.run(1);
+    b.run(1);
+    assert!(a.samples().eq(b.samples()), "prediction output mismatch");
+    println!("round,revision,operation,operations,cycles,heap_calls,requested_bytes");
+    for round in 0..rounds {
+        for candidate in [round % 2 == 0, round % 2 != 0] {
+            let revision = if candidate { "after" } else { "before" };
+            let (_, cycles, calls, bytes) = measure(|| {
+                if candidate {
+                    b.run(repeats);
+                } else {
+                    a.run(repeats);
+                }
+            });
+            println!(
+                "{round},{revision},prediction,{},{cycles},{calls},{bytes}",
+                a.len() * repeats
+            );
+        }
+    }
+    assert!(
+        a.samples().eq(b.samples()),
+        "prediction output mismatch after replay"
+    );
+}
+
+#[cfg(itg_motion)]
+fn motion_kernels(rounds: usize, directory: &str, repeats: usize) {
+    let raw = std::fs::read(Path::new(directory).join("read-motions.bin")).unwrap();
+    assert_eq!(raw.len() % 20, 0);
+    let records: Vec<_> = raw
+        .chunks_exact(20)
+        .map(|r| {
+            assert!(r[8] <= 8 && r[9] < 8);
+            (
+                r[..8].try_into().unwrap(),
+                r[8],
+                r[9],
+                [r[10], r[11]],
+                [
+                    i32::from_le_bytes(r[12..16].try_into().unwrap()),
+                    i32::from_le_bytes(r[16..20].try_into().unwrap()),
+                ],
+            )
+        })
+        .collect();
+    assert!(!records.is_empty());
+    let expected = baseline::perf_motion_values(&records);
+    assert_eq!(
+        expected,
+        candidate::perf_motion_values(&records),
+        "motion vector, status or bit position mismatch"
+    );
+    let expected_once = expected
+        .iter()
+        .fold(0u64, |sum, (motion, position, status)| {
+            let value = (u64::from(motion[0] as u32) << 32) | u64::from(motion[1] as u32);
+            sum.wrapping_add(value ^ ((*position as u64) << 2) ^ u64::from(*status))
+        });
+    let expected_sum = expected_once.wrapping_mul(repeats as u64);
+    assert_eq!(baseline::perf_motion_batch(&records, 1), expected_once);
+    assert_eq!(candidate::perf_motion_batch(&records, 1), expected_once);
+    println!("round,revision,operation,operations,cycles,heap_calls,requested_bytes");
+    for round in 0..rounds {
+        for candidate in [round % 2 == 0, round % 2 != 0] {
+            let revision = if candidate { "after" } else { "before" };
+            let f = if candidate {
+                candidate::perf_motion_batch
+            } else {
+                baseline::perf_motion_batch
+            };
+            let (sum, cycles, calls, bytes) = measure(|| f(&records, repeats));
+            assert_eq!(sum, expected_sum);
+            println!(
+                "{round},{revision},read-motion,{},{cycles},{calls},{bytes}",
+                records.len() * repeats
+            );
+        }
+    }
+}
+
+#[cfg(itg_flags)]
+fn flag_kernels(rounds: usize, directory: &str, repeats: usize) {
+    let raw = std::fs::read(Path::new(directory).join("flags.bin")).unwrap();
+    assert_eq!(raw.len() % 6, 0);
+    let records: Vec<_> = raw
+        .chunks_exact(6)
+        .map(|r| {
+            assert!(r[4] <= 4 && r[5] < 8);
+            (r[..4].try_into().unwrap(), r[4], r[5])
+        })
+        .collect();
+    assert!(!records.is_empty());
+    let expected = baseline::perf_flag_values(&records);
+    assert_eq!(
+        expected,
+        candidate::perf_flag_values(&records),
+        "flag status or bit position mismatch"
+    );
+    let expected_once = expected
+        .iter()
+        .fold(0u64, |sum, value| sum.wrapping_add(*value));
+    let expected_sum = expected_once.wrapping_mul(repeats as u64);
+    assert_eq!(baseline::perf_flag_batch(&records, 1), expected_once);
+    assert_eq!(candidate::perf_flag_batch(&records, 1), expected_once);
+    println!("round,revision,operation,operations,cycles,heap_calls,requested_bytes");
+    for round in 0..rounds {
+        for candidate in [round % 2 == 0, round % 2 != 0] {
+            let revision = if candidate { "after" } else { "before" };
+            let f = if candidate {
+                candidate::perf_flag_batch
+            } else {
+                baseline::perf_flag_batch
+            };
+            let (sum, cycles, calls, bytes) = measure(|| f(&records, repeats));
+            assert_eq!(sum, expected_sum);
+            println!(
+                "{round},{revision},flag,{},{cycles},{calls},{bytes}",
+                records.len() * repeats
+            );
+        }
+    }
+}
+
 #[cfg(itg_kernels)]
-fn kernels(rounds: usize, directory: &str, operation: &str) {
+fn kernels(rounds: usize, directory: &str, operation: &str, repeats: usize) {
     fn coeff(bytes: &[u8]) -> [i16; 64] {
         std::array::from_fn(|i| i16::from_le_bytes([bytes[2 * i], bytes[2 * i + 1]]))
     }
@@ -390,7 +540,6 @@ fn kernels(rounds: usize, directory: &str, operation: &str) {
     a.run(&blocks, 1);
     b.run(&blocks, 1);
     assert_eq!(a.samples(), b.samples());
-    let repeats = 64;
     println!("round,revision,operation,blocks,cycles,heap_calls,requested_bytes");
     for round in 0..rounds {
         for candidate in [round % 2 == 0, round % 2 != 0] {

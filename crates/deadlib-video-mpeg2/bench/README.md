@@ -94,3 +94,10 @@ It uses the original MPEG files directly, including program-stream extraction
 when needed, and captures real coded blocks in temporary source copies for
 the isolated reconstruction measurements. See the [measurements and reproduction
 instructions](results/windows-x86_64-20261128-itg-pass/README.md).
+
+## ITG corpus optimization pass 2 (2026-11-28)
+
+The second pass measures motion-vector wrapping, prediction bounds checks and
+bilinear interpolation on the same MPG corpus, with real-operation capture and
+replay, exact output comparisons, and cycle/allocation acceptance checks. See the
+[measurements, rejected candidate and reproduction instructions](results/windows-x86_64-20261128-itg-pass2/README.md).

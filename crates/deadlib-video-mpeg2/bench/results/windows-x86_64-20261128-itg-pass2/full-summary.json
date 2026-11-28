@@ -1,0 +1,22 @@
+{
+  "clips": 263,
+  "input_bytes": 1304001107,
+  "frames": 135185,
+  "visible_pixel_bytes": 16123776000,
+  "metadata_bytes": 3244440,
+  "exact_verified_bytes": 16127020440,
+  "before": {
+    "cycles": 102674199596,
+    "frames_per_billion_cycles": 1316.640407540772,
+    "heap_calls": 137578,
+    "requested_bytes": 163054518
+  },
+  "after": {
+    "cycles": 100853631808,
+    "frames_per_billion_cycles": 1340.4078522165498,
+    "heap_calls": 137578,
+    "requested_bytes": 163054518
+  },
+  "cycles_change_percent": -1.7731502121891674,
+  "throughput_change_percent": 1.805158381867611
+}
