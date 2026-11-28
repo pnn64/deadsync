@@ -3,7 +3,7 @@ use crate::bytecode::{ProgramData, RecycledPrototype};
 use crate::memory::fallible::VecExt;
 use std::cell::RefCell;
 
-const MIN_INSTRUCTIONS: usize = 32;
+const MIN_INSTRUCTIONS: usize = 1;
 const MAX_INSTRUCTIONS: usize = 256;
 const MAX_PER_SIZE: usize = 64;
 const MAX_RETAINED_BYTES: usize = 1024 * 1024;
@@ -114,4 +114,24 @@ fn recycles_buffers_only_after_the_last_program_owner_drops() {
     assert_eq!(body.code.as_ptr(), code_address);
     assert_eq!(body.metadata.as_ptr(), metadata_address);
     assert_eq!(body.original_constants.as_ptr(), constants_address);
+}
+
+#[cfg(test)]
+#[test]
+fn ordinary_vm_compilation_reuses_retired_short_code() {
+    let mut vm = crate::Vm::new();
+    let first = vm.compile_source(b"return 11", b"=first").unwrap();
+    let prototype = &first.data.prototypes[0];
+    assert!(prototype.code.len() < 32);
+    let code = prototype.code.as_ptr();
+    let metadata = prototype.metadata.as_ptr();
+    assert_eq!(vm.execute(&first).unwrap(), &[crate::Value::Number(11.0)]);
+    drop(first);
+    vm.collect_garbage().unwrap();
+
+    let second = vm.compile_source(b"return 47", b"=second").unwrap();
+    let prototype = &second.data.prototypes[0];
+    assert_eq!(prototype.code.as_ptr(), code);
+    assert_eq!(prototype.metadata.as_ptr(), metadata);
+    assert_eq!(vm.execute(&second).unwrap(), &[crate::Value::Number(47.0)]);
 }

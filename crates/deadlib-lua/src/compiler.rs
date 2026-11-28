@@ -308,6 +308,7 @@ fn compile_with_templates(
     names.clear();
     let mut tasks = recycle(std::mem::take(&mut spare.tasks));
     let mut prototypes = Vec::new();
+    let recycle_root = template_locale.is_some() && ast.stacks.is_empty();
     if !crate::memory::compilation::active() {
         // Every AST node emits about one instruction. Sizing the entry
         // function's buffers up front avoids their growth copies; nested
@@ -316,7 +317,9 @@ fn compile_with_templates(
         fallible::reserve(&mut function.code, estimate)?;
         fallible::reserve(&mut tasks, 64)?;
         // The parser records one stack size for each nested function.
-        prototypes = fallible::with_capacity(ast.stacks.len() + 1)?;
+        if !recycle_root {
+            prototypes = fallible::with_capacity(ast.stacks.len() + 1)?;
+        }
     }
     tasks.try_push(Task::Block(ast.ids(ast.body)))?;
     let mut c = Compiler {
@@ -340,7 +343,8 @@ fn compile_with_templates(
     c.run()?;
     c.line = ast.end_line;
     c.emit(Op::Return, 0, 0, 0)?;
-    let entry = c.finish()?;
+    let pool = recycle_root.then_some(&mut spare.code);
+    let entry = c.finish_with_buffers(pool)?;
     c.spare.try_push(c.function)?;
     spare.functions = c.spare;
     debug_assert!(c.parents.is_empty());
