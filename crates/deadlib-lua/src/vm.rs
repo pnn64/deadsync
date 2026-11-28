@@ -3182,8 +3182,8 @@ impl Vm {
         if !self.sort_fast_context() {
             return 0;
         }
-        let max_args =
-            usize::from(prototype.params).min(self.registers.capacity() - self.registers.len());
+        let params = usize::from(prototype.params);
+        let max_args = params.min(self.registers.capacity() - self.registers.len());
         let closure = &self.functions[slot_index(function.0)];
         let can_change_field_liveness = self.gc_can_change_field_liveness();
         let mut context = simple::Context {
@@ -3208,7 +3208,8 @@ impl Vm {
             resolvers: None,
             string_metatable: self.type_metatables[meta::STRING_METATABLE_SLOT],
         };
-        let (next, tail_calls) = simple::run_fixed_self_tails(&mut context, function, max_args);
+        let (next, tail_calls) =
+            simple::run_fixed_self_tails(&mut context, function, params, max_args);
         frame.tail_calls = frame.tail_calls.saturating_add(tail_calls);
         self.frames.last_mut().expect("active Lua frame").tail_calls = frame.tail_calls;
         next

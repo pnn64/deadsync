@@ -31,6 +31,58 @@ fn sums_preserve_iteration_direction_and_live_outputs() {
 }
 
 #[test]
+fn counted_self_tails_preserve_arguments_and_terminal_activation() {
+    let program = compile(
+        br#"
+        local function forward()
+            local function walk(n, bound, step, tag)
+                if n >= bound then
+                    return n, tag, debug.getinfo(2, "S").what
+                end
+                return walk(n + step, bound, step, tag)
+            end
+            return walk
+        end
+        local walk = forward()
+        local n, tag, frame = walk(-49, 60, 3, "east")
+        assert(n == 62 and tag == "east" and frame == "tail")
+        local n = walk(9007199254740984, 9007199254740992, 3, "edge")
+        assert(n == 9007199254740992)
+
+        local counter = { tag = "west" }
+        function counter:walk(n, bound, step)
+            if n ~= bound then return self:walk(n - step, bound, step) end
+            return n, self.tag
+        end
+        local n, tag = counter:walk(1630, -470, 7)
+        assert(n == -470 and tag == "west")
+
+        local function with_lookup()
+            local reads = 0
+            local function count(self, n)
+                if n <= 0 then return reads end
+                return self:count(n - 1)
+            end
+            local proxy = setmetatable({}, { __index = function()
+                reads = reads + 1
+                return count
+            end })
+            return count, proxy
+        end
+        local count, proxy = with_lookup()
+        assert(count(proxy, 13) == 13)
+        return 10
+        "#,
+    )
+    .unwrap();
+    let mut fast = Vm::new();
+    let mut ordinary = Vm::new();
+    ordinary.set_instruction_limit(Some(250_000));
+    assert_eq!(fast.execute(&program).unwrap(), &[Value::Number(10.0)]);
+    assert_eq!(ordinary.execute(&program).unwrap(), &[Value::Number(10.0)]);
+}
+
+#[test]
 fn arithmetic_boundaries_keep_sequential_float_results() {
     let results = numbers(
         br#"

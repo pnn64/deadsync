@@ -10,6 +10,8 @@ use super::{
 use crate::bytecode::{COMPARE_BRANCH, Instruction, NUMERIC_WHILE, OPEN, Op, RK};
 use std::ops::Deref;
 
+mod counted_tails;
+
 pub(super) const FIELD_HINTS: usize = 32;
 
 /// The registers, constants and tables one simple instruction can touch.
@@ -456,9 +458,14 @@ pub(super) fn reload_fixed_tail_registers(
 pub(super) fn run_fixed_self_tails(
     cx: &mut Context<'_>,
     function: FunctionId,
+    params: usize,
     max_args: usize,
 ) -> (usize, u32) {
-    let mut tails = 0u32;
+    let mut tails = if params == max_args {
+        counted_tails::advance(cx, function, params).unwrap_or(0)
+    } else {
+        0
+    };
     loop {
         let mut pc = 0;
         while let Some(next) = step(cx, pc) {

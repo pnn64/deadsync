@@ -20,7 +20,7 @@ mod periodic;
 mod substring;
 pub(super) mod while_numeric;
 
-const EXACT_INTEGER: i128 = 1 << 53;
+pub(super) const EXACT_INTEGER: i128 = 1 << 53;
 const BODY_LIMIT: usize = 32;
 
 pub(super) enum Reduction {
@@ -40,7 +40,7 @@ impl Retry {
     pub(super) const ATTEMPTS: u8 = 8;
 }
 
-fn integer(value: Value) -> Option<i128> {
+pub(super) fn integer(value: Value) -> Option<i128> {
     let Value::Number(value) = value else {
         return None;
     };
