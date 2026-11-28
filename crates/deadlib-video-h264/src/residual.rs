@@ -354,21 +354,43 @@ const RASTER_TO_ZIGZAG_8X8: [u8; 64] = {
 /// `scale` is the 8x8 scaling matrix in zigzag scan order.
 pub fn dequant_8x8(block: &mut [i32; 64], qp: i32, scale: &[u8; 64]) {
     let qp_per = qp / 6;
-    let ls = LEVEL_SCALE_8X8[(qp % 6) as usize];
-    // Branch-free over all 64 positions (a zero coefficient stays zero)
-    let v = |idx: usize| {
-        let cat = DEQUANT_8X8_POS_CAT[((idx >> 3) & 3) * 4 + (idx & 3)];
-        ls[cat] * scale[RASTER_TO_ZIGZAG_8X8[idx] as usize] as i32
+    let qp_rem = (qp % 6) as usize;
+    const FLAT: [[i32; 64]; 6] = {
+        let mut table = [[0; 64]; 6];
+        let mut q = 0;
+        while q < 6 {
+            let mut idx = 0;
+            while idx < 64 {
+                let cat = DEQUANT_8X8_POS_CAT[((idx >> 3) & 3) * 4 + (idx & 3)];
+                table[q][idx] = LEVEL_SCALE_8X8[q][cat] * 16;
+                idx += 1;
+            }
+            q += 1;
+        }
+        table
+    };
+    // The usual flat matrix has precomputed factors in raster order.
+    // Custom matrices are also converted once, so both loops use
+    // contiguous factors and can vectorize.
+    let custom;
+    let factors = if scale == &[16; 64] {
+        &FLAT[qp_rem]
+    } else {
+        custom = core::array::from_fn(|idx| {
+            let cat = DEQUANT_8X8_POS_CAT[((idx >> 3) & 3) * 4 + (idx & 3)];
+            LEVEL_SCALE_8X8[qp_rem][cat] * scale[RASTER_TO_ZIGZAG_8X8[idx] as usize] as i32
+        });
+        &custom
     };
     if qp_per >= 6 {
         let sh = (qp_per - 6) as u32;
-        for (idx, b) in block.iter_mut().enumerate() {
-            *b = b.wrapping_mul(v(idx)).wrapping_shl(sh);
+        for (b, &v) in block.iter_mut().zip(factors) {
+            *b = b.wrapping_mul(v).wrapping_shl(sh);
         }
     } else {
         let (round, sh) = (1 << (5 - qp_per), (6 - qp_per) as u32);
-        for (idx, b) in block.iter_mut().enumerate() {
-            *b = b.wrapping_mul(v(idx)).wrapping_add(round) >> sh;
+        for (b, &v) in block.iter_mut().zip(factors) {
+            *b = b.wrapping_mul(v).wrapping_add(round) >> sh;
         }
     }
 }
@@ -634,6 +656,36 @@ pub fn dequant_4x4_full(block: &mut [i32; 16], qp: i32, scale: &[u8; 16]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dequant_8x8_matches_scalar_for_flat_and_custom_matrices() {
+        let coefficients = core::array::from_fn(|i| match i % 5 {
+            0 => i32::MIN,
+            1 => i32::MAX,
+            2 => 0,
+            3 => i as i32 * 73,
+            _ => -(i as i32) * 91,
+        });
+        for qp in 0..=63 {
+            for scale in [[16; 64], core::array::from_fn(|i| (i * 37 + 1) as u8)] {
+                let mut actual = coefficients;
+                let expected = core::array::from_fn(|idx| {
+                    let cat = DEQUANT_8X8_POS_CAT[((idx >> 3) & 3) * 4 + (idx & 3)];
+                    let v = LEVEL_SCALE_8X8[(qp % 6) as usize][cat]
+                        * i32::from(scale[RASTER_TO_ZIGZAG_8X8[idx] as usize]);
+                    let product = coefficients[idx].wrapping_mul(v);
+                    let qp_per = qp / 6;
+                    if qp_per >= 6 {
+                        product.wrapping_shl((qp_per - 6) as u32)
+                    } else {
+                        product.wrapping_add(1 << (5 - qp_per)) >> (6 - qp_per)
+                    }
+                });
+                dequant_8x8(&mut actual, qp, &scale);
+                assert_eq!(actual, expected);
+            }
+        }
+    }
 
     #[test]
     fn test_inverse_hadamard_4x4_all_same() {
