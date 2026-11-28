@@ -14,7 +14,7 @@ use deadsync_noteskin::pack::InstalledPack;
 use deadsync_theme::player_options::{
     NoteskinPreviewPriority, NoteskinPreviewRequest,
 };
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, mpsc};
 
@@ -504,10 +504,7 @@ fn decode(key: &str, model: bool) -> Result<Ready, String> {
         return Ok(Ready::Texture(generated.image, generated.sampler));
     }
     let job = deadsync_assets::textures::texture_decode_job(key, model);
-    let reader = image::ImageReader::open(&job.path)
-        .and_then(|reader| reader.with_guessed_format())
-        .map_err(|e| e.to_string())?;
-    let (width, height) = reader.into_dimensions().map_err(|e| e.to_string())?;
+    let (width, height) = deadlib_assets::texture_source_size(&job.path).map_err(|e| e.to_string())?;
     if u64::from(width)
         .saturating_mul(u64::from(height))
         .saturating_mul(4)
@@ -576,19 +573,19 @@ return Def.Sprite {
         .unwrap();
         for button in ["Left", "Down", "Up", "Right"] {
             for quant in deadsync_noteskin::Quantization::ALL {
-                RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
+                image::RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
                     .save(skin.join(format!("{button} {}.png", quant.color_name())))
                     .unwrap();
             }
         }
         for name in ["other", "unused"] {
-            RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
+            image::RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
                 .save(skin.join(format!("{name}.png")))
                 .unwrap();
         }
         let tile = root.join("assets/graphics/alternate-tile.png");
         fs::create_dir_all(tile.parent().unwrap()).unwrap();
-        RgbaImage::from_pixel(8, 8, image::Rgba([1, 2, 3, 255]))
+        image::RgbaImage::from_pixel(8, 8, image::Rgba([1, 2, 3, 255]))
             .save(tile)
             .unwrap();
         let dirs = deadsync_config::dirs::AppDirs {

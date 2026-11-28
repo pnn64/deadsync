@@ -184,7 +184,7 @@ impl TextureLookup for Textures {
 fn textures(filter: SamplerFilter, wrap: SamplerWrap) -> Textures {
     Textures(Texture {
         image: RgbaImage::from_fn(4, 4, |x, y| {
-            image::Rgba([
+            deadlib_image::Rgba([
                 (x * 61) as u8,
                 (y * 71) as u8,
                 97,

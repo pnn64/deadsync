@@ -11,7 +11,7 @@ use deadlib_present::texture::{TextureContext, TextureMeta};
 use deadlib_render_core::{
     FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, TextureHandle, TextureHandleMap, Yuv420Image,
 };
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::cell::Cell;
 use std::sync::{Arc, mpsc::SyncSender};
@@ -631,7 +631,7 @@ mod tests {
     }
 
     fn blank_rgba(width: u32, height: u32) -> RgbaImage {
-        RgbaImage::from_pixel(width, height, image::Rgba([0, 0, 0, 0]))
+        RgbaImage::from_pixel(width, height, deadlib_image::Rgba([0, 0, 0, 0]))
     }
 
     #[test]

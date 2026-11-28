@@ -61,13 +61,21 @@ pub fn decode_rgba8_with_limits(input: &[u8], limits: Limits) -> Result<(Info, V
             palette_start,
             palette_len,
             entry_bytes,
-        } if header.info.bit_depth == 8
-            || (header.pixel_count >= 4096 && palette_len == 1 << header.info.bit_depth) =>
-        {
+        } => {
             let palette = &input[palette_start..palette_start + palette_len * entry_bytes];
             match header.info.bit_depth {
-                1 => indexed::rgba_packed::<1, 8>(source, &header, palette, entry_bytes)?,
-                4 => indexed::rgba_packed::<4, 2>(source, &header, palette, entry_bytes)?,
+                1 if header.pixel_count >= 4096 && palette_len == 2 => {
+                    indexed::rgba_packed::<1, 8>(source, &header, palette, entry_bytes)?
+                }
+                4 if header.pixel_count >= 4096 && palette_len == 16 => {
+                    indexed::rgba_packed::<4, 2>(source, &header, palette, entry_bytes)?
+                }
+                1 => indexed::rgba_packed_small::<1, 8>(
+                    source, &header, palette, palette_len, entry_bytes,
+                )?,
+                4 => indexed::rgba_packed_small::<4, 2>(
+                    source, &header, palette, palette_len, entry_bytes,
+                )?,
                 _ => indexed::rgba8(source, &header, palette, palette_len, entry_bytes)?,
             }
         }

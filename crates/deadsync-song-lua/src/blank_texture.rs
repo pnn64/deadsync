@@ -9,12 +9,8 @@ pub(crate) fn load_native_blank_texture() -> Result<&'static str, String> {
     static PREPARED: OnceLock<Result<(), String>> = OnceLock::new();
     PREPARED
         .get_or_init(|| {
-            let decoded = image::load_from_memory_with_format(
-                include_bytes!("../assets/itgmania/_blank.png"),
-                image::ImageFormat::Png,
-            )
-            .map_err(|error| error.to_string())?;
-            let mut bitmap = decoded.into_rgba8();
+            let mut bitmap = deadlib_image_io::load_png(include_bytes!("../assets/itgmania/_blank.png"))
+                .map_err(|error| error.to_string())?;
             let source_size = [bitmap.width(), bitmap.height()];
             let hints = deadlib_assets::TextureHints {
                 min_size: Some(8),
@@ -24,12 +20,7 @@ pub(crate) fn load_native_blank_texture() -> Result<&'static str, String> {
             let upload = deadlib_assets::texture_image_size(source_size, &hints)
                 .map_err(|error| error.to_string())?;
             if upload != source_size {
-                bitmap = image::imageops::resize(
-                    &bitmap,
-                    upload[0],
-                    upload[1],
-                    image::imageops::FilterType::Triangle,
-                );
+                bitmap = deadlib_image::imageops::resize_triangle(&bitmap, upload[0], upload[1]);
             }
             deadlib_assets::fix_hidden_alpha(&mut bitmap);
             deadlib_assets::register_prepared_generated_texture(

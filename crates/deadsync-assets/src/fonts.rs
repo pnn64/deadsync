@@ -7,7 +7,7 @@ use deadlib_render_core::TextureBackend;
 use log::debug;
 use std::path::Path;
 
-fn upload_font_textures<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+fn upload_font_textures<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     font: &Font,
@@ -25,7 +25,7 @@ fn upload_font_textures<B: TextureBackend<RgbaImage = image::RgbaImage>>(
     Ok(())
 }
 
-pub fn load_font_from_ini_path<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn load_font_from_ini_path<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     name: &'static str,
@@ -38,7 +38,7 @@ pub fn load_font_from_ini_path<B: TextureBackend<RgbaImage = image::RgbaImage>>(
 }
 
 /// Registers a font and uploads its pages on startup or renderer replacement.
-pub fn load_font_at_renderer_startup<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn load_font_at_renderer_startup<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     name: &'static str,
@@ -55,7 +55,7 @@ pub fn load_font_at_renderer_startup<B: TextureBackend<RgbaImage = image::RgbaIm
     Ok(())
 }
 
-pub fn load_initial_fonts<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn load_initial_fonts<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     fonts: &'static [deadlib_assets::FontAssetSpec],

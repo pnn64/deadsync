@@ -319,10 +319,9 @@ pub const fn transition_fullscreen_type(
 fn load_window_icon() -> Option<Icon> {
     for path in WINDOW_ICON_PATHS {
         let resolved = deadsync_assets::resolve_asset_path(path);
-        let Ok(image) = image::open(&resolved) else {
+        let Ok(rgba) = deadlib_image_io::open(&resolved) else {
             continue;
         };
-        let rgba = image.into_rgba8();
         let (width, height) = rgba.dimensions();
         if let Ok(icon) = Icon::from_rgba(rgba.into_raw(), width, height) {
             return Some(icon);

@@ -37,7 +37,7 @@ impl fmt::Display for ScreenshotFlowError {
 }
 
 pub struct SavedScreenshot {
-    pub image: image::RgbaImage,
+    pub image: deadlib_image::RgbaImage,
     pub path: PathBuf,
 }
 
@@ -151,7 +151,7 @@ pub fn capture_screenshot(
 pub fn replace_screenshot_preview_texture(
     asset_manager: &mut RenderAssets,
     backend: &mut Backend,
-    image: &image::RgbaImage,
+    image: &deadlib_image::RgbaImage,
 ) -> Result<(), ScreenshotFlowError> {
     if let Some((_handle, old)) = asset_manager.remove_texture(SCREENSHOT_PREVIEW_TEXTURE_KEY) {
         backend.retire_texture(old);

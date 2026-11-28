@@ -20,7 +20,6 @@ use std::hash::{BuildHasher, DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-use image;
 use log::{debug, trace, warn};
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use smallvec::SmallVec;
@@ -38,7 +37,7 @@ const MAX_PREALLOCATED_GLYPH_MAPPINGS: usize = 65_536;
 #[derive(Debug)]
 pub enum FontParseError {
     Io(std::io::Error),
-    Image(image::ImageError),
+    Image(deadlib_image_io::ImageError),
     ImportRecursion { current: PathBuf, chain: String },
     MissingFontDir(PathBuf),
     NoTexturePages(PathBuf),
@@ -85,8 +84,8 @@ impl From<std::io::Error> for FontParseError {
     }
 }
 
-impl From<image::ImageError> for FontParseError {
-    fn from(value: image::ImageError) -> Self {
+impl From<deadlib_image_io::ImageError> for FontParseError {
+    fn from(value: deadlib_image_io::ImageError) -> Self {
         Self::Image(value)
     }
 }
@@ -2526,7 +2525,7 @@ pub fn parse_with_texture_context(
         let (num_frames_wide, num_frames_high) = *frame_dims;
         let page_name = get_page_name_from_path(tex_path);
         let page_name = page_name.as_ref();
-        let tex_dims = image::image_dimensions(tex_path)?;
+        let tex_dims = deadlib_image_io::dimensions(tex_path)?;
         required_textures.push(tex_path.clone());
 
         let total_frames = (num_frames_wide * num_frames_high) as usize;
@@ -2627,7 +2626,7 @@ pub fn parse_with_texture_context(
             let stroke_key = texture_ctx.canonical_texture_key(&stroke_path);
             let (stroke_frames_w, stroke_frames_h) = texture_ctx.sprite_sheet_dims(&stroke_key);
             let stroke_total_frames = (stroke_frames_w * stroke_frames_h) as usize;
-            let stroke_dims = image::image_dimensions(&stroke_path)?;
+            let stroke_dims = deadlib_image_io::dimensions(&stroke_path)?;
             let stroke_has_doubleres = is_doubleres_in_name(&stroke_key) || hints_doubleres;
             let (stroke_base_w, _stroke_base_h) =
                 parse_base_res_from_filename(&stroke_key).unwrap_or((stroke_dims.0, stroke_dims.1));

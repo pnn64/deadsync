@@ -1763,7 +1763,7 @@ fn completed_parent_exit_culls_one_sprite_sheet_cell() {
     let mut asset_manager = AssetManager::new();
     asset_manager.queue_texture_upload(
         idle_texture_key.to_string(),
-        image::RgbaImage::new(1_152, 1_056),
+        deadlib_image::RgbaImage::new(1_152, 1_056),
     );
     assert_eq!(
         song_lua_overlay_sprite_size(
@@ -7952,7 +7952,7 @@ fn song_lua_capture_mesh_keeps_handle_and_uvs() {
 fn song_lua_actor_multi_vertex_builds_textured_mesh_overlay() {
     let texture_key = "song-lua-amv-texture.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(texture_key.clone(), image::RgbaImage::new(16, 16));
+    asset_manager.queue_texture_upload(texture_key.clone(), deadlib_image::RgbaImage::new(16, 16));
     let overlay = SongLuaOverlayActor {
         kind: SongLuaOverlayKind::ActorMultiVertex {
             vertices: Arc::from(vec![
@@ -8941,7 +8941,7 @@ fn native_model_material_mapping_matches_production() {
 fn song_lua_model_builds_textured_mesh_layers() {
     let texture_key = "song-lua-model-texture.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(texture_key.clone(), image::RgbaImage::new(16, 16));
+    asset_manager.queue_texture_upload(texture_key.clone(), deadlib_image::RgbaImage::new(16, 16));
     let overlay = SongLuaOverlayActor {
         kind: SongLuaOverlayKind::Model {
             layers: Arc::from(vec![SongLuaOverlayModelLayer {
@@ -9186,7 +9186,7 @@ fn song_lua_multitap_model_preserves_vertical_squash_in_all_lanes() {
         .expect("cyber tap model should load");
     let mut assets = AssetManager::new();
     for slot in slots.iter() {
-        assets.queue_texture_upload(slot.texture_key().to_owned(), image::RgbaImage::new(16, 16));
+        assets.queue_texture_upload(slot.texture_key().to_owned(), deadlib_image::RgbaImage::new(16, 16));
     }
     for rotation in [90.0_f32, 0.0, 180.0, 270.0] {
         for squash in [0.9, 1.0, 1.1] {
@@ -9259,7 +9259,7 @@ fn song_lua_noteskin_actor_rotation_matches_noteskin_base_rotation() {
     let mut asset_manager = AssetManager::new();
     for slot in slots.iter().chain(rotated_slots.iter()) {
         asset_manager
-            .queue_texture_upload(slot.texture_key().to_owned(), image::RgbaImage::new(16, 16));
+            .queue_texture_upload(slot.texture_key().to_owned(), deadlib_image::RgbaImage::new(16, 16));
     }
 
     let actor_rotation = song_lua_noteskin_actor(
@@ -10681,7 +10681,7 @@ fn song_lua_ddr_explosions_honor_resolution_hints() {
                 .join(file);
             let key = path.to_string_lossy().into_owned();
             let mut assets = AssetManager::new();
-            assets.queue_texture_upload(key.clone(), image::open(&path).unwrap().into_rgba8());
+            assets.queue_texture_upload(key.clone(), deadlib_image_io::open(&path).unwrap());
             let overlay = SongLuaOverlayActor {
                 kind: test_sprite_kind(&key),
                 name: None,
@@ -10752,7 +10752,7 @@ fn song_lua_sprite_binding_tracks_availability_key_changes_and_reload() {
         ),
         Some([7.0, 9.0])
     );
-    textures.queue_texture_upload(key.to_string(), image::RgbaImage::new(40, 20));
+    textures.queue_texture_upload(key.to_string(), deadlib_image::RgbaImage::new(40, 20));
     let bound = scratch.bind_sprite(&key, &textures).unwrap();
     assert_eq!(bound.handle, original);
     assert_eq!(
@@ -10763,7 +10763,7 @@ fn song_lua_sprite_binding_tracks_availability_key_changes_and_reload() {
         song_lua_overlay_uv_rect(state, Some(bound.sheet), &[], 0.0),
         Some([0.25, 0.5, 0.5, 1.0])
     );
-    textures.queue_texture_upload(key.to_string(), image::RgbaImage::new(80, 40));
+    textures.queue_texture_upload(key.to_string(), deadlib_image::RgbaImage::new(80, 40));
     let resized = scratch.bind_sprite(&key, &textures).unwrap();
     assert_eq!(resized.handle, original);
     assert_eq!(
@@ -10827,7 +10827,7 @@ fn song_lua_bound_sprite_draw_refreshes_identity_size_and_uv() {
     };
     assert!(draw(&assets).is_none());
     for width in [40, 80] {
-        assets.queue_texture_upload(key.into(), image::RgbaImage::new(width, 20));
+        assets.queue_texture_upload(key.into(), deadlib_image::RgbaImage::new(width, 20));
         for _ in 0..3 {
             // Other tests can invalidate the shared metadata registry during draw.
             let generation_before = assets.texture_context().revision();
@@ -10865,7 +10865,7 @@ fn song_lua_bound_sprite_draw_refreshes_identity_size_and_uv() {
 fn song_lua_sprite_setstate_uses_sheet_cell_size_at_runtime() {
     let key = "song-lua-test 4x3.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(40, 30));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(&key),
         name: None,
@@ -10916,7 +10916,7 @@ fn song_lua_sprite_setstate_uses_sheet_cell_size_at_runtime() {
 fn song_lua_sprite_setstate_restarts_custom_animation() {
     let key = "song-lua-animation-reset 4x1.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 10));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(40, 10));
     let overlay = SongLuaOverlayActor {
         kind: SongLuaOverlayKind::Sprite {
             texture_path: key.clone().into(),
@@ -11023,7 +11023,7 @@ fn spooky_door_vertices_match_native_tween() {
     // Quad starts with unit geometry. A unit texture preserves that geometry
     // when inspecting the sprite draw path; the actor already carries the
     // native fullscreen zoom and must not be scaled by a full-screen bitmap.
-    assets.queue_texture_upload("spooky-door.png".into(), image::RgbaImage::new(1, 1));
+    assets.queue_texture_upload("spooky-door.png".into(), deadlib_image::RgbaImage::new(1, 1));
     let mut corners = 0;
     for mut door in compiled
         .overlays
@@ -11098,7 +11098,7 @@ fn spooky_door_vertices_match_native_tween() {
 fn song_lua_target_sheet_uses_filename_grid_for_physical_size() {
     let key = r"C:\songs\Botanic Panic\lua\ayaze\target 4x2.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(256, 128));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(256, 128));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(&key),
         name: None,
@@ -11162,7 +11162,7 @@ fn queued_sprite_load_changes_rendered_binding() {
         let path = song_dir.join(file);
         assets.queue_texture_upload(
             path.to_string_lossy().into_owned(),
-            image::open(path).expect("local sheet").into_rgba8(),
+            deadlib_image_io::open(&path).expect("local sheet"),
         );
     }
     // Includes a backward seek: resource selection must depend on song time,
@@ -11213,7 +11213,7 @@ fn queued_sprite_load_changes_rendered_binding() {
 fn song_lua_zero_zoom_sheet_does_not_fall_back_to_native_size() {
     let key = r"C:\songs\Botanic Panic\lua\ayaze\target 4x2.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(256, 128));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(256, 128));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(&key),
         name: None,
@@ -11276,9 +11276,7 @@ fn screen_camera_projects_extensionless_sprite_at_runtime() {
     let mut assets = AssetManager::new();
     assets.queue_texture_upload(
         texture_key.to_string(),
-        image::open(song_dir.join("Normal 2x6.png"))
-            .expect("local sheet")
-            .into_rgba8(),
+        deadlib_image_io::open(&song_dir.join("Normal 2x6.png")).expect("local sheet"),
     );
     let topology = SongLuaOverlayTopologyIndex::new(&compiled.overlays);
     let mut order = song_lua_overlay_order_cache_from(&compiled.overlays, &[]);
@@ -11405,7 +11403,7 @@ fn screen_camera_projects_extensionless_sprite_at_runtime() {
 fn song_lua_paused_sheet_keeps_first_frame_uv_at_runtime() {
     let key = "song-lua-paused 4x3.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(40, 30));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(&key),
         name: None,
@@ -11442,7 +11440,7 @@ fn song_lua_paused_sheet_keeps_first_frame_uv_at_runtime() {
 fn song_lua_custom_sprite_state_maps_to_declared_frame_at_runtime() {
     let key = "song-lua-custom-state 4x3.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(40, 30));
     let overlay = SongLuaOverlayActor {
         kind: SongLuaOverlayKind::Sprite {
             texture_path: key.clone().into(),
@@ -11494,7 +11492,7 @@ fn song_lua_custom_sprite_state_maps_to_declared_frame_at_runtime() {
 fn song_lua_sprite_animation_advances_sheet_frames_at_runtime() {
     let key = "song-lua-animate 4x3.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(40, 30));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(&key),
         name: None,
@@ -11538,7 +11536,7 @@ fn song_lua_sprite_animation_advances_sheet_frames_at_runtime() {
 fn song_lua_sprite_animation_applies_rate_and_loop_controls_at_runtime() {
     let key = "song-lua-animate-rate 4x3.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(40, 30));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(&key),
         name: None,
@@ -11582,7 +11580,7 @@ fn song_lua_sprite_animation_applies_rate_and_loop_controls_at_runtime() {
 fn song_lua_sprite_custom_uvs_preserve_native_endpoint_order() {
     let key = "song-lua-signed-uv.png";
     let mut assets = AssetManager::new();
-    assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(40, 30));
+    assets.queue_texture_upload(key.to_owned(), deadlib_image::RgbaImage::new(40, 30));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(key),
         name: None,
@@ -11697,7 +11695,7 @@ fn song_lua_sprite_custom_uvs_preserve_native_endpoint_order() {
 fn song_lua_sprite_applies_texture_translate_to_uv_rect() {
     let key = "song-lua-translate.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(40, 30));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(&key),
         name: None,
@@ -11753,7 +11751,7 @@ fn song_lua_sprite_applies_texture_translate_to_uv_rect() {
 fn song_lua_sprite_renders_vertex_diffuse_as_mesh() {
     let key = "song-lua-vertex-diffuse.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(40, 30));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(&key),
         name: None,
@@ -11802,7 +11800,7 @@ fn song_lua_sprite_renders_vertex_diffuse_as_mesh() {
 fn song_lua_sprite_applies_fade_edges_at_runtime() {
     let key = "song-lua-fade-edges.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(40, 30));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(&key),
         name: None,
@@ -11857,8 +11855,8 @@ fn song_lua_overlay_preserves_ancestor_scale_before_child_rotation() {
     let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
     deadlib_present::space::set_current_metrics(metrics);
     let mut assets = AssetManager::new();
-    assets.queue_texture_upload("ancestor-scale.png".into(), image::RgbaImage::new(40, 30));
-    assets.queue_texture_upload(white_texture_key().to_string(), image::RgbaImage::new(1, 1));
+    assets.queue_texture_upload("ancestor-scale.png".into(), deadlib_image::RgbaImage::new(40, 30));
+    assets.queue_texture_upload(white_texture_key().to_string(), deadlib_image::RgbaImage::new(1, 1));
     for kind in [test_sprite_kind("ancestor-scale.png"), SongLuaOverlayKind::Quad] {
         for ancestor_x in [3.0, -3.0] {
             let overlays: Vec<SongLuaOverlayActor> = vec![
@@ -11937,7 +11935,7 @@ fn song_lua_overlay_preserves_ancestor_scale_before_child_rotation() {
 fn song_lua_overlay_ancestor_scale_keeps_commuting_and_masked_sprites_generic() {
     deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(640.0, 480.0));
     let mut assets = AssetManager::new();
-    assets.queue_texture_upload("ancestor-scale.png".into(), image::RgbaImage::new(40, 30));
+    assets.queue_texture_upload("ancestor-scale.png".into(), deadlib_image::RgbaImage::new(40, 30));
     for kind in [test_sprite_kind("ancestor-scale.png"), SongLuaOverlayKind::Quad] {
         let overlay = SongLuaOverlayActor {
             kind, name: None, parent_index: None,
@@ -11972,7 +11970,7 @@ fn song_lua_overlay_ancestor_scale_keeps_commuting_and_masked_sprites_generic() 
 fn song_lua_overlay_applies_skew_at_runtime() {
     let key = "song-lua-skew.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+    asset_manager.queue_texture_upload(key.clone(), deadlib_image::RgbaImage::new(40, 30));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(&key),
         name: None,
@@ -12243,7 +12241,7 @@ fn song_lua_overlay_applies_runtime_actor_shadow() {
 fn song_lua_overlay_applies_extra_blend_modes_at_runtime() {
     let sprite_key = "song-lua-multiply.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(sprite_key.clone(), image::RgbaImage::new(40, 30));
+    asset_manager.queue_texture_upload(sprite_key.clone(), deadlib_image::RgbaImage::new(40, 30));
 
     let sprite = SongLuaOverlayActor {
         kind: test_sprite_kind(&sprite_key),
@@ -12320,8 +12318,8 @@ fn lua_flat_sprites_and_quads_preserve_independent_depth_flags() {
     use deadlib_render_core::DrawOp;
     crate::tests::init_paths();
     let directory = tempfile::tempdir().unwrap();
-    let image = image::RgbaImage::from_pixel(40, 30, image::Rgba([255; 4]));
-    image.save(directory.path().join("depth.png")).unwrap();
+    let image = deadlib_image::RgbaImage::from_pixel(40, 30, deadlib_image::Rgba([255; 4]));
+    deadlib_image_io::save_png(&directory.path().join("depth.png"), &image).unwrap();
     // Native Actor::ztest and ::zwrite are independent. Both are renderer state,
     // including at Z=0, with no perspective camera or generic MaskSource/Dest.
     let cases = [
@@ -12354,7 +12352,7 @@ fn lua_flat_sprites_and_quads_preserve_independent_depth_flags() {
     let mut assets = AssetManager::new();
     assets.queue_texture_upload(
         white_texture_key().to_string(),
-        image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),
+        deadlib_image::RgbaImage::from_pixel(1, 1, deadlib_image::Rgba([255; 4])),
     );
     for overlay in &compiled.overlays {
         if let SongLuaOverlayKind::Sprite { texture_key, .. } = &overlay.kind {
@@ -12415,7 +12413,7 @@ fn song_lua_sprite_retains_tiny_diffuse_before_color_quantization() {
     use deadlib_render_core::DrawOp;
     let key = "song-lua-tiny-alpha.png";
     let mut assets = AssetManager::new();
-    assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(40, 30));
+    assets.queue_texture_upload(key.to_owned(), deadlib_image::RgbaImage::new(40, 30));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(key),
         name: None,
@@ -12527,7 +12525,7 @@ fn song_lua_sprite_glow_draws_once_with_native_blend_and_sampler() {
     };
     let key = "song-lua-cyber-glow.png";
     let mut assets = AssetManager::new();
-    assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(64, 64));
+    assets.queue_texture_upload(key.to_owned(), deadlib_image::RgbaImage::new(64, 64));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(key),
         name: None,
@@ -12639,7 +12637,7 @@ fn song_lua_sprite_glow_draws_once_with_native_blend_and_sampler() {
 fn song_lua_overlay_wraps_runtime_actors_with_glow() {
     let sprite_key = "song-lua-glow.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(sprite_key.clone(), image::RgbaImage::new(32, 24));
+    asset_manager.queue_texture_upload(sprite_key.clone(), deadlib_image::RgbaImage::new(32, 24));
 
     let sprite = SongLuaOverlayActor {
         kind: test_sprite_kind(&sprite_key),
@@ -12738,7 +12736,7 @@ fn projected_sprite_keeps_native_zoom_and_uvs() {
         .expect("native mirrored sprite");
     let key = "native-mirrored.png";
     let mut assets = AssetManager::new();
-    assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(64, 32));
+    assets.queue_texture_upload(key.to_owned(), deadlib_image::RgbaImage::new(64, 32));
     let overlay = SongLuaOverlayActor {
         kind: test_sprite_kind(key),
         name: None,
@@ -12815,7 +12813,7 @@ fn projected_sprite_keeps_native_zoom_and_uvs() {
 fn song_lua_projected_overlay_applies_fade_edges_at_runtime() {
     let sprite_key = "song-lua-projected-fade.png".to_string();
     let mut asset_manager = AssetManager::new();
-    asset_manager.queue_texture_upload(sprite_key.clone(), image::RgbaImage::new(64, 32));
+    asset_manager.queue_texture_upload(sprite_key.clone(), deadlib_image::RgbaImage::new(64, 32));
 
     let sprite = SongLuaOverlayActor {
         kind: test_sprite_kind(&sprite_key),

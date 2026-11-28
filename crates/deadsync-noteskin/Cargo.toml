@@ -5,11 +5,12 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-image-io = { path = "../deadlib-image-io" }
 deadlib-lua = { path = "../deadlib-lua", default-features = false }
 arrayvec = "0.7.8"
 bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 hashbrown = "0.17.1"
-image = "0.25.10"
+deadlib-image = { path = "../deadlib-image" }
 log = "0.4.35"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
@@ -20,3 +21,6 @@ twox-hash = "2.1.5"
 perf = { level = "warn", priority = -1 }
 
 inline_always = "allow"
+
+[dev-dependencies]
+image = { version = "0.25.10", default-features = false, features = ["png"] }

@@ -1,7 +1,7 @@
 //! Compile Cel and Metal Workshop assets into a selectable noteskin pack.
 
 use crate::pack::{Choice, Error, FileSwap, InstalledPack, Manifest, MetricSwap, Skin};
-use image::{ImageReader, RgbaImage, imageops};
+use deadlib_image::{RgbaImage, imageops};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -76,8 +76,7 @@ pub fn compile(root: &Path, progress: impl FnMut(usize, usize) -> bool) -> Resul
     }
     let atlases = build_atlases(root, &skins, progress)?;
     for (skin, atlas) in skins.iter().zip(atlases) {
-        atlas
-            .save(root.join(&skin.preview))
+        deadlib_image_io::save_png(&root.join(&skin.preview), &atlas)
             .map_err(|e| Error::Invalid(e.to_string()))?;
     }
     let manifest = Manifest {
@@ -197,7 +196,7 @@ fn build_atlases_with(
                 for &(skin, cell) in cells {
                     let x = (u32::from(cell) % (ATLAS / CELL)) * CELL + (CELL - tile.width()) / 2;
                     let y = (u32::from(cell) / (ATLAS / CELL)) * CELL + (CELL - tile.height()) / 2;
-                    imageops::overlay(&mut atlases[skin], &tile, i64::from(x), i64::from(y));
+                    imageops::overlay(&mut atlases[skin], &tile, x, y);
                 }
                 if !progress(index + 1, total) {
                     return Err(std::io::Error::from(std::io::ErrorKind::Interrupted).into());
@@ -346,16 +345,16 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
 }
 
 fn thumbnail(path: &Path) -> Result<RgbaImage, Error> {
-    let mut reader = ImageReader::open(path)?;
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(8192);
-    limits.max_image_height = Some(8192);
-    limits.max_alloc = Some(256 * 1024 * 1024);
-    reader.limits(limits);
-    let image = reader
-        .decode()
-        .map_err(|e| Error::Invalid(e.to_string()))?
-        .into_rgba8();
+    let limits = deadlib_image_io::Limits {
+        max_width: 8192,
+        max_height: 8192,
+        max_bytes: 256 << 20,
+    };
+    let image = deadlib_image_io::open_with_limits(path, limits)
+        .map_err(|e| match e {
+            deadlib_image_io::ImageError::Io(error) => Error::from(error),
+            other => Error::Invalid(other.to_string()),
+        })?;
     let name = path
         .file_name()
         .and_then(|n| n.to_str())
@@ -392,12 +391,11 @@ fn thumbnail(path: &Path) -> Result<RgbaImage, Error> {
             ));
         }
     }
-    Ok(imageops::thumbnail(&image, CELL - 4, CELL - 4))
+    Ok(thumbnail_frame(&image, image.width(), image.height()))
 }
 
 fn thumbnail_frame(image: &RgbaImage, width: u32, height: u32) -> RgbaImage {
-    let frame = imageops::crop_imm(image, 0, 0, width, height);
-    imageops::thumbnail(&*frame, CELL - 4, CELL - 4)
+    imageops::thumbnail_region(image, width, height, CELL - 4, CELL - 4)
 }
 
 #[cfg(test)]
@@ -447,7 +445,7 @@ mod tests {
                 Ok(RgbaImage::from_pixel(
                     60,
                     60,
-                    image::Rgba(if path == "a.png" {
+                    deadlib_image::Rgba(if path == "a.png" {
                         [255, 0, 0, 255]
                     } else {
                         [0, 255, 0, 255]

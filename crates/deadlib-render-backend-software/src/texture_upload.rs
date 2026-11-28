@@ -1,6 +1,6 @@
 //! CPU texture upload work shared by creation and retained-frame updates.
 use deadlib_render_core::Yuv420Upload;
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use std::error::Error;
 
 // Preserve division's rounding exactly; multiplying by 1/255 can differ by one ULP.

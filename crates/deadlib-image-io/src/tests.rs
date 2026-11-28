@@ -1,5 +1,40 @@
 use super::*;
 
+#[test]
+fn default_png_decodes_from_a_nonseekable_reader() {
+    let pixels = [255, 0, 255, 255, 12, 34, 56, 78];
+    let mut encoded = Vec::new();
+    deadlib_image_png::encode_rgba8_writer(2, 1, &pixels, &Default::default(), &mut encoded)
+        .unwrap();
+    let mut input = encoded.as_slice();
+    assert_eq!(file_format(&mut input, None).unwrap(), Format::Png);
+    let decoded = decode_reader(&mut input, Format::Png, Use::Artwork, None).unwrap();
+    assert_eq!(decoded.dimensions(), (2, 1));
+    assert_eq!(decoded.as_ref(), &pixels);
+}
+
+#[test]
+fn png_limits_bound_the_expanded_rgba_raster() {
+    let image = Image {
+        width: 3,
+        height: 1,
+        color_type: ColorType::Grayscale,
+        bit_depth: 8,
+        samples: Samples::U8(vec![11, 22, 33]),
+    };
+    let encoded =
+        deadlib_image_png::encode(&deadlib_image_png::Png::new(image), &Default::default())
+            .unwrap();
+    let limits = Limits {
+        max_width: 3,
+        max_height: 1,
+        max_bytes: 11,
+    };
+    assert!(matches!(
+        load_with_limits(&encoded, limits),
+        Err(ImageError::LimitExceeded)
+    ));
+}
 
 #[test]
 fn key_preserves_edges_alpha_and_trailing_storage() {
@@ -14,10 +49,10 @@ fn key_preserves_edges_alpha_and_trailing_storage() {
                     [12, 34, 56, 78],
                 ];
                 let mut image = RgbaImage::from_fn(width, height, |x, y| {
-                    image::Rgba(palette[((x + y * width) % 5) as usize])
+                    deadlib_image::Rgba(palette[((x + y * width) % 5) as usize])
                 });
                 if off_pink && width > 0 && height > 0 {
-                    image.put_pixel(width - 1, height - 1, image::Rgba(palette[1]));
+                    image.put_pixel(width - 1, height - 1, deadlib_image::Rgba(palette[1]));
                 }
                 let uses_off_pink = image
                     .enumerate_pixels()

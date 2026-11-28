@@ -136,7 +136,7 @@ mod backend {
         fn batch_coalescing_preserves_direct_and_staged_software_pixels() {
             let texture = create_texture(
                 &RgbaImage::from_fn(4, 4, |x, y| {
-                    image::Rgba([
+                    deadlib_image::Rgba([
                         180 + x as u8 * 20,
                         160 + y as u8 * 20,
                         230,

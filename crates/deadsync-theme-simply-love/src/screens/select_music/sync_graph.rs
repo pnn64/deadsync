@@ -2,7 +2,7 @@
 
 use deadlib_render_core::MeshVertex;
 use deadsync_config::null_or_die::GraphOrigin;
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use null_or_die::GraphOrientation;
 use std::sync::Arc;
 

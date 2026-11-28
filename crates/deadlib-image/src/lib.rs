@@ -5,6 +5,11 @@
 //! Indexed images retain palette indices. No implicit color conversion occurs.
 #![forbid(unsafe_code)]
 
+pub mod imageops;
+mod rgba;
+
+pub use rgba::{Rgba, RgbaImage};
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum ColorType {

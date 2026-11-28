@@ -3,7 +3,7 @@ use deadlib_present::actors::Actor;
 use deadlib_render_core::SamplerDesc;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_score as score_data;
-use image::{Rgba, RgbaImage};
+use deadlib_image::{Rgba, RgbaImage};
 use std::sync::{Arc, LazyLock, OnceLock};
 
 const DEFAULT_EVAL_ZOOM: f32 = 0.4;
@@ -593,7 +593,6 @@ fn affluent_rot_bucket(rot_deg: f32) -> u32 {
 
 fn load_grade_rgba(key: &str) -> Option<RgbaImage> {
     deadsync_assets::open_bundled_image(&format!("assets/graphics/{key}"))
-        .map(|img| img.to_rgba8())
         .ok()
 }
 

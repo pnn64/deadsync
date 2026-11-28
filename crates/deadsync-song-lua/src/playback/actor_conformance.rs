@@ -752,7 +752,7 @@ fn queue_texture(
         .or_else(|| deadlib_assets::texture_dims(key));
     let width = dims.map_or(1, |dims| dims.w.max(1));
     let height = dims.map_or(1, |dims| dims.h.max(1));
-    assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(width, height));
+    assets.queue_texture_upload(key.to_owned(), deadlib_image::RgbaImage::new(width, height));
 }
 
 #[cfg(test)]

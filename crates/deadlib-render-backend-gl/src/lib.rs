@@ -15,7 +15,7 @@ use glutin::{
     prelude::*,
     surface::{Surface, SurfaceAttributesBuilder, SwapInterval, WindowSurface},
 };
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use log::{debug, info, warn};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
 use std::{

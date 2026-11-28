@@ -52,7 +52,7 @@ struct Fixture {
 fn texture(filter: SamplerFilter) -> Texture {
     Texture {
         image: RgbaImage::from_fn(8, 8, |x, y| {
-            image::Rgba([
+            deadlib_image::Rgba([
                 (x * 37 + y * 13) as u8,
                 (x * 5 + y * 41) as u8,
                 (x * 23 + y * 3) as u8,

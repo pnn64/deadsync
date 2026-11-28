@@ -412,7 +412,7 @@ fn capture_actors(
     backend.draw(&frame, assets.textures(), false).unwrap();
     let image = backend.capture_frame().unwrap();
     assert_eq!(image.dimensions(), (640, 480));
-    image.save(output.join(format!("{name}.png"))).unwrap();
+    deadlib_image_io::save_png(&output.join(format!("{name}.png")), &image).unwrap();
 }
 
 fn selection_actors(mode: bool, selected: usize) -> Vec<Actor> {

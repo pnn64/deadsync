@@ -1,5 +1,5 @@
 pub use deadlib_render_core::{Yuv420Image, YuvConversion};
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use log::warn;
 use serde::Deserialize;
 use std::{

@@ -7,7 +7,7 @@ use deadlib_render_core::{
     resolve_textured_meshes, texture_sampler_desc, texture_sampler_variants,
 };
 use glam::Mat4 as Matrix4;
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use log::{debug, info, warn};
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
@@ -3776,8 +3776,8 @@ mod tests {
             false,
         )
         .expect("wgpu backend");
-        let invalid = image::RgbaImage::new(0, 1);
-        let valid = image::RgbaImage::from_pixel(2, 2, image::Rgba([255; 4]));
+        let invalid = deadlib_image::RgbaImage::new(0, 1);
+        let valid = deadlib_image::RgbaImage::from_pixel(2, 2, deadlib_image::Rgba([255; 4]));
         for _ in 0..2 {
             let result = create_texture(&mut state, &invalid, SamplerDesc::default());
             assert!(matches!(
@@ -3927,11 +3927,11 @@ mod tests {
             false,
         )
         .expect("wgpu backend");
-        let image = image::RgbaImage::from_fn(2, 1, |x, _| {
+        let image = deadlib_image::RgbaImage::from_fn(2, 1, |x, _| {
             if x == 0 {
-                image::Rgba([0, 255, 0, 255])
+                deadlib_image::Rgba([0, 255, 0, 255])
             } else {
-                image::Rgba([255; 4])
+                deadlib_image::Rgba([255; 4])
             }
         });
         let textures = Textures(

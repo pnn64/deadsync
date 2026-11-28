@@ -473,10 +473,7 @@ pub(super) fn load(name: &str) -> Result<String, String> {
     bitmap
         .prepared
         .get_or_init(|| {
-            let decoded =
-                image::load_from_memory_with_format(bitmap.bytes, image::ImageFormat::Png)
-                    .map_err(|error| error.to_string())?;
-            let mut image = decoded.into_rgba8();
+            let mut image = deadlib_image_io::load_png(bitmap.bytes).map_err(|error| error.to_string())?;
             let source_size = [image.width(), image.height()];
             let mut hints = deadlib_assets::parse_texture_hints(bitmap.filename);
             hints.min_size = Some(8);
@@ -484,12 +481,7 @@ pub(super) fn load(name: &str) -> Result<String, String> {
             let size = deadlib_assets::texture_image_size(source_size, &hints)
                 .map_err(|error| error.to_string())?;
             if size != source_size {
-                image = image::imageops::resize(
-                    &image,
-                    size[0],
-                    size[1],
-                    image::imageops::FilterType::Triangle,
-                );
+                image = deadlib_image::imageops::resize_triangle(&image, size[0], size[1]);
             }
             deadlib_assets::apply_texture_hints(&mut image, &hints);
             deadlib_assets::fix_hidden_alpha(&mut image);

@@ -16,6 +16,7 @@ deadsync-theme = { path = "../deadsync-theme" }
 glam = "0.34.3"
 
 [dev-dependencies]
+deadlib-image-io = { path = "../deadlib-image-io" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-config = { path = "../deadsync-config" }
 deadlib-render = { path = "../deadlib-render" }

@@ -710,6 +710,6 @@ mod tests {
         backend.draw(&frame, assets.textures(), false).unwrap();
         let image = backend.capture_frame().unwrap();
         assert!(image.get_pixel(25, 65)[0] < image.get_pixel(10, 65)[0], "the translucent panel must render over the background");
-        image.save(root.join("target/twitch-chat-preview.png")).unwrap();
+        deadlib_image_io::save_png(&root.join("target/twitch-chat-preview.png"), &image).unwrap();
     }
 }

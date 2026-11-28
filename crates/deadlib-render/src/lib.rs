@@ -25,7 +25,7 @@ pub use deadlib_render_core::{
     render_target_texture_handle, render_target_uses_nearest, resolve_textured_mesh_geometries,
     resolve_textured_meshes,
 };
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use std::{error::Error, sync::Arc};
 use winit::window::Window;
 

@@ -65,8 +65,7 @@ pub struct AssetManifest<T> {
 }
 
 use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap};
-use image::{ImageFormat, ImageReader, RgbaImage};
-use log::warn;
+use deadlib_image::RgbaImage;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -507,51 +506,13 @@ pub fn direct_texture_key_path(raw: &str, key: &str) -> Option<PathBuf> {
     None
 }
 
-fn open_image_fallback_mode(
-    path: &Path,
-    warn_mismatch: bool,
-) -> image::ImageResult<image::DynamicImage> {
-    use std::io::{BufReader, Seek};
-
-    let Some(hint) = ImageFormat::from_path(path).ok() else {
-        return ImageReader::open(path)
-            .map_err(image::ImageError::IoError)?
-            .with_guessed_format()?
-            .decode();
-    };
-    let file = std::fs::File::open(path).map_err(image::ImageError::IoError)?;
-    let mut input = BufReader::new(file);
-    if let Ok(img) = ImageReader::with_format(&mut input, hint).decode() {
-        return Ok(img);
-    }
-    // Keep the file and read buffer for the format-guessing retry. If this
-    // input cannot seek, retain the original reopen-and-retry behavior.
-    if input.rewind().is_err() {
-        input = BufReader::new(std::fs::File::open(path).map_err(image::ImageError::IoError)?);
-    }
-
-    let guessed = ImageReader::with_format(input, hint).with_guessed_format()?;
-    let guessed_fmt = guessed.format();
-    if let Some(real_fmt) = guessed_fmt
-        && hint != real_fmt
-        && warn_mismatch
-    {
-        warn!(
-            "Graphic file '{}' is really {:?}",
-            path.to_string_lossy(),
-            real_fmt
-        );
-    }
-    guessed.decode()
+pub fn open_image_fallback(path: &Path) -> deadlib_image_io::ImageResult<RgbaImage> {
+    deadlib_image_io::open_reporting_format(path, |_, format| {
+        log::warn!("Graphic file '{}' is really {:?}", path.display(), format);
+    })
 }
 
-pub fn open_image_fallback(path: &Path) -> image::ImageResult<image::DynamicImage> {
-    open_image_fallback_mode(path, true)
-}
-
-pub fn open_image_fallback_quiet(path: &Path) -> image::ImageResult<image::DynamicImage> {
-    open_image_fallback_mode(path, false)
-}
+pub use deadlib_image_io::open as open_image_fallback_quiet;
 
 #[must_use]
 pub fn ascii_ci_hash(input: &str) -> u64 {

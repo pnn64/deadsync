@@ -66,7 +66,7 @@ pub fn resolve_asset_path(path: &str) -> std::path::PathBuf {
 
 /// Open an image from bundled/data-overlay assets without exposing resolution
 /// paths to the presentation consumer.
-pub fn open_bundled_image(path: &str) -> image::ImageResult<image::DynamicImage> {
+pub fn open_bundled_image(path: &str) -> deadlib_image_io::ImageResult<deadlib_image::RgbaImage> {
     open_image_fallback(&resolve_asset_path(path))
 }
 
@@ -79,7 +79,7 @@ pub fn load_initial_assets<T, B>(
 ) -> Result<(), deadlib_assets::AssetError>
 where
     T: IntoIterator<Item = deadlib_assets::TextureAssetSpec>,
-    B: TextureBackend<RgbaImage = image::RgbaImage>,
+    B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>,
 {
     let jobs = textures::initial_texture_jobs(
         manifest.textures,

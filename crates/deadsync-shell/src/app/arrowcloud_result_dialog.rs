@@ -1,8 +1,8 @@
 use deadlib_render_core::SamplerDesc;
 use deadsync_online::arrowcloud::ArrowCloudResultDialogRequest;
 use deadsync_profile as profile_data;
-use image::{DynamicImage, ImageReader, Limits, RgbaImage};
-use std::io::Cursor;
+use deadlib_image::{RgbaImage, imageops};
+use deadlib_image_io::Limits;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
@@ -11,7 +11,7 @@ use std::thread;
 const RESULT_DIALOG_QUEUE_CAPACITY: usize = 2;
 /// Bounds transient decoder allocations to at most one 4096x4096 RGBA image.
 const RESULT_DIALOG_MAX_DECODE_DIMENSION: u32 = 4096;
-const RESULT_DIALOG_MAX_DECODE_ALLOCATION_BYTES: u64 = 96 * 1024 * 1024;
+const RESULT_DIALOG_MAX_DECODE_ALLOCATION_BYTES: usize = 96 * 1024 * 1024;
 /// Generated textures are capped at four MiB each, matching the main-frame
 /// upload budget's intended bounded work.
 const RESULT_DIALOG_MAX_TEXTURE_DIMENSION: u32 = 1024;
@@ -130,7 +130,7 @@ fn download_and_decode(request: ArrowCloudResultDialogRequest) -> Option<ReadyRe
     let mut textures = Vec::with_capacity(images.len());
     for (image_index, (&key, bytes)) in keys.iter().zip(images.into_vec()).enumerate() {
         match decode_image(bytes.as_ref()) {
-            Ok(image) => textures.push((key, image.into_rgba8())),
+            Ok(image) => textures.push((key, image)),
             Err(error) => log::warn!(
                 "ArrowCloud result dialog image {} could not be decoded: {error}.",
                 image_index + 1
@@ -148,18 +148,18 @@ fn download_and_decode(request: ArrowCloudResultDialogRequest) -> Option<ReadyRe
     })
 }
 
-fn decode_image(bytes: &[u8]) -> Result<DynamicImage, image::ImageError> {
-    let mut reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format()?;
-    let mut limits = Limits::default();
-    limits.max_image_width = Some(RESULT_DIALOG_MAX_DECODE_DIMENSION);
-    limits.max_image_height = Some(RESULT_DIALOG_MAX_DECODE_DIMENSION);
-    limits.max_alloc = Some(RESULT_DIALOG_MAX_DECODE_ALLOCATION_BYTES);
-    reader.limits(limits);
-    let image = reader.decode()?;
+fn decode_image(bytes: &[u8]) -> Result<RgbaImage, deadlib_image_io::ImageError> {
+    let limits = Limits {
+        max_width: RESULT_DIALOG_MAX_DECODE_DIMENSION,
+        max_height: RESULT_DIALOG_MAX_DECODE_DIMENSION,
+        max_bytes: RESULT_DIALOG_MAX_DECODE_ALLOCATION_BYTES,
+    };
+    let image = deadlib_image_io::load_with_limits(bytes, limits)?;
     if image.width() > RESULT_DIALOG_MAX_TEXTURE_DIMENSION
         || image.height() > RESULT_DIALOG_MAX_TEXTURE_DIMENSION
     {
-        Ok(image.thumbnail(
+        Ok(imageops::thumbnail_fit(
+            &image,
             RESULT_DIALOG_MAX_TEXTURE_DIMENSION,
             RESULT_DIALOG_MAX_TEXTURE_DIMENSION,
         ))
@@ -171,7 +171,7 @@ fn decode_image(bytes: &[u8]) -> Result<DynamicImage, image::ImageError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::{ImageFormat, Rgba, RgbaImage};
+    use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use std::io::Cursor;
 
     #[test]

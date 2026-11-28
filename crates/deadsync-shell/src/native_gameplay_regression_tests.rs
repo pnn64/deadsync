@@ -354,7 +354,7 @@ fn native_gameplay_composition_captures() {
                     backend.draw(&frame, assets.textures(), false).unwrap();
                     let mut image = backend.capture_frame().unwrap();
                     deadsync_assets::screenshot::set_opaque_alpha(&mut image);
-                    image.save(output.join(format!("{name}.png"))).unwrap();
+                    deadlib_image_io::save_png(&output.join(format!("{name}.png")), &image).unwrap();
                     assert!(!frame.ops.is_empty());
                     let mut note_textures = std::collections::HashSet::new();
                     for skin in state.noteskin_assets.noteskin.iter().flatten() {

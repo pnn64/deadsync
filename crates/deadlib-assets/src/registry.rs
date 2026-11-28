@@ -1,6 +1,6 @@
 use crate::parse_sprite_sheet_dims;
 use deadlib_render_core::SamplerDesc;
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::sync::{
     Arc, LazyLock, RwLock,

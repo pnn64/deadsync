@@ -14,7 +14,7 @@ use deadlib_render_core::{
     render_target_base_handle, resolve_textured_mesh_geometries, texture_sampler_desc,
 };
 use glam::Mat4 as Matrix4;
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use log::{debug, error, info, warn};
 use std::{error::Error, ffi, mem, sync::Arc, time::Instant};
 #[cfg(windows)]

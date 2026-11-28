@@ -2,17 +2,17 @@ use crate::open_image_fallback;
 use deadlib_assets::{AssetManager, dynamic};
 use deadlib_render_core::TextureBackend;
 use deadlib_video as video;
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use log::warn;
 use rustc_hash::FxHashSet;
 use std::path::{Path, PathBuf};
 
-fn decode_artwork_source(path: &Path) -> image::ImageResult<RgbaImage> {
+fn decode_artwork_source(path: &Path) -> deadlib_image_io::ImageResult<RgbaImage> {
     if dynamic::is_dynamic_video_path(path) {
         return video::load_poster(path)
-            .map_err(|e| image::ImageError::IoError(std::io::Error::other(e)));
+            .map_err(|e| deadlib_image_io::ImageError::Io(std::io::Error::other(e)));
     }
-    Ok(deadlib_assets::open_image_fallback_quiet(path)?.into_rgba8())
+    deadlib_assets::open_image_fallback_quiet(path)
 }
 
 pub fn load_banner_source_rgba(
@@ -32,7 +32,6 @@ pub fn load_banner_source_rgba(
         return video::load_poster(path);
     }
     open_image_fallback(path)
-        .map(|img| img.into_rgba8())
         .map_err(|e| e.to_string())
 }
 
@@ -50,7 +49,6 @@ pub fn load_cdtitle_source_rgba(
         .map_err(|e| e.to_string());
     }
     open_image_fallback(path)
-        .map(|img| img.into_rgba8())
         .map_err(|e| e.to_string())
 }
 

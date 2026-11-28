@@ -46,7 +46,7 @@ fn texture_cleanup_preserves_8bit_sources_and_hint_combinations() {
                         alphamap,
                         ..Default::default()
                     };
-                    let mut expected = open_image_fallback(&path).unwrap().into_rgba8();
+                    let mut expected = open_image_fallback(&path).unwrap();
                     if !hints.is_default() {
                         apply_texture_hints(&mut expected, &hints);
                     }

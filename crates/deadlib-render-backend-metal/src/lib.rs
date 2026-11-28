@@ -14,7 +14,7 @@ use deadlib_render_core::{
 };
 use foreign_types::ForeignType;
 use glam::Mat4 as Matrix4;
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use log::{debug, info, warn};
 use metal::*;
 use objc::{

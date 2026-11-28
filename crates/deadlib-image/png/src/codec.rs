@@ -251,6 +251,33 @@ fn chunk<'a>(input: &mut &'a [u8]) -> Result<([u8; 4], &'a [u8], bool), Error> {
     Ok((kind, data, checksum_valid))
 }
 
+/// Read and validate the PNG signature and IHDR without decoding pixels.
+pub fn read_header(mut input: impl std::io::Read) -> Result<crate::ImageInfo, Error> {
+    let mut bytes = [0; 33];
+    input.read_exact(&mut bytes).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::UnexpectedEof {
+            Error::Truncated
+        } else {
+            error.into()
+        }
+    })?;
+    if &bytes[..8] != SIGNATURE {
+        return Err(Error::Invalid("signature"));
+    }
+    parse_ihdr(&mut &bytes[8..]).map(Into::into)
+}
+
+fn parse_ihdr(input: &mut &[u8]) -> Result<Header, Error> {
+    let (kind, data, checksum_valid) = chunk(input)?;
+    if !checksum_valid {
+        return Err(Error::Checksum);
+    }
+    if &kind != b"IHDR" {
+        return Err(Error::Invalid("IHDR must be first"));
+    }
+    Header::parse(data)
+}
+
 pub fn decode(input: &[u8]) -> Result<Png, Error> {
     decode_with_options(input, &DecodeOptions::default())
 }
@@ -270,14 +297,7 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
         return Err(Error::Invalid("signature"));
     }
     input = &input[8..];
-    let (kind, data, checksum_valid) = chunk(&mut input)?;
-    if !checksum_valid {
-        return Err(Error::Checksum);
-    }
-    if &kind != b"IHDR" {
-        return Err(Error::Invalid("IHDR must be first"));
-    }
-    let header = Header::parse(data)?;
+    let header = parse_ihdr(&mut input)?;
     let mut animation_decoder = crate::apng::Decoder::new(header, *options)?;
     let expected = scanline::filtered_size(
         header.width,

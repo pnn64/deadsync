@@ -2226,7 +2226,7 @@ impl App {
             };
             spent += fetched.bytes.len();
             decoded += 1;
-            match image::load_from_memory(&fetched.bytes) {
+            match deadlib_image_io::load(&fetched.bytes) {
                 Ok(image) => {
                     let key = pack_banner_texture_key(fetched.pack_id);
                     // queue_texture_upload registers the dimensions
@@ -2234,11 +2234,8 @@ impl App {
                     // frame it is queued -- one or more frames before the GPU
                     // texture exists. A sprite whose texture is not there yet
                     // is skipped at draw rather than failing.
-                    // `into_rgba8` rather than `to_rgba8`: the decoded image is
-                    // owned here and about to be dropped, so there is no
-                    // reason to copy several megabytes of it first.
                     self.asset_manager
-                        .queue_texture_upload(key, image.into_rgba8());
+                        .queue_texture_upload(key, image);
                 }
                 Err(error) => {
                     // Not an image, or a format the decoder does not have.

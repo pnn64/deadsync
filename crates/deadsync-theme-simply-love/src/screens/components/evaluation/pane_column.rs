@@ -14,7 +14,7 @@ use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization};
 use deadsync_profile as profile_data;
 use deadsync_score::ColumnJudgments;
 use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
-use image::{Rgba, RgbaImage};
+use deadlib_image::{Rgba, RgbaImage};
 use std::cell::RefCell;
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -125,9 +125,7 @@ fn pane3_solid_arrow_texture(texture_key: &str) -> Arc<str> {
         return key;
     }
 
-    let Ok(src) = deadsync_assets::open_bundled_image(&format!("assets/{texture_key}"))
-        .map(|img| img.to_rgba8())
-    else {
+    let Ok(src) = deadsync_assets::open_bundled_image(&format!("assets/{texture_key}")) else {
         return Arc::from(texture_key);
     };
 

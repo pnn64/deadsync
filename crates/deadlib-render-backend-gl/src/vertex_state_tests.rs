@@ -6,7 +6,7 @@ use deadlib_render_core::{
     BlendMode, DrawOp, ProjectionMatrix, RenderFrame, SamplerDesc, TexturedMeshGeometry,
     TexturedMeshVertices,
 };
-use image::{Rgba, RgbaImage};
+use deadlib_image::{Rgba, RgbaImage};
 use std::sync::Arc;
 use winit::{
     dpi::PhysicalSize, event_loop::EventLoop, platform::windows::EventLoopBuilderExtWindows,

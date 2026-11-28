@@ -934,8 +934,39 @@ fn gather_words<const CHANNELS: usize>(samples: &[u16], step: usize, row: &mut [
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum SampleView<'a> {
+    U8(&'a [u8]),
+    U16(&'a [u16]),
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ImageView<'a> {
+    pub width: u32,
+    pub height: u32,
+    pub color_type: ColorType,
+    pub bit_depth: u8,
+    pub samples: SampleView<'a>,
+}
+
+impl<'a> From<&'a Image> for ImageView<'a> {
+    fn from(image: &'a Image) -> Self {
+        let samples = match &image.samples {
+            Samples::U8(samples) => SampleView::U8(samples),
+            Samples::U16(samples) => SampleView::U16(samples),
+        };
+        Self {
+            width: image.width,
+            height: image.height,
+            color_type: image.color_type,
+            bit_depth: image.bit_depth,
+            samples,
+        }
+    }
+}
+
 pub(crate) fn pack_row(
-    image: &Image,
+    image: ImageView<'_>,
     y: usize,
     x: usize,
     step: usize,
@@ -946,11 +977,11 @@ pub(crate) fn pack_row(
     let depth = image.bit_depth;
     let start = (y * image.width as usize + x) * channels;
     if step == 1 {
-        match &image.samples {
-            Samples::U8(v) if depth == 8 => {
+        match image.samples {
+            SampleView::U8(v) if depth == 8 => {
                 row.copy_from_slice(&v[start..start + width * channels]);
             }
-            Samples::U16(v) => {
+            SampleView::U16(v) => {
                 for (out, value) in row
                     .as_chunks_mut::<2>()
                     .0
@@ -960,7 +991,7 @@ pub(crate) fn pack_row(
                     *out = value.to_be_bytes();
                 }
             }
-            Samples::U8(v) => {
+            SampleView::U8(v) => {
                 let samples = &v[start..start + width * channels];
                 match depth {
                     1 => pack_bits::<1>(samples, row),
@@ -972,8 +1003,8 @@ pub(crate) fn pack_row(
         }
         return;
     }
-    let samples = match &image.samples {
-        Samples::U8(v) if depth == 8 => {
+    let samples = match image.samples {
+        SampleView::U8(v) if depth == 8 => {
             let samples = &v[start..];
             match channels {
                 1 => gather8::<1>(samples, step, row),
@@ -983,7 +1014,7 @@ pub(crate) fn pack_row(
             }
             return;
         }
-        Samples::U16(v) => {
+        SampleView::U16(v) => {
             let samples = &v[start..];
             let out = row.as_chunks_mut::<2>().0;
             match channels {
@@ -994,7 +1025,7 @@ pub(crate) fn pack_row(
             }
             return;
         }
-        Samples::U8(v) => v,
+        SampleView::U8(v) => v,
     };
     let samples = &samples[start..];
     match depth {
@@ -1210,7 +1241,7 @@ mod tests {
                                 samples: Samples::U8(samples),
                             };
                             let mut output = [0xa5];
-                            pack_row(&image, 0, offset, step, width, &mut output);
+                            pack_row((&image).into(), 0, offset, step, width, &mut output);
                             assert_eq!(
                                 output,
                                 [byte & (u8::MAX << (8 - depth as usize * width))],
@@ -1243,7 +1274,7 @@ mod tests {
                     samples: Samples::U8(samples),
                 };
                 let mut packed = vec![0xa5; expected.len()];
-                pack_row(&image, 0, 0, 1, width, &mut packed);
+                pack_row((&image).into(), 0, 0, 1, width, &mut packed);
                 assert_eq!(packed, expected, "{width} samples at depth {depth}");
             }
         }

@@ -42,11 +42,11 @@ fn color_assets() -> AssetManager {
     let mut assets = AssetManager::new();
     assets.queue_texture_upload(
         white_texture_key().to_string(),
-        image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),
+        deadlib_image::RgbaImage::from_pixel(1, 1, deadlib_image::Rgba([255; 4])),
     );
     assets.queue_texture_upload(
         "native-colors.png".to_owned(),
-        image::RgbaImage::new(40, 30),
+        deadlib_image::RgbaImage::new(40, 30),
     );
     assets
 }

@@ -10,8 +10,10 @@ sample storage; each format is a separate Cargo package under its own directory.
 | `jpeg/` | `deadlib-image-jpeg` | Local shared primitives |
 | `bmp/` | `deadlib-image-bmp` | None; owns its indexed/RGB/RGBA model |
 
-These four formats cover the normal ITGmania image-loading scope. Native codec
-integration into the application remains a separate migration step.
+These four formats cover the normal ITGmania image-loading scope. DeadSync uses
+them through [`deadlib-image-io`](../deadlib-image-io) for textures, artwork,
+screenshots and StepManiaX lighting. The adapter and shared RGBA8 storage use
+only the standard library and local crates.
 
 The PNG implementation targets the [W3C PNG Third Edition](https://www.w3.org/TR/png-3/),
 [RFC 1950](https://www.rfc-editor.org/rfc/rfc1950), and

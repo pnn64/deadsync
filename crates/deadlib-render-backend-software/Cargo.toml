@@ -7,7 +7,7 @@ license = "GPL-3.0"
 [dependencies]
 deadlib-render-core = { path = "../deadlib-render-core" }
 glam = "0.34.3"
-image = "0.25.10"
+deadlib-image = { path = "../deadlib-image" }
 log = "0.4.35"
 rayon = "1.12.0"
 softbuffer = "0.4.8"

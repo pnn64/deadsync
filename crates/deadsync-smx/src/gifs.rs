@@ -54,13 +54,11 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use hashbrown::{Equivalent, HashMap as RegistryMap};
-use image::codecs::gif::GifDecoder;
-use image::{AnimationDecoder, RgbaImage};
+use deadlib_image_io::GifFrames;
 
 use crate::panels::{LEDS_PER_PANEL, PANELS};
 
@@ -277,15 +275,8 @@ impl PanelAnim {
 
 // GIF decoding
 
-/// Decode one composited frame at a time; callers retain only LED samples.
-fn decode_gif(data: &[u8]) -> Result<impl Iterator<Item = image::Frame> + '_, &'static str> {
-    let decoder = GifDecoder::new(Cursor::new(data)).map_err(|_| "the GIF couldn't be read")?;
-    Ok(decoder.into_frames().filter_map(std::result::Result::ok))
-}
-
-fn frame_duration(frame: &image::Frame) -> f32 {
-    let (numer, denom) = frame.delay().numer_denom_ms();
-    let ms = numer as f32 / denom as f32;
+fn frame_duration(delay: u16) -> f32 {
+    let ms = f32::from(delay) * 10.0;
     if ms <= 0.0 || (28.0..=42.0).contains(&ms) {
         1.0 / 30.0
     } else {
@@ -293,7 +284,23 @@ fn frame_duration(frame: &image::Frame) -> f32 {
     }
 }
 
-fn is_marked(img: &RgbaImage, x: u32, marker_y: u32) -> bool {
+#[derive(Clone, Copy)]
+struct PixelView<'a> {
+    pixels: &'a [[u8; 4]],
+    width: usize,
+}
+
+impl<'a> PixelView<'a> {
+    fn new(rgba: &'a [u8], width: u32) -> Self {
+        Self { pixels: rgba.as_chunks::<4>().0, width: width as usize }
+    }
+
+    fn get_pixel(self, x: u32, y: u32) -> [u8; 4] {
+        self.pixels[y as usize * self.width + x as usize]
+    }
+}
+
+fn is_marked(img: PixelView<'_>, x: u32, marker_y: u32) -> bool {
     let px = img.get_pixel(x, marker_y);
     px[3] == 255 && px[0] >= 128
 }
@@ -302,20 +309,20 @@ fn is_marked(img: &RgbaImage, x: u32, marker_y: u32) -> bool {
 
 /// Sample one panel's LEDs from a 7x7-footprint block at (bx, by): the 16
 /// even/even pixels (outer 4x4) then the 9 odd/odd pixels (inner 3x3).
-fn sample_block_25(img: &RgbaImage, bx: u32, by: u32) -> PanelFrame {
+fn sample_block_25(img: PixelView<'_>, bx: u32, by: u32) -> PanelFrame {
     let mut out = [0u8; PANEL_RGB_BYTES];
     for dy in 0..4u32 {
         for dx in 0..4u32 {
             let led = (dy * 4 + dx) as usize;
             let px = img.get_pixel(bx + dx * 2, by + dy * 2);
-            out[led * 3..led * 3 + 3].copy_from_slice(&px.0[..3]);
+            out[led * 3..led * 3 + 3].copy_from_slice(&px[..3]);
         }
     }
     for dy in 0..3u32 {
         for dx in 0..3u32 {
             let led = 16 + (dy * 3 + dx) as usize;
             let px = img.get_pixel(bx + dx * 2 + 1, by + dy * 2 + 1);
-            out[led * 3..led * 3 + 3].copy_from_slice(&px.0[..3]);
+            out[led * 3..led * 3 + 3].copy_from_slice(&px[..3]);
         }
     }
     out
@@ -323,20 +330,20 @@ fn sample_block_25(img: &RgbaImage, bx: u32, by: u32) -> PanelFrame {
 
 /// Sample one panel's LEDs from a 4x4 block at (bx, by). The inner-ring bytes
 /// (LEDs 16..25) stay black; the pad's inner LEDs simply stay off.
-fn sample_block_16(img: &RgbaImage, bx: u32, by: u32) -> PanelFrame {
+fn sample_block_16(img: PixelView<'_>, bx: u32, by: u32) -> PanelFrame {
     let mut out = [0u8; PANEL_RGB_BYTES];
     for dy in 0..4u32 {
         for dx in 0..4u32 {
             let led = (dy * 4 + dx) as usize;
             let px = img.get_pixel(bx + dx, by + dy);
-            out[led * 3..led * 3 + 3].copy_from_slice(&px.0[..3]);
+            out[led * 3..led * 3 + 3].copy_from_slice(&px[..3]);
         }
     }
     out
 }
 
 /// Sample panel `p` (0..9, row-major 3x3) from a full-pad image.
-fn sample_full_pad_panel(img: &RgbaImage, panel: usize, size: PadSize) -> PanelFrame {
+fn sample_full_pad_panel(img: PixelView<'_>, panel: usize, size: PadSize) -> PanelFrame {
     let col = (panel % 3) as u32;
     let row = (panel / 3) as u32;
     match size {
@@ -370,22 +377,24 @@ const fn panel_canvas(w: u32, h: u32) -> Option<(PadSize, bool)> {
 /// and the size implied by its dimensions. `beats_per_loop` is left `None`;
 /// the registry fills it from the filename.
 pub fn decode_full_pad(data: &[u8]) -> Result<(FullPadAnim, PadSize), &'static str> {
-    let mut frames = decode_gif(data)?;
-    let first = frames.next().ok_or("the GIF has no frames")?;
-    let (w, h) = first.buffer().dimensions();
+    let mut frames = GifFrames::new(data).map_err(|_| "the GIF couldn't be read")?;
+    let (w, h) = frames.dimensions();
     let size = full_pad_size(w, h).ok_or("a full-pad GIF must be 23x24 or 14x15")?;
     let mut loop_frame = None;
     let mut panels: [Vec<PanelFrame>; PANELS] = std::array::from_fn(|_| Vec::new());
     let mut durations = Vec::new();
-    for frame in std::iter::once(first).chain(frames) {
-        let img = frame.buffer();
+    while let Some(frame) = frames.next_frame().ok().flatten() {
+        let img = PixelView::new(frame.rgba, w);
         if loop_frame.is_none() && is_marked(img, 0, h - 1) {
             loop_frame = Some(durations.len());
         }
         for (panel, samples) in panels.iter_mut().enumerate() {
             samples.push(sample_full_pad_panel(img, panel, size));
         }
-        durations.push(frame_duration(&frame));
+        durations.push(frame_duration(frame.control.map_or(0, |control| control.delay)));
+    }
+    if durations.is_empty() {
+        return Err("the GIF has no frames");
     }
     for samples in &mut panels {
         samples.shrink_to_fit();
@@ -405,17 +414,16 @@ pub fn decode_full_pad(data: &[u8]) -> Result<(FullPadAnim, PadSize), &'static s
 /// Decode a per-panel judgement GIF (7x8, 7x7, 4x5, or 4x4). Bare 7x7 / 4x4
 /// canvases have no marker row, so they loop from frame 0 with no outro.
 pub fn decode_panel(data: &[u8]) -> Result<(PanelAnim, PadSize), &'static str> {
-    let mut frames = decode_gif(data)?;
-    let first = frames.next().ok_or("the GIF has no frames")?;
-    let (w, h) = first.buffer().dimensions();
+    let mut frames = GifFrames::new(data).map_err(|_| "the GIF couldn't be read")?;
+    let (w, h) = frames.dimensions();
     let (size, has_marker_row) =
         panel_canvas(w, h).ok_or("a per-panel GIF must be 7x8, 7x7, 4x5, or 4x4")?;
     let mut loop_frame = None;
     let mut loop_end = None;
     let mut samples = Vec::new();
     let mut durations = Vec::new();
-    for frame in std::iter::once(first).chain(frames) {
-        let img = frame.buffer();
+    while let Some(frame) = frames.next_frame().ok().flatten() {
+        let img = PixelView::new(frame.rgba, w);
         if has_marker_row {
             if loop_frame.is_none() && is_marked(img, 0, h - 1) {
                 loop_frame = Some(samples.len());
@@ -428,7 +436,10 @@ pub fn decode_panel(data: &[u8]) -> Result<(PanelAnim, PadSize), &'static str> {
             PadSize::Leds16 => sample_block_16(img, 0, 0),
             PadSize::Leds25 => sample_block_25(img, 0, 0),
         });
-        durations.push(frame_duration(&frame));
+        durations.push(frame_duration(frame.control.map_or(0, |control| control.delay)));
+    }
+    if durations.is_empty() {
+        return Err("the GIF has no frames");
     }
     samples.shrink_to_fit();
     durations.shrink_to_fit();
@@ -1222,7 +1233,8 @@ fn visit_pack(dir: &Path, pack: &str, visit: &mut impl FnMut(&str, &Path)) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::Rgba;
+    use image::{Rgba, RgbaImage};
+    use std::io::Cursor;
 
     #[test]
     fn difficulty_gif_tag_uses_the_file_difficulty() {
@@ -1252,11 +1264,11 @@ mod tests {
         // Panel 4 (col 1, row 1, base 8,8): outer LED 5 (dx 1, dy 1) at (10,10).
         img.put_pixel(10, 10, Rgba([1, 2, 3, 255]));
 
-        let p0 = sample_full_pad_panel(&img, 0, PadSize::Leds25);
+        let p0 = sample_full_pad_panel(PixelView::new(img.as_raw(), img.width()), 0, PadSize::Leds25);
         assert_eq!(&p0[0..3], &[128, 64, 32]);
         assert_eq!(&p0[16 * 3..16 * 3 + 3], &[10, 20, 30]);
 
-        let p4 = sample_full_pad_panel(&img, 4, PadSize::Leds25);
+        let p4 = sample_full_pad_panel(PixelView::new(img.as_raw(), img.width()), 4, PadSize::Leds25);
         assert_eq!(&p4[5 * 3..5 * 3 + 3], &[1, 2, 3]);
     }
 
@@ -1267,11 +1279,11 @@ mod tests {
         // Panel 4 (col 1, row 1, base 5,5): LED 0 at (5,5).
         img.put_pixel(5, 5, Rgba([0, 255, 0, 255]));
 
-        let p0 = sample_full_pad_panel(&img, 0, PadSize::Leds16);
+        let p0 = sample_full_pad_panel(PixelView::new(img.as_raw(), img.width()), 0, PadSize::Leds16);
         assert_eq!(&p0[0..3], &[255, 0, 0]);
         assert!(p0[16 * 3..].iter().all(|&b| b == 0), "inner ring stays off");
 
-        let p4 = sample_full_pad_panel(&img, 4, PadSize::Leds16);
+        let p4 = sample_full_pad_panel(PixelView::new(img.as_raw(), img.width()), 4, PadSize::Leds16);
         assert_eq!(&p4[0..3], &[0, 255, 0]);
     }
 
@@ -1284,7 +1296,7 @@ mod tests {
         img.put_pixel(5, 5, Rgba([4, 4, 4, 255])); // inner LED 24 (dx 2, dy 2)
         img.put_pixel(1, 0, Rgba([9, 9, 9, 255])); // opposite parity: no LED
 
-        let f = sample_block_25(&img, 0, 0);
+        let f = sample_block_25(PixelView::new(img.as_raw(), img.width()), 0, 0);
         assert_eq!(&f[0..3], &[1, 1, 1]);
         assert_eq!(&f[16 * 3..16 * 3 + 3], &[2, 2, 2]);
         assert_eq!(&f[15 * 3..15 * 3 + 3], &[3, 3, 3]);
@@ -1299,7 +1311,7 @@ mod tests {
         img.put_pixel(0, 0, Rgba([5, 6, 7, 255]));
         img.put_pixel(3, 3, Rgba([8, 9, 10, 255]));
 
-        let f = sample_block_16(&img, 0, 0);
+        let f = sample_block_16(PixelView::new(img.as_raw(), img.width()), 0, 0);
         assert_eq!(&f[0..3], &[5, 6, 7]);
         assert_eq!(&f[15 * 3..15 * 3 + 3], &[8, 9, 10]);
         assert!(f[16 * 3..].iter().all(|&b| b == 0));

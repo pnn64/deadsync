@@ -7,7 +7,7 @@ use crate::{
 };
 use deadlib_present::font::{Font, FontMap};
 use deadlib_render_core::{SamplerDesc, TextureBackend, TextureHandle, TextureHandleMap, Yuv420Image};
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use log::{debug, warn};
 use std::sync::mpsc::SyncSender;
 
@@ -286,7 +286,7 @@ impl<T> AssetManager<T> {
         backend: &mut impl TextureBackend<Texture = T, RgbaImage = RgbaImage>,
         png: crate::EmbeddedPng,
     ) -> Result<(), AssetError> {
-        let image = image::load_from_memory_with_format(png.bytes, image::ImageFormat::Png)?.into_rgba8();
+        let image = deadlib_image_io::load_png(png.bytes)?;
         self.update_texture_for_key(backend, png.key, &image)
     }
 
@@ -428,7 +428,7 @@ mod tests {
     use deadlib_render::{Backend, Texture as RendererTexture};
 
     fn blank_rgba(width: u32, height: u32) -> RgbaImage {
-        RgbaImage::from_pixel(width, height, image::Rgba([0, 0, 0, 0]))
+        RgbaImage::from_pixel(width, height, deadlib_image::Rgba([0, 0, 0, 0]))
     }
 
     #[test]
@@ -542,7 +542,7 @@ mod tests {
         };
         let handle = assets.reserve_texture_handle("video".into());
         let (tx, rx) = sync_channel(4);
-        let frame = RgbaImage::from_pixel(2, 2, image::Rgba([1, 2, 3, 255]));
+        let frame = RgbaImage::from_pixel(2, 2, deadlib_image::Rgba([1, 2, 3, 255]));
         let raw_ptr = frame.as_ptr();
         assets
             .texture_store
@@ -564,7 +564,7 @@ mod tests {
         let first_pixels = software_image(&assets, "video").as_ptr();
         assets.queue_texture_upload(
             "video".into(),
-            RgbaImage::from_pixel(2, 2, image::Rgba([9, 8, 7, 255])),
+            RgbaImage::from_pixel(2, 2, deadlib_image::Rgba([9, 8, 7, 255])),
         );
         assets.drain_texture_uploads(&mut backend, budget); // Earlier queued key owns this budget.
         assert!(assets.has_pending_texture_upload("video"));

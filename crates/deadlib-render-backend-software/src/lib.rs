@@ -6,7 +6,7 @@ use deadlib_render_core::{
     render_target_base_handle, render_target_uses_nearest, texture_sampler_desc,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use log::info;
 use rayon::prelude::*;
 use std::{error::Error, num::NonZeroU32, sync::Arc, time::Instant};
@@ -4723,7 +4723,7 @@ mod tests {
         TexturedMeshVertices,
     };
     use glam::Vec3;
-    use image::Rgba;
+    use deadlib_image::Rgba;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     const WIDTH: usize = 96;
@@ -4910,10 +4910,10 @@ mod tests {
             half_pixels: Vec::new(),
         };
         let gradient = texture(RgbaImage::from_fn(128, 128, |x, y| {
-            image::Rgba([(x * 2) as u8, (y * 2) as u8, 0, 255])
+            deadlib_image::Rgba([(x * 2) as u8, (y * 2) as u8, 0, 255])
         }));
-        let base = texture(RgbaImage::from_pixel(1, 1, image::Rgba([40, 60, 80, 128])));
-        let reflection = texture(RgbaImage::from_pixel(1, 1, image::Rgba([80, 40, 20, 128])));
+        let base = texture(RgbaImage::from_pixel(1, 1, deadlib_image::Rgba([40, 60, 80, 128])));
+        let reflection = texture(RgbaImage::from_pixel(1, 1, deadlib_image::Rgba([80, 40, 20, 128])));
         let vertices = [
             [-0.8, -0.8, 0.0],
             [0.8, -0.8, 0.0],
@@ -5415,8 +5415,8 @@ mod tests {
     fn transparent_foreground_preserves_visible_background_depth() {
         use deadlib_render_core::DepthMode;
 
-        let transparent = RgbaImage::from_pixel(1, 1, image::Rgba([91, 39, 77, 0]));
-        let blue = RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 255, 255]));
+        let transparent = RgbaImage::from_pixel(1, 1, deadlib_image::Rgba([91, 39, 77, 0]));
+        let blue = RgbaImage::from_pixel(1, 1, deadlib_image::Rgba([0, 0, 255, 255]));
         let draw = |z, image: &RgbaImage, mode, unorm, pixels: &mut [u32], depth: &mut [f32]| {
             let vertex = |x, y| ScreenVertexTexColor {
                 inv_w: 1.0,

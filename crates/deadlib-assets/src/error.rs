@@ -4,7 +4,7 @@ use std::{error::Error as StdError, fmt};
 #[derive(Debug)]
 pub enum AssetError {
     FontParse(FontParseError),
-    Image(image::ImageError),
+    Image(deadlib_image_io::ImageError),
     Backend(String),
 }
 
@@ -34,8 +34,8 @@ impl From<FontParseError> for AssetError {
     }
 }
 
-impl From<image::ImageError> for AssetError {
-    fn from(value: image::ImageError) -> Self {
+impl From<deadlib_image_io::ImageError> for AssetError {
+    fn from(value: deadlib_image_io::ImageError) -> Self {
         Self::Image(value)
     }
 }

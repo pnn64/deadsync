@@ -32,7 +32,7 @@ const SCREENSHOT_PREVIEW_GLOW_ALPHA: f32 = 0.2;
 #[derive(Debug)]
 pub enum ScreenshotSaveError {
     Io(std::io::Error),
-    Image(image::ImageError),
+    Image(deadlib_image_io::ImageError),
     FilenameExhausted,
 }
 
@@ -54,8 +54,8 @@ impl From<std::io::Error> for ScreenshotSaveError {
     }
 }
 
-impl From<image::ImageError> for ScreenshotSaveError {
-    fn from(value: image::ImageError) -> Self {
+impl From<deadlib_image_io::ImageError> for ScreenshotSaveError {
+    fn from(value: deadlib_image_io::ImageError) -> Self {
         Self::Image(value)
     }
 }
@@ -68,9 +68,9 @@ pub fn sanitize_screenshot_title(title: &str) -> String {
         .collect()
 }
 
-pub fn set_opaque_alpha(image: &mut image::RgbaImage) {
-    for pixel in image.pixels_mut() {
-        pixel.0[3] = 255;
+pub fn set_opaque_alpha(image: &mut deadlib_image::RgbaImage) {
+    for pixel in image.as_mut().as_chunks_mut::<4>().0 {
+        pixel[3] = 255;
     }
 }
 
@@ -249,7 +249,7 @@ pub fn screenshot_preview_pose(
 
 pub fn save_screenshot_image(
     root: &Path,
-    image: &image::RgbaImage,
+    image: &deadlib_image::RgbaImage,
     song_info: Option<(&str, Option<u32>)>,
 ) -> Result<PathBuf, ScreenshotSaveError> {
     let now = Local::now();
@@ -259,7 +259,7 @@ pub fn save_screenshot_image(
     let stamp = now.format("%Y-%m-%d_%H%M%S").to_string();
     let stem = screenshot_file_stem(&stamp, song_info);
     let path = allocate_screenshot_path(&dir, &stem)?;
-    image.save_with_format(&path, image::ImageFormat::Png)?;
+    deadlib_image_io::save_png(&path, image)?;
     Ok(path)
 }
 
@@ -337,8 +337,8 @@ mod tests {
 
     #[test]
     fn alpha_normalization_sets_every_pixel_opaque() {
-        let mut image = image::RgbaImage::from_fn(2, 2, |x, y| {
-            image::Rgba([x as u8, y as u8, 0, (x + y) as u8])
+        let mut image = deadlib_image::RgbaImage::from_fn(2, 2, |x, y| {
+            deadlib_image::Rgba([x as u8, y as u8, 0, (x + y) as u8])
         });
 
         set_opaque_alpha(&mut image);

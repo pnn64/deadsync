@@ -103,7 +103,7 @@ fn assets() -> AssetManager {
     let mut assets = AssetManager::new();
     assets.queue_texture_upload(
         white_texture_key().to_string(),
-        image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),
+        deadlib_image::RgbaImage::from_pixel(1, 1, deadlib_image::Rgba([255; 4])),
     );
     assets
 }

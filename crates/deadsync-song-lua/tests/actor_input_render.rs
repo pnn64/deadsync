@@ -161,7 +161,7 @@ mod renderer {
             backend: &mut Backend,
             frame: &deadlib_render_core::RenderFrame,
             textures: &TextureHandleMap<Texture>,
-        ) -> image::RgbaImage {
+        ) -> deadlib_image::RgbaImage {
             backend.request_screenshot();
             backend.draw(frame, textures, false).unwrap();
             backend.capture_frame().unwrap()

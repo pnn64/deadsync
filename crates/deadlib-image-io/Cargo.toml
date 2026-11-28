@@ -1,0 +1,12 @@
+[package]
+name = "deadlib-image-io"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadlib-image = { path = "../deadlib-image" }
+deadlib-image-bmp = { path = "../deadlib-image/bmp" }
+deadlib-image-gif = { path = "../deadlib-image/gif" }
+deadlib-image-jpeg = { path = "../deadlib-image/jpeg" }
+deadlib-image-png = { path = "../deadlib-image/png" }

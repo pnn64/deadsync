@@ -5,12 +5,12 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-image-io = { path = "../deadlib-image-io" }
 arrayvec = "0.7.8"
 bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }
-image = "0.25.10"
 log = "0.4.35"
 memchr = "2.8.3"
 rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
@@ -21,6 +21,7 @@ twox-hash = "2.1.5"
 unicode-normalization = "0.1.26"
 
 [dev-dependencies]
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 strsim = "0.11.1"
 
 [lints.clippy]

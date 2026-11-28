@@ -3,7 +3,7 @@ use crate::media::{
     song_asset_entry_is_file,
 };
 use crate::tags::latest_simfile_tag_values;
-use image::image_dimensions;
+use deadlib_image_io::dimensions as image_dimensions;
 use std::fs;
 use std::path::{Path, PathBuf};
 

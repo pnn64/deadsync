@@ -1,5 +1,5 @@
 use deadlib_render_core::{SamplerDesc, TextureHandle, Yuv420Image};
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::{
     collections::{VecDeque, hash_map::Entry},
@@ -282,7 +282,7 @@ mod tests {
     use std::sync::mpsc::sync_channel;
 
     fn blank_rgba(width: u32, height: u32) -> RgbaImage {
-        RgbaImage::from_pixel(width, height, image::Rgba([0, 0, 0, 0]))
+        RgbaImage::from_pixel(width, height, deadlib_image::Rgba([0, 0, 0, 0]))
     }
 
     #[test]

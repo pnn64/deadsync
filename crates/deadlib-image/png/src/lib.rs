@@ -14,6 +14,7 @@ pub mod zlib;
 pub use codec::{
     AncillaryChunk, AnimationPolicy, ChunkPosition, DecodeOptions, EncodeOptions, Filter, Limits,
     MetadataPolicy, PalettePolicy, Png, Transparency, decode, decode_with_options, encode,
+    read_header,
 };
 
 pub use apng::{Animation, BlendOp, DisposeOp, Frame, FrameControl};
@@ -22,9 +23,9 @@ pub use deadlib_image::{ColorType, Image, Samples};
 pub use metadata::{LANGUAGE_SUBTAG_REGISTRY_DATE, Metadata};
 pub use stream::{
     DecodeEvent, DecodeProgress, DecodeStatus, ImageInfo, ImageKind, Row, RowSamples,
-    StreamDecoder, decode_reader,
+    StreamDecoder, decode_default_reader, decode_reader,
 };
-pub use stream::{EncodeStats, encode_writer};
+pub use stream::{EncodeStats, encode_rgba8_writer, encode_writer};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {

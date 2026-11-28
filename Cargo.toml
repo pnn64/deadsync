@@ -52,6 +52,7 @@ members = [
     "crates/deadlib-assets",
     "crates/deadlib-bincode",
     "crates/deadlib-image",
+    "crates/deadlib-image-io",
     "crates/deadlib-image/png",
     "crates/deadlib-image/gif",
     "crates/deadlib-image/jpeg",
@@ -167,10 +168,16 @@ panic = "abort"
 
 # Native noteskin sheets are decoded while browsing Player Options. Keep the
 # PNG codec fast in development builds without disabling app debug checks.
-[profile.dev.package.png]
+[profile.dev.package.deadlib-image-png]
 opt-level = 3
 
-[profile.dev.package.fdeflate]
+[profile.dev.package.deadlib-image-gif]
+opt-level = 3
+
+[profile.dev.package.deadlib-image-jpeg]
+opt-level = 3
+
+[profile.dev.package.deadlib-image-bmp]
 opt-level = 3
 
 # Song-Lua Sound actors can preload full-length music. Keep their decoder and

@@ -293,7 +293,7 @@ pub(super) fn texture_path(
         PREPARED.get_or_init(|| {
             deadlib_assets::register_prepared_generated_texture(
                 KEY,
-                image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),
+                deadlib_image::RgbaImage::from_pixel(1, 1, deadlib_image::Rgba([255; 4])),
                 [1, 1],
                 Default::default(),
             )

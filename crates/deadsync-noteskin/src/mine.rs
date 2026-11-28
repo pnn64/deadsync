@@ -1,6 +1,6 @@
 #[cfg(test)]
-use image::Rgba;
-use image::RgbaImage;
+use deadlib_image::Rgba;
+use deadlib_image::RgbaImage;
 use smallvec::SmallVec;
 use std::{hash::Hasher, sync::LazyLock};
 use twox_hash::XxHash64;
@@ -528,7 +528,7 @@ mod tests {
             MINE_GRADIENT_FRAME_SIZE * colors.len() as u32
         );
         assert_eq!(image.height(), MINE_GRADIENT_FRAME_SIZE);
-        assert_eq!(image.get_pixel(0, 0), &Rgba([0, 0, 0, 0]));
+        assert_eq!(image.get_pixel(0, 0), Rgba([0, 0, 0, 0]));
     }
 
     #[test]

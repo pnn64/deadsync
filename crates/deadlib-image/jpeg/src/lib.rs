@@ -84,7 +84,7 @@ pub use stream_abbreviated::{
 pub use stream_encode::{StreamEncoder, WriteError, WriteResult};
 pub use tables::{HuffmanClass, HuffmanTable, QuantizationTable, TableStream, Tables};
 
-pub use marker::{Event, MarkerReader};
+pub use marker::{Event, MarkerReader, read_frame_header};
 pub use model::*;
 
 /// Failure categories shared by native input and output APIs.

@@ -3,7 +3,7 @@ use deadlib_assets::{METADATA_TEXTURE_CONTEXT, TextureStore, register_texture_di
 use deadlib_present::actors::{ActorResourceArena, SpriteSource};
 use deadlib_present::texture::TextureContext;
 use deadlib_render_core::{INVALID_TEXTURE_HANDLE, SamplerDesc};
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use std::sync::Arc;
 
 // Metadata remains process-wide during CPU asset preparation.

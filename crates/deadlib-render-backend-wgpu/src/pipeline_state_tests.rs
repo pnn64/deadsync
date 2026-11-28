@@ -236,7 +236,7 @@ fn pipeline_switches_preserve_camera_pixels() {
     }
     check_buffer_uploads(&state);
     let rgba = RgbaImage::from_fn(4, 4, |x, y| {
-        image::Rgba([180 + x as u8 * 20, 160 + y as u8 * 20, 230, 100])
+        deadlib_image::Rgba([180 + x as u8 * 20, 160 + y as u8 * 20, 230, 100])
     });
     let textures = TestTextures([
         create_texture(&mut state, &rgba, SamplerDesc::default()).unwrap(),

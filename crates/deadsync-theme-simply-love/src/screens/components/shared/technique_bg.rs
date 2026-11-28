@@ -552,10 +552,9 @@ mod tests {
                 backend
                     .draw(&frame, assets.textures(), false)
                     .expect("draw Technique background");
-                backend
-                    .capture_frame()
-                    .expect("capture Technique background")
-                    .save(std::path::PathBuf::from(dir).join(format!("technique-{elapsed}.png")))
+                let image = backend.capture_frame().expect("capture Technique background");
+                let path = std::path::PathBuf::from(dir).join(format!("technique-{elapsed}.png"));
+                deadlib_image_io::save_png(&path, &image)
                     .expect("save Technique capture");
             }
             actors.retain(|actor| match actor {

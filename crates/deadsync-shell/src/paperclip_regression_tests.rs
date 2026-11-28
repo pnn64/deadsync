@@ -453,13 +453,13 @@ return Def.ActorFrame {
                                     Some((texture_path.clone(), Arc::clone(texture_key))),
                                 _ => None,
                             }).expect("Paperclip includes the failure background");
-                            assets.queue_texture_upload(bsod_key.to_string(), image::open(bsod_path).unwrap().into_rgba8());
+                            assets.queue_texture_upload(bsod_key.to_string(), deadlib_image_io::open(&bsod_path).unwrap());
                             let bsod_handle = assets.texture_context().texture_handle(&bsod_key);
                             let meter_atlas_key = Arc::clone(&assets.fonts()["wendy"].glyph_map[&'1'].texture_key);
                             let meter_atlas_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                                 .join("../../assets").join(meter_atlas_key.as_ref());
                             assets.queue_texture_upload(meter_atlas_key.to_string(),
-                                image::open(meter_atlas_path).unwrap().into_rgba8());
+                                deadlib_image_io::open(&meter_atlas_path).unwrap());
                             let meter_atlas = assets.texture_context().texture_handle(&meter_atlas_key);
                             assert_ne!(meter_atlas, 0, "the real life-meter font atlas is bound");
                             let mut actors = Vec::new();

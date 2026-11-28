@@ -2567,7 +2567,7 @@ pub(super) mod tests {
                 1,
                 backend
                     .create_texture(
-                        &image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),
+                        &deadlib_image::RgbaImage::from_pixel(1, 1, deadlib_image::Rgba([255; 4])),
                         SamplerDesc::default(),
                     )
                     .unwrap(),
@@ -3850,11 +3850,8 @@ pub(super) mod tests {
             );
             backend.request_screenshot();
             backend.draw(&frame, assets.textures(), false).unwrap();
-            backend
-                .capture_frame()
-                .unwrap()
-                .save(output.join(name))
-                .unwrap();
+            let image = backend.capture_frame().unwrap();
+            deadlib_image_io::save_png(&output.join(name), &image).unwrap();
         };
         let mut view = test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]);
         view.policy.scorebox_available = true;

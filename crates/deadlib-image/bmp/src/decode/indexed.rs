@@ -61,6 +61,31 @@ pub(super) fn rgba_packed<const BITS: usize, const PER_BYTE: usize>(
     Ok(samples.into_flattened())
 }
 
+pub(super) fn rgba_packed_small<const BITS: usize, const PER_BYTE: usize>(
+    source: &[u8],
+    header: &Header,
+    palette: &[u8],
+    palette_len: usize,
+    entry_bytes: usize,
+) -> Result<Vec<u8>, Error> {
+    let colors = rgba_palette::<16>(palette, entry_bytes);
+    let mask = (1 << BITS) - 1;
+    let width = header.info.width as usize;
+    let mut pixels = Vec::new();
+    reserve(&mut pixels, header.pixel_count)?;
+    for row in display_rows(source, header.row_pitch, header.info.top_down) {
+        for x in 0..width {
+            let shift = (PER_BYTE - 1 - x % PER_BYTE) * BITS;
+            let index = (usize::from(row[x / PER_BYTE]) >> shift) & mask;
+            if index >= palette_len {
+                return Err(Error::Invalid("pixel index exceeds the palette"));
+            }
+            pixels.push(colors[index]);
+        }
+    }
+    Ok(pixels.into_flattened())
+}
+
 pub(super) fn rgba8(
     source: &[u8],
     header: &Header,

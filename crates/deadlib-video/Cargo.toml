@@ -6,7 +6,7 @@ license = "GPL-3.0"
 
 [dependencies]
 deadlib-render-core = { path = "../deadlib-render-core" }
-image = "0.25.10"
+deadlib-image = { path = "../deadlib-image" }
 log = "0.4.35"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

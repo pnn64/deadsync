@@ -15,7 +15,7 @@ test = false
 
 [dependencies]
 deadsync-song-lua = { path = "../deadsync-song-lua" }
-null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
+null-or-die = { package = "null-or-die-core", git = "https://github.com/pnn64/null-or-die", branch = "main" }
 deadlib-platform = { path = "../deadlib-platform" }
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
@@ -38,7 +38,7 @@ deadsync-theme = { path = "../deadsync-theme" }
 bitflags = "2.13.2"
 chrono = "0.4.45"
 glam = "0.34.3"
-image = "0.25.10"
+deadlib-image = { path = "../deadlib-image" }
 log = "0.4.35"
 memchr = "2.8.3"
 deadlib-lua = { path = "../deadlib-lua", default-features = false }
@@ -49,6 +49,8 @@ smallvec = "1.16.5"
 twox-hash = "2.1.5"
 
 [dev-dependencies]
+deadlib-image-io = { path = "../deadlib-image-io" }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 askama = "0.16.1"
 deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
 deadlib-render = { path = "../deadlib-render" }

@@ -1,4 +1,4 @@
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use log::{debug, warn};
 use rustc_hash::FxHashSet;
 use std::{
@@ -279,8 +279,8 @@ pub fn load_or_build_cached_dynamic_image(
     path: &Path,
     opts: BannerCacheOptions,
     cache_dir: &Path,
-    decode: fn(&Path) -> image::ImageResult<RgbaImage>,
-) -> image::ImageResult<RgbaImage> {
+    decode: fn(&Path) -> deadlib_image_io::ImageResult<RgbaImage>,
+) -> deadlib_image_io::ImageResult<RgbaImage> {
     let Some((cache_path, path_hex)) = dynamic_image_cache_path_for(path, opts, cache_dir) else {
         return decode(path);
     };
@@ -332,8 +332,8 @@ pub fn ensure_cached_dynamic_image_on_disk(
     path: &Path,
     opts: BannerCacheOptions,
     cache_dir: &Path,
-    decode: fn(&Path) -> image::ImageResult<RgbaImage>,
-) -> image::ImageResult<bool> {
+    decode: fn(&Path) -> deadlib_image_io::ImageResult<RgbaImage>,
+) -> deadlib_image_io::ImageResult<bool> {
     let Some((cache_path, path_hex)) = dynamic_image_cache_path_for(path, opts, cache_dir) else {
         return Ok(false);
     };
@@ -344,8 +344,8 @@ fn ensure_cached_dynamic_image_at(
     path: &Path,
     cache_path: &Path,
     path_hex: &str,
-    decode: fn(&Path) -> image::ImageResult<RgbaImage>,
-) -> image::ImageResult<bool> {
+    decode: fn(&Path) -> deadlib_image_io::ImageResult<RgbaImage>,
+) -> deadlib_image_io::ImageResult<bool> {
     if with_cached_banner(cache_path, path, validate_raw_banner).is_some() {
         return Ok(false);
     }
@@ -445,7 +445,7 @@ pub fn dynamic_image_prewarm_workers(job_count: usize) -> usize {
 #[inline(always)]
 fn prewarm_one_dynamic_image(
     job: DynamicImagePrewarmJob,
-    decode: fn(&Path) -> image::ImageResult<RgbaImage>,
+    decode: fn(&Path) -> deadlib_image_io::ImageResult<RgbaImage>,
 ) -> DynamicImagePrewarmOutcome {
     let DynamicImagePrewarmJob {
         path,
@@ -566,7 +566,7 @@ pub fn prewarm_dynamic_image_jobs_with_progress<F>(
     jobs: Vec<DynamicImagePrewarmJob>,
     duplicate: usize,
     label: &'static str,
-    decode: fn(&Path) -> image::ImageResult<RgbaImage>,
+    decode: fn(&Path) -> deadlib_image_io::ImageResult<RgbaImage>,
     progress: &mut F,
 ) where
     F: FnMut(usize, usize, Option<&Path>),
@@ -787,7 +787,7 @@ mod tests {
     }
 
     fn write_test_png(path: &Path, color: [u8; 4]) {
-        test_rgba(color).save(path).unwrap();
+        deadlib_image_io::save_png(path, &test_rgba(color)).unwrap();
     }
 
     fn load_raw_cached_banner_image(path: &Path) -> Option<RgbaImage> {
@@ -1013,7 +1013,7 @@ mod tests {
         let dir = TempDir::new("raw-cache-round-trip");
         let cache_path = dir.path().join("banner.rgba");
         let expected = RgbaImage::from_fn(7, 3, |x, y| {
-            image::Rgba([x as u8, y as u8, x.wrapping_mul(y) as u8, 255])
+            deadlib_image::Rgba([x as u8, y as u8, x.wrapping_mul(y) as u8, 255])
         });
 
         assert!(save_raw_cached_banner_image(&cache_path, &expected));
@@ -1039,7 +1039,7 @@ mod tests {
     fn raw_banner_cache_load_rejects_wrong_payload_lengths() {
         let dir = TempDir::new("raw-cache-length-validation");
         let cache_path = dir.path().join("banner.rgba");
-        let expected = RgbaImage::from_pixel(4, 2, image::Rgba([1, 2, 3, 4]));
+        let expected = RgbaImage::from_pixel(4, 2, deadlib_image::Rgba([1, 2, 3, 4]));
         assert!(save_raw_cached_banner_image(&cache_path, &expected));
 
         let mut truncated = fs::read(&cache_path).unwrap();

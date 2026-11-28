@@ -325,7 +325,7 @@ fn export(
                         if options.reverse { "-reverse" } else { "" }
                     );
                     let output = folder.join(&filename);
-                    image.save(&output)?;
+                    deadlib_image_io::save_png(&output, &image)?;
                     println!("{}", output.display());
                 }
             }
@@ -350,11 +350,11 @@ fn sample_song(directory: &Path) -> Result<(PathBuf, PathBuf, String)> {
     let pack_directory = directory.join(&pack_name);
     let song_directory = pack_directory.join("Layout Preview");
     std::fs::create_dir_all(&song_directory)?;
-    let banner = image::RgbaImage::from_fn(512, 160, |x, y| {
-        image::Rgba([40 + (x / 4) as u8, 40 + (y / 2) as u8, 150, 255])
+    let banner = deadlib_image::RgbaImage::from_fn(512, 160, |x, y| {
+        deadlib_image::Rgba([40 + (x / 4) as u8, 40 + (y / 2) as u8, 150, 255])
     });
-    banner.save(song_directory.join("banner.png"))?;
-    pack_banner().save(pack_directory.join("banner.png"))?;
+    deadlib_image_io::save_png(&song_directory.join("banner.png"), &banner)?;
+    deadlib_image_io::save_png(&pack_directory.join("banner.png"), &pack_banner())?;
     let mut sm = String::from(
         "#TITLE:Simply Love Layout Preview;#SUBTITLE:All HUD widgets;#ARTIST:DeadSync;\
         #BPMS:0=150;#OFFSET:0;#BANNER:banner.png;\n",
@@ -394,12 +394,12 @@ fn sample_song(directory: &Path) -> Result<(PathBuf, PathBuf, String)> {
     Ok((path, pack_directory, pack_name))
 }
 
-fn pack_banner() -> image::RgbaImage {
-    image::RgbaImage::from_fn(512, 160, |x, y| {
+fn pack_banner() -> deadlib_image::RgbaImage {
+    deadlib_image::RgbaImage::from_fn(512, 160, |x, y| {
         let diagonal = (x + 2 * y) % 144;
         let glow = (110_i32 - (x as i32 - 370).abs() / 2 - (y as i32 - 76).abs()).max(0) as u8;
         let stripe = if diagonal < 18 { 30 } else { 0 };
-        image::Rgba([
+        deadlib_image::Rgba([
             28_u8
                 .saturating_add((x / 3) as u8)
                 .saturating_add(glow / 2)

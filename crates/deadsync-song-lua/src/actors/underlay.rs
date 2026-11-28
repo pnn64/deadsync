@@ -403,8 +403,7 @@ fn swoosh() -> Result<String, String> {
     static PREPARED: OnceLock<Result<String, String>> = OnceLock::new();
     PREPARED.get_or_init(|| {
         let bytes = include_bytes!("../../assets/simply-love/BGAnimations/ScreenGameplay underlay/PerPlayer/LifeMeter/swoosh.png");
-        let decoded = image::load_from_memory_with_format(bytes, image::ImageFormat::Png).map_err(|error| error.to_string())?;
-        let mut image = decoded.into_rgba8();
+        let mut image = deadlib_image_io::load_png(bytes).map_err(|error| error.to_string())?;
         let source_size = [image.width(), image.height()];
         let hints = deadlib_assets::parse_texture_hints("swoosh.png");
         deadlib_assets::apply_texture_hints(&mut image, &hints);

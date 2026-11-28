@@ -15,7 +15,7 @@ use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
 use deadsync_assets::noteskin::{self, Noteskin, Style};
 use deadsync_theme_simply_love::screens::content_browser::{self as browser, PreviewSkinModels};
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use std::sync::{Arc, mpsc};
 
 /// Decoded textures the worker may hold ready ahead of the uploads. Small, so

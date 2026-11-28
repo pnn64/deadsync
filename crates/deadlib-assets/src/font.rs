@@ -3,7 +3,7 @@ use crate::{
     parse_sprite_sheet_dims, parse_texture_hints, texture_hint_doubleres, texture_hint_is_default,
 };
 use deadlib_present::font::{self, Font, FontLoadData, FontParseError};
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -94,7 +94,7 @@ fn prepare_font_texture_with_key(
     tex_path: &Path,
     key: String,
     texture_hints_map: &HashMap<String, String>,
-) -> image::ImageResult<PreparedFontTexture> {
+) -> deadlib_image_io::ImageResult<PreparedFontTexture> {
     let hints = texture_hints_map
         .get(&key)
         .map(|s| parse_texture_hints(s))
@@ -107,7 +107,7 @@ pub fn prepare_font_texture(
     tex_path: &Path,
     texture_hints_map: &HashMap<String, String>,
     asset_roots: &[PathBuf],
-) -> image::ImageResult<PreparedFontTexture> {
+) -> deadlib_image_io::ImageResult<PreparedFontTexture> {
     let key = font_texture_key(tex_path, asset_roots);
     prepare_font_texture_with_key(tex_path, key, texture_hints_map)
 }
@@ -134,7 +134,7 @@ pub fn prepare_required_font_textures(
     required_textures: &[PathBuf],
     asset_roots: &[PathBuf],
     has_texture_key: impl Fn(&str) -> bool,
-) -> image::ImageResult<Vec<PreparedFontTexture>> {
+) -> deadlib_image_io::ImageResult<Vec<PreparedFontTexture>> {
     prepare_required_font_textures_with(
         required_textures,
         asset_roots,

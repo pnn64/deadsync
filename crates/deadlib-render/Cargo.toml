@@ -9,7 +9,7 @@ deadlib-render-core = { path = "../deadlib-render-core" }
 deadlib-render-backend-gl = { path = "../deadlib-render-backend-gl" }
 deadlib-render-backend-software = { path = "../deadlib-render-backend-software" }
 deadlib-render-backend-wgpu = { path = "../deadlib-render-backend-wgpu" }
-image = "0.25.10"
+deadlib-image = { path = "../deadlib-image" }
 winit = "0.30.13"
 
 [target.'cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))'.dependencies]

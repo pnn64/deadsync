@@ -11,7 +11,7 @@ deadlib-audio-core = { path = "../deadlib-audio-core" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-input = { path = "../deadsync-input" }
 log = "0.4.35"
-null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
+null-or-die = { package = "null-or-die-core", git = "https://github.com/pnn64/null-or-die", branch = "main" }
 winit = "0.30.13"
 uuid = { version = "1.29.0", features = ["v4"] }
 

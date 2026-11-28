@@ -7,8 +7,8 @@ mod rows;
 mod write;
 pub use decode::StreamDecoder;
 pub(crate) use encode_rows::{Rows, compress_image};
-pub use read::decode_reader;
-pub use write::{EncodeStats, encode_writer};
+pub use read::{decode_default_reader, decode_reader};
+pub use write::{EncodeStats, encode_rgba8_writer, encode_writer};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ImageInfo {

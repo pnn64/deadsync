@@ -1,4 +1,5 @@
 use crate::{EncodeOptions, Error, Filter, Image, Samples, reserve, scanline, zlib};
+use crate::scanline::{ImageView, SampleView};
 
 /// Filter and compress an image into the stream that `zlib::compress` gives
 /// for its whole filtered bytes, holding only rows and a compression window.
@@ -42,7 +43,7 @@ pub(crate) fn compress_image<'a, 'image>(
             .push_stored_word_rows(pixels, image.width as usize * image.color_type.channels());
         return Ok(compressor.finish());
     }
-    rows.reset(image);
+    rows.reset(image.into());
     while let Some(row) = rows.next_row()? {
         if row.zero {
             let prefix = usize::from(row.bytes[0] != 0);
@@ -65,7 +66,7 @@ pub(super) struct FilteredRow<'a> {
 }
 
 pub(crate) struct Rows<'a> {
-    image: &'a Image,
+    image: ImageView<'a>,
     pixels: Option<&'a [u8]>,
     interlaced: bool,
     filter: Filter,
@@ -133,6 +134,14 @@ impl<'a> Rows<'a> {
     }
 
     pub(crate) fn new(image: &'a Image, interlaced: bool, filter: Filter) -> Result<Self, Error> {
+        Self::from_view(image.into(), interlaced, filter)
+    }
+
+    pub(super) fn from_view(
+        image: ImageView<'a>,
+        interlaced: bool,
+        filter: Filter,
+    ) -> Result<Self, Error> {
         scanline::filtered_size(
             image.width,
             image.height,
@@ -182,14 +191,14 @@ impl<'a> Rows<'a> {
                 image.bit_depth,
                 false,
             )?;
-            self.reset(image);
+            self.reset(image.into());
         }
         Ok(())
     }
-    fn reset(&mut self, image: &'a Image) {
+    fn reset(&mut self, image: ImageView<'a>) {
         self.image = image;
-        self.pixels = match &image.samples {
-            Samples::U8(pixels) if image.bit_depth == 8 && !self.interlaced => Some(pixels),
+        self.pixels = match image.samples {
+            SampleView::U8(pixels) if image.bit_depth == 8 && !self.interlaced => Some(pixels),
             _ => None,
         };
         self.next_pass = 0;
@@ -415,7 +424,7 @@ mod tests {
         let narrow = image(3, 3, 4);
         let mut reused = Rows::new(&wide, true, Filter::Adaptive).unwrap();
         for image in [&wide, &narrow, &wide] {
-            reused.reset(image);
+            reused.reset(image.into());
             let mut fresh = Rows::new(image, true, Filter::Adaptive).unwrap();
             while let Some(expected) = fresh.next_row().unwrap() {
                 let row = reused.next_row().unwrap().unwrap();

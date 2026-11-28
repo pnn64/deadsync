@@ -54,7 +54,7 @@ mod backend {
         #[test]
         fn alpha_sampling_matches_rgba_including_nonfinite_and_missing_texels() {
             let image = RgbaImage::from_fn(7, 5, |x, y| {
-                image::Rgba([x as u8, 71, y as u8, (x * 47 + y * 23) as u8])
+                deadlib_image::Rgba([x as u8, 71, y as u8, (x * 47 + y * 23) as u8])
             });
             let halves: Vec<_> = (0..35)
                 .map(|i| {
@@ -148,7 +148,7 @@ mod backend {
                     .mul_add(upload.levels[2], upload.levels[3]);
                 let y = (f32::from(upload.y[(y * upload.width + x) as usize]) / 255.0)
                     .mul_add(upload.levels[0], upload.levels[1]);
-                image::Rgba([
+                deadlib_image::Rgba([
                     (upload.coeffs[0].mul_add(v, y) * 255.0).round() as u8,
                     (upload.coeffs[2].mul_add(v, upload.coeffs[1].mul_add(u, y)) * 255.0).round()
                         as u8,

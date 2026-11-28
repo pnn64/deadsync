@@ -14,7 +14,7 @@ deadlib-platform = { path = "../deadlib-platform" }
 deadlib-render-core = { path = "../deadlib-render-core" }
 foreign-types = "0.5.0"
 glam = "0.34.3"
-image = "0.25.10"
+deadlib-image = { path = "../deadlib-image" }
 log = "0.4.35"
 metal = "0.33.0"
 objc = "0.2.7"

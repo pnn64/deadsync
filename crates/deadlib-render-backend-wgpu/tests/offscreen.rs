@@ -12,7 +12,7 @@ use deadlib_render_core::{
     TexturedMeshRun, TexturedMeshVertex, TexturedMeshVertices, render_target_texture_handle,
 };
 use glam::Mat4;
-use image::{Rgba, RgbaImage};
+use deadlib_image::{Rgba, RgbaImage};
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,

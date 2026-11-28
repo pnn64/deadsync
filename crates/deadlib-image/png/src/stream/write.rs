@@ -1,9 +1,10 @@
 use super::encode_rows::Rows;
 use crate::{
-    ChunkPosition, EncodeOptions, Error, Filter, Png,
+    ChunkPosition, ColorType, EncodeOptions, Error, Filter, Png,
     checksum::Crc32,
-    codec::{SIGNATURE, ancillary_writable, validate_encoding, write_transparency},
+    codec::{Header, SIGNATURE, ancillary_writable, validate_encoding, write_transparency},
     reserve,
+    scanline::{ImageView, SampleView},
     zlib::{Deflater, StreamStatus, png_zero_run},
 };
 use std::io::{self, Write};
@@ -269,6 +270,46 @@ pub fn encode_writer(
         }
     }
     ancillary(&mut out, png, ChunkPosition::AfterData)?;
+    chunk(&mut out, b"IEND", &[])?;
+    Ok(EncodeStats {
+        bytes_written: out.bytes,
+        peak_image_buffer_bytes: peak,
+    })
+}
+
+/// Encode a packed RGBA8 raster without copying the caller's pixels.
+pub fn encode_rgba8_writer(
+    width: u32,
+    height: u32,
+    pixels: &[u8],
+    options: &EncodeOptions,
+    writer: impl Write,
+) -> Result<EncodeStats, Error> {
+    let header = Header {
+        width,
+        height,
+        color: ColorType::Rgba,
+        depth: 8,
+        interlaced: options.interlaced,
+    };
+    if width == 0 || height == 0 || width > 0x7fff_ffff || height > 0x7fff_ffff
+        || options.idat_chunk_size == 0 || options.idat_chunk_size > 0x7fff_ffff
+        || header.sample_bytes()? != pixels.len()
+    {
+        return Err(Error::Invalid("encoding dimensions, samples, or chunk size"));
+    }
+    let view = ImageView {
+        width,
+        height,
+        color_type: ColorType::Rgba,
+        bit_depth: 8,
+        samples: SampleView::U8(pixels),
+    };
+    let mut rows = Rows::from_view(view, options.interlaced, options.filter)?;
+    let mut out = Count { writer, bytes: 0 };
+    out.write_all(SIGNATURE)?;
+    chunk(&mut out, b"IHDR", &[&header.wire()])?;
+    let peak = image(&mut out, &mut rows, options, None, &mut Vec::new(), &mut None)?;
     chunk(&mut out, b"IEND", &[])?;
     Ok(EncodeStats {
         bytes_written: out.bytes,

@@ -255,7 +255,7 @@ impl InstalledPack {
                 )));
             }
             let preview = checked_path_with_root(root, &skin.preview, Some(&canonical_root))?;
-            if image::image_dimensions(preview).map_err(|e| Error::Invalid(e.to_string()))?
+            if deadlib_image_io::dimensions(&preview).map_err(|e| Error::Invalid(e.to_string()))?
                 != (2048, 2048)
             {
                 return Err(Error::Invalid(

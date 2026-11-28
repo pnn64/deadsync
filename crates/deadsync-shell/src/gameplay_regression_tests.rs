@@ -2333,7 +2333,7 @@ end
     }
 
     #[cfg(target_os = "windows")]
-    fn gpu_frame_hash(image: &image::RgbaImage) -> u64 {
+    fn gpu_frame_hash(image: &deadlib_image::RgbaImage) -> u64 {
         image
             .as_raw()
             .iter()
@@ -2500,8 +2500,7 @@ end
         }
 
         let path = output_dir.join(format!("sprite-core-{name}.png"));
-        image
-            .save(&path)
+        deadlib_image_io::save_png(&path, &image)
             .map_err(|error| format!("failed to save '{}': {error}", path.display()))?;
         let stats = GpuFrameStats {
             hash: gpu_frame_hash(&image),
@@ -3948,7 +3947,7 @@ return root
                             for slot in slots.iter() {
                                 assets.queue_texture_upload(
                                     slot.texture_key().to_owned(),
-                                    image::RgbaImage::new(16, 16),
+                                    deadlib_image::RgbaImage::new(16, 16),
                                 );
                             }
                         }
@@ -3956,7 +3955,7 @@ return root
                             for layer in layers.iter() {
                                 assets.queue_texture_upload(
                                     layer.texture_key.to_string(),
-                                    image::RgbaImage::new(16, 16),
+                                    deadlib_image::RgbaImage::new(16, 16),
                                 );
                             }
                         }
@@ -5781,13 +5780,10 @@ return Def.ActorFrame{
                         if let Some(output) = std::env::var_os("DEADSYNC_LAKE_CAPTURE_DIR") {
                             let output = PathBuf::from(output);
                             fs::create_dir_all(&output).expect("capture directory");
-                            image
-                                .save(
-                                    output.join(format!(
-                                        "lake-hold-{skin}-{backend_type}-{held}.png"
-                                    )),
-                                )
-                                .expect("save capture");
+                            let path = output.join(format!(
+                                "lake-hold-{skin}-{backend_type}-{held}.png"
+                            ));
+                            deadlib_image_io::save_png(&path, &image).expect("save capture");
                         }
                         frame.ops.retain(|op| match op {
                             DrawOp::Sprite(run) => !body_handles.contains(&run.texture_handle),
@@ -6570,9 +6566,8 @@ return Def.ActorFrame {
                 .draw(&frame, self.assets.textures(), false)
                 .unwrap();
             let image = self.backend.capture_frame().unwrap();
-            image
-                .save(self.output.join(format!("{name}-beat-{beat}.png")))
-                .unwrap();
+            let path = self.output.join(format!("{name}-beat-{beat}.png"));
+            deadlib_image_io::save_png(&path, &image).unwrap();
             if name == "mawaru7" && [308.0, 320.0].contains(&beat) {
                 let visuals = state.gameplay.song_lua_visuals();
                 let titan: std::collections::HashSet<_> = visuals
@@ -7468,7 +7463,8 @@ return Def.ActorFrame {
             .expect("draw Bank Account");
         let image = backend.capture_frame().expect("Bank Account pixels");
         if let Some(output) = std::env::var_os("DEADSYNC_BANK_CAPTURE") {
-            image.save(output).expect("save Bank Account capture");
+            deadlib_image_io::save_png(std::path::Path::new(&output), &image)
+                .expect("save Bank Account capture");
         }
         frame.ops.retain(|op| match op {
             DrawOp::Sprite(run) => !handles.contains(&run.texture_handle),
@@ -7646,9 +7642,7 @@ return Def.ActorFrame {
             .output()
             .expect("decode lyric frame");
         assert!(output.status.success(), "lyric frame decode failed");
-        let image = image::load_from_memory(&output.stdout)
-            .expect("lyric pixels")
-            .into_rgba8();
+        let image = deadlib_image_io::load_png(&output.stdout).expect("lyric pixels");
         assert_eq!(image.dimensions(), (1920, 1080));
         let key = movie.to_string_lossy().into_owned();
         let mut assets = RenderAssets::new();
@@ -7708,7 +7702,7 @@ return Def.ActorFrame {
             .expect("draw lyric frame");
         let image = backend.capture_frame().expect("lyric frame pixels");
         if let Some(path) = std::env::var_os("DEADSYNC_DELIGHTFUL_CAPTURE") {
-            image.save(path).expect("save lyric frame");
+            deadlib_image_io::save_png(std::path::Path::new(&path), &image).expect("save lyric frame");
         }
         frame
             .ops

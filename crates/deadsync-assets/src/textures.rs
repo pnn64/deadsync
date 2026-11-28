@@ -126,7 +126,7 @@ pub fn texture_decode_job(key: &str, model: bool) -> TextureDecodeJob {
 ///
 /// # Errors
 /// Returns an error if a GPU texture cannot be created.
-pub fn preload_texture_keys<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn preload_texture_keys<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     textures: impl IntoIterator<Item = (std::sync::Arc<str>, bool)>,
@@ -183,7 +183,7 @@ pub fn initial_texture_jobs(
         .collect()
 }
 
-pub fn ensure_texture_for_key<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn ensure_texture_for_key<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     texture_key: &str,
@@ -193,7 +193,7 @@ pub fn ensure_texture_for_key<B: TextureBackend<RgbaImage = image::RgbaImage>>(
 }
 
 /// Load a game-owned sprite using its native filename sampling hints.
-pub fn ensure_native_texture_for_key<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn ensure_native_texture_for_key<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     texture_key: &str,
@@ -202,7 +202,7 @@ pub fn ensure_native_texture_for_key<B: TextureBackend<RgbaImage = image::RgbaIm
 }
 
 /// An explicit sampler forces replacement, even if this key is already loaded.
-pub fn ensure_texture_for_key_with_sampler<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn ensure_texture_for_key_with_sampler<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     texture_key: &str,
@@ -211,7 +211,7 @@ pub fn ensure_texture_for_key_with_sampler<B: TextureBackend<RgbaImage = image::
     load_texture_key(assets, backend, texture_key, Some(sampler), |_| false);
 }
 
-fn load_texture_key<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+fn load_texture_key<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     texture_key: &str,

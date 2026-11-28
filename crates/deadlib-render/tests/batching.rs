@@ -6,7 +6,7 @@
 
 use deadlib_render::{Backend, Texture, create_backend};
 use deadlib_render_core::*;
-use image::{Rgba, RgbaImage};
+use deadlib_image::{Rgba, RgbaImage};
 use std::sync::Arc;
 use winit::{
     dpi::PhysicalSize, event_loop::EventLoop, platform::windows::EventLoopBuilderExtWindows,

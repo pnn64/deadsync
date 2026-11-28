@@ -487,7 +487,7 @@ fn screen_transform_preserves_generic_sprite_and_quad_masks() {
     let mut assets = AssetManager::<()>::new();
     for key in [white_texture_key(), Arc::from("screen-mask.png")] {
         assets.queue_texture_upload(
-            key.to_string(), image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),
+            key.to_string(), deadlib_image::RgbaImage::from_pixel(1, 1, deadlib_image::Rgba([255; 4])),
         );
     }
     let screen = SongLuaOverlayState {

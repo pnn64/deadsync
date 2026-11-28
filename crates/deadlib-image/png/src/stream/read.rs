@@ -143,36 +143,71 @@ fn read(reader: &mut impl Read, bytes: &mut [u8]) -> Result<usize, Error> {
 /// Like `decode`, rejects bytes after IEND. Use `StreamDecoder` for prefix parsing
 /// or to consume rows without retaining complete images and animation frames.
 pub fn decode_reader(mut reader: impl Read, options: &DecodeOptions) -> Result<Png, Error> {
+    decode_from(&mut reader, options, None)
+}
+
+/// Decode the default image, without retaining ancillary data or reading APNG frames.
+/// The default image's complete IDAT stream and chunk checksums are verified.
+/// `max_pixels` bounds the raster before allocating native samples.
+pub fn decode_default_reader(
+    mut reader: impl Read,
+    options: &DecodeOptions,
+    max_pixels: usize,
+) -> Result<Png, Error> {
+    decode_from(&mut reader, options, Some(max_pixels))
+}
+
+fn decode_from(
+    reader: &mut impl Read,
+    options: &DecodeOptions,
+    default_limit: Option<usize>,
+) -> Result<Png, Error> {
     let mut decoder = StreamDecoder::for_reader(*options);
     let mut png = None;
     let mut input = [0; 8192];
     let (mut pos, mut end) = (0, 0);
-    loop {
+    let default_verified = loop {
         let progress = decoder.process_into(&input[pos..end], png.as_mut())?;
         pos += progress.consumed;
         match progress.status {
-            DecodeStatus::Event => {
-                collect(&mut png, &mut decoder, options.limits.max_output_bytes)?
-            }
+            DecodeStatus::Event => match decoder.event() {
+                Some(DecodeEvent::ImageEnd(ImageKind::Default)) if default_limit.is_some() => {
+                    break true;
+                }
+                Some(DecodeEvent::Header(info)) => {
+                    if default_limit.is_some_and(|max_pixels| {
+                        u64::from(info.width) * u64::from(info.height) > max_pixels as u64
+                    }) {
+                        return Err(Error::LimitExceeded);
+                    }
+                    collect(&mut png, &mut decoder, options.limits.max_output_bytes)?;
+                }
+                _ if default_limit.is_none() => {
+                    collect(&mut png, &mut decoder, options.limits.max_output_bytes)?;
+                }
+                _ => (),
+            },
             DecodeStatus::NeedInput => {
                 if pos != end {
                     return Err(Error::Invalid("decoder input progress"));
                 }
-                end = read(&mut reader, &mut input)?;
+                end = read(reader, &mut input)?;
                 pos = 0;
                 if end == 0 {
-                    break;
+                    break false;
                 }
             }
             DecodeStatus::Done => {
-                if pos != end || read(&mut reader, &mut [0; 1])? != 0 {
+                if pos != end || read(reader, &mut [0; 1])? != 0 {
                     return Err(Error::Invalid("data after IEND"));
                 }
-                break;
+                break false;
             }
         }
+    };
+    if !default_verified {
+        decoder.finish()?;
     }
-    decoder.finish()?;
     let mut png = png.ok_or(Error::Invalid("missing IHDR"))?;
     (png.palette, png.transparency) = decoder.take_palette_and_transparency();
     Ok(png)

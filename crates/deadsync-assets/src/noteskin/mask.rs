@@ -105,7 +105,7 @@ fn load_mask_mesh(slot: &SpriteSlot) -> Option<ModelMesh> {
         return None;
     }
     let path = super::texture::resolve_asset_path(&Path::new("assets").join(slot.texture_key()));
-    let image = crate::open_image_fallback(&path).ok()?.into_rgba8();
+    let image = crate::open_image_fallback(&path).ok()?;
     let [w, h] = slot
         .def
         .size
@@ -130,7 +130,7 @@ fn load_mask_mesh(slot: &SpriteSlot) -> Option<ModelMesh> {
     Some(cutout_mesh(&image, [x, y, w, h], slot.source_size))
 }
 
-fn mask_cells_match(image: &image::RgbaImage, [x, y, w, h]: [u32; 4]) -> bool {
+fn mask_cells_match(image: &deadlib_image::RgbaImage, [x, y, w, h]: [u32; 4]) -> bool {
     if image.width() == 0 || image.height() == 0 {
         return true;
     }
@@ -216,7 +216,7 @@ impl MaskRows {
     }
 }
 
-fn mask_rectangles(image: &image::RgbaImage, [x, y, w, h]: [u32; 4]) -> Vec<[u32; 4]> {
+fn mask_rectangles(image: &deadlib_image::RgbaImage, [x, y, w, h]: [u32; 4]) -> Vec<[u32; 4]> {
     let mut rects: Vec<[u32; 4]> = Vec::new();
     let mut active = MaskRows::new(w);
     for row in 0..h {
@@ -306,6 +306,6 @@ fn mesh_from_rectangles(rects: Vec<[u32; 4]>, [w, h]: [u32; 2], size: [i32; 2]) 
     }
 }
 
-fn cutout_mesh(image: &image::RgbaImage, [x, y, w, h]: [u32; 4], size: [i32; 2]) -> ModelMesh {
+fn cutout_mesh(image: &deadlib_image::RgbaImage, [x, y, w, h]: [u32; 4], size: [i32; 2]) -> ModelMesh {
     mesh_from_rectangles(mask_rectangles(image, [x, y, w, h]), [w, h], size)
 }

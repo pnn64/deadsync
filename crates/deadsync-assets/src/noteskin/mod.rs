@@ -1099,17 +1099,17 @@ mod tests {
         let root = temp_noteskin_root("sprite-cutout");
         let art = root.join("Arrow Art");
         fs::create_dir_all(&art).unwrap();
-        let mut mask = image::RgbaImage::from_pixel(16, 8, image::Rgba([255; 4]));
+        let mut mask = deadlib_image::RgbaImage::from_pixel(16, 8, deadlib_image::Rgba([255; 4]));
         for frame in 0..2 {
             for y in 2..6 {
                 for x in 2..6 {
-                    mask.put_pixel(frame * 8 + x, y, image::Rgba([255, 255, 255, 0]));
+                    mask.put_pixel(frame * 8 + x, y, deadlib_image::Rgba([255, 255, 255, 0]));
                 }
             }
             // Alpha=1 still writes depth in ITG; it must punch a hole in the fill.
-            mask.put_pixel(frame * 8 + 3, 3, image::Rgba([255, 255, 255, 1]));
+            mask.put_pixel(frame * 8 + 3, 3, deadlib_image::Rgba([255, 255, 255, 1]));
         }
-        mask.save(art.join("mask 2x1.png")).unwrap();
+        deadlib_image_io::save_png(&art.join("mask 2x1.png"), &mask).unwrap();
         for name in ["fill", "gloss", "frame"] {
             image::RgbaImage::from_pixel(16, 8, image::Rgba([128; 4]))
                 .save(art.join(format!("{name} 2x1.png")))

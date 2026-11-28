@@ -3,7 +3,7 @@ use deadlib_assets::{AssetManager, dynamic};
 use deadlib_render_core::{SamplerDesc, TextureBackend, TextureHandle};
 use deadlib_video as video;
 use deadsync_chart::{SongBackgroundChange, SongBackgroundChangeTarget, SongData};
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 use rustc_hash::FxHashSet;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -317,7 +317,7 @@ fn visit_bgchange_paths<'a>(change: &'a SongBackgroundChange, visit: &mut impl F
     }
 }
 
-pub fn create_cdtitle_texture<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn create_cdtitle_texture<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     path: &Path,
@@ -334,7 +334,7 @@ pub fn create_cdtitle_texture<B: TextureBackend<RgbaImage = image::RgbaImage>>(
     Ok(key)
 }
 
-pub fn create_inserted_banner_texture<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn create_inserted_banner_texture<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     path: &Path,
@@ -351,7 +351,7 @@ pub fn create_inserted_banner_texture<B: TextureBackend<RgbaImage = image::RgbaI
     Ok(key)
 }
 
-pub fn set_banner_texture_for_path<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn set_banner_texture_for_path<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     path: &Path,
@@ -372,7 +372,7 @@ pub fn start_background_video(path: &Path) -> Result<video::Player, String> {
     video::open_player(path, true)
 }
 
-pub fn set_video_background_texture<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn set_video_background_texture<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     path: &Path,
@@ -403,7 +403,7 @@ pub fn set_video_background_texture<B: TextureBackend<RgbaImage = image::RgbaIma
     Ok((key, state))
 }
 
-pub fn set_video_background_poster_texture<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn set_video_background_poster_texture<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     path: &Path,
@@ -429,7 +429,7 @@ pub fn set_video_background_poster_texture<B: TextureBackend<RgbaImage = image::
     Ok((key, state))
 }
 
-pub fn set_image_background_texture<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+pub fn set_image_background_texture<B: TextureBackend<RgbaImage = deadlib_image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     path: &Path,
@@ -437,7 +437,6 @@ pub fn set_image_background_texture<B: TextureBackend<RgbaImage = image::RgbaIma
     video_rate: f32,
 ) -> Result<(String, DynamicBackgroundState), BackgroundTextureError> {
     let rgba = open_image_fallback(path)
-        .map(|img| img.into_rgba8())
         .map_err(|e| BackgroundTextureError::OpenImage(e.to_string()))?;
     let texture = backend
         .create_texture(&rgba, SamplerDesc::default())

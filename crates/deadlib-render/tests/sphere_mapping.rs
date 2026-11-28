@@ -7,7 +7,7 @@
 
 use deadlib_render::*;
 use deadlib_render_core::ProjectionMatrix as Mat4;
-use image::{Rgba, RgbaImage};
+use deadlib_image::{Rgba, RgbaImage};
 use std::sync::Arc;
 use winit::{
     dpi::PhysicalSize, event_loop::EventLoop, platform::windows::EventLoopBuilderExtWindows,

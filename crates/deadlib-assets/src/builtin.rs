@@ -1,4 +1,4 @@
-use image::RgbaImage;
+use deadlib_image::RgbaImage;
 
 pub const WHITE_TEXTURE_KEY: &str = "__white";
 pub const BLACK_TEXTURE_KEY: &str = "__black";
