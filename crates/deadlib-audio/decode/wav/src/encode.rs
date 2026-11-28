@@ -234,16 +234,26 @@ impl<W: Write> Writer<W> {
         if bits == 32 {
             return self.write_i32(samples);
         }
-        let e = self.endian;
-        self.pack_samples(samples, &mut [0; 8192], usize::from(bits / 8), |n, b| {
-            if bits == 8 {
+        let mut scratch = [0; 8192];
+        // Fix width and byte order once so every sample copy has a constant size.
+        match (bits, self.endian) {
+            (8, _) => self.pack_samples(samples, &mut scratch, 1, |n, b| {
                 b[0] = (*n + 128) as u8;
-            } else if e == Endian::Little {
-                b.copy_from_slice(&n.to_le_bytes()[..bits as usize / 8]);
-            } else {
-                b.copy_from_slice(&n.to_be_bytes()[4 - bits as usize / 8..]);
-            }
-        })
+            }),
+            (16, Endian::Little) => self.pack_samples(samples, &mut scratch, 2, |n, b| {
+                b.copy_from_slice(&(*n as i16).to_le_bytes());
+            }),
+            (16, Endian::Big) => self.pack_samples(samples, &mut scratch, 2, |n, b| {
+                b.copy_from_slice(&(*n as i16).to_be_bytes());
+            }),
+            (24, Endian::Little) => self.pack_samples(samples, &mut scratch, 3, |n, b| {
+                b.copy_from_slice(&n.to_le_bytes()[..3]);
+            }),
+            (24, Endian::Big) => self.pack_samples(samples, &mut scratch, 3, |n, b| {
+                b.copy_from_slice(&n.to_be_bytes()[1..]);
+            }),
+            _ => unreachable!("float and native I32 formats were handled above"),
+        }
     }
     fn pack_samples<T>(
         &mut self,
