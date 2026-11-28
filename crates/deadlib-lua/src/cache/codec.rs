@@ -1,5 +1,10 @@
 //! Little-endian, bounded serialization of the shared compiler representation.
-use crate::{Program, bytecode::*, chunk51::Wire, memory::PackedDebug};
+use crate::{
+    Error, ErrorKind, Program,
+    bytecode::*,
+    chunk51::Wire,
+    memory::{PackedCode, PackedDebug},
+};
 use std::mem::size_of;
 
 // Bump for a wire-layout change. Cargo's build identity also invalidates entries
@@ -167,7 +172,7 @@ impl Writer {
         self.u8(u8::from(p.vararg))?;
         self.u8(u8::from(p.compat_arg))?;
         self.upvalues(&p.upvalues)?;
-        self.list(&p.code, |w, i| {
+        self.list(p.code(), |w, i| {
             if OPS.get(i.op as usize) != Some(&i.op) {
                 return None;
             }
@@ -176,10 +181,10 @@ impl Writer {
             w.u16(i.b)?;
             w.u32(i.c)
         })?;
-        self.list(&p.metadata, |w, metadata| {
+        self.list(p.metadata(), |w, metadata| {
             w.u32(p.adjust_line(metadata.line))
         })?;
-        self.list(&p.metadata, |w, metadata| w.u32(metadata.gc_live))?;
+        self.list(p.metadata(), |w, metadata| w.u32(metadata.gc_live))?;
         self.list(&p.gc_maps, |w, mask| {
             for &word in mask {
                 w.u64(word)?;
@@ -234,7 +239,7 @@ impl Writer {
         self.list(p.debug.active_lines(), |w, line| {
             w.u32(p.adjust_line(*line))
         })?;
-        self.list(&p.metadata, |w, metadata| {
+        self.list(p.metadata(), |w, metadata| {
             w.u32(p.adjust_hook_line(metadata.hook_line))
         })?;
         self.bytes(d.temporaries())?;
@@ -328,19 +333,44 @@ impl<'a> Reader<'a> {
     fn words(&mut self) -> Option<Box<[u32]>> {
         self.list(4, Self::u32)
     }
-    fn metadata_words(
-        &mut self,
-        metadata: &mut [InstructionMetadata],
-        mut write: impl FnMut(&mut InstructionMetadata, u32),
-    ) -> Option<()> {
-        if self.u32()? as usize != metadata.len() {
+    fn metadata_words(&mut self, count: usize) -> Option<&'a [[u8; 4]]> {
+        if self.u32()? as usize != count {
             return None;
         }
-        for instruction in metadata {
-            write(instruction, self.u32()?);
-        }
-        Some(())
+        Some(self.take(count.checked_mul(4)?)?.as_chunks::<4>().0)
     }
+
+    fn instructions(&mut self) -> Option<PackedCode> {
+        let count = self.u32()? as usize;
+        let code = self.take(count.checked_mul(8)?)?.as_chunks::<8>().0;
+        let lines = self.metadata_words(count)?;
+        let live = self.metadata_words(count)?;
+        self.charge(PackedCode::byte_count(count)?)?;
+        let mut instructions = PackedCode::default();
+        instructions
+            .try_write(count, |pc| {
+                let [op, a, b0, b1, c0, c1, c2, c3] = code[pc];
+                let op = *OPS.get(op as usize).ok_or_else(|| {
+                    Error::new_static(ErrorKind::Bytecode, 0, "invalid cached opcode")
+                })?;
+                Ok((
+                    Instruction {
+                        op,
+                        a,
+                        b: u16::from_le_bytes([b0, b1]),
+                        c: u32::from_le_bytes([c0, c1, c2, c3]),
+                    },
+                    InstructionMetadata {
+                        line: u32::from_le_bytes(lines[pc]),
+                        gc_live: u32::from_le_bytes(live[pc]),
+                        ..InstructionMetadata::default()
+                    },
+                ))
+            })
+            .ok()?;
+        Some(instructions)
+    }
+
     fn upvalues(&mut self) -> Option<Box<[Upvalue]>> {
         self.list(3, |r| {
             let tag = r.u8()?;
@@ -358,21 +388,7 @@ impl<'a> Reader<'a> {
         let vararg = self.boolean()?;
         let compat_arg = self.boolean()?;
         let upvalues = self.upvalues()?;
-        let code = self.list(8, |r| {
-            Some(Instruction {
-                op: *OPS.get(r.u8()? as usize)?,
-                a: r.u8()?,
-                b: r.u16()?,
-                c: r.u32()?,
-            })
-        })?;
-        let mut metadata = self.list(4, |r| {
-            Some(InstructionMetadata {
-                line: r.u32()?,
-                ..Default::default()
-            })
-        })?;
-        self.metadata_words(&mut metadata, |m, value| m.gc_live = value)?;
+        let mut instructions = self.instructions()?;
         let gc_maps = self.list(32, |r| Some([r.u64()?, r.u64()?, r.u64()?, r.u64()?]))?;
         let constants = self.list(1, |r| match r.u8()? {
             0 => Some(Constant::Nil),
@@ -418,7 +434,10 @@ impl<'a> Reader<'a> {
             })
         })?;
         let active_lines = self.words()?;
-        self.metadata_words(&mut metadata, |m, value| m.hook_line = value)?;
+        let hooks = self.metadata_words(instructions.code().len())?;
+        for (metadata, &line) in instructions.metadata_mut().iter_mut().zip(hooks) {
+            metadata.hook_line = u32::from_le_bytes(line);
+        }
         let temporaries = self.bytes()?;
         let line_bytes = std::mem::size_of_val(active_lines.as_ref());
         self.charge(
@@ -461,7 +480,7 @@ impl<'a> Reader<'a> {
                 vararg,
                 compat_arg,
                 upvalues,
-                code,
+                instructions,
                 gc_maps: RegisterMaps::Owned(gc_maps),
                 original_constants: constants,
                 constant_strings: Box::default(),
@@ -473,7 +492,6 @@ impl<'a> Reader<'a> {
                 },
                 ..PrototypeBody::default()
             },
-            metadata,
             defined,
         ))
     }
@@ -487,8 +505,7 @@ fn decoded_bytes(data: &ProgramOwner) -> usize {
         + data.sources.iter().map(|s| s.len()).sum::<usize>()
         + size_of_val(data.prototypes.as_ref());
     for p in &data.prototypes {
-        bytes += size_of_val(p.code.as_ref())
-            + size_of_val(p.metadata.as_ref())
+        bytes += p.instructions.heap_bytes()
             // Cache decoding materializes the full map array.
             + size_of_val(&*p.gc_maps)
             + size_of_val(p.upvalues.as_ref())

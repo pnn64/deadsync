@@ -15,7 +15,7 @@ pub(super) fn stack_top(proto: &Prototype, frame: Frame, next: Option<&Frame>) -
         FrameKind::Native(CONT_TRACE) => {
             let previous = (next.vararg_count as usize)
                 .checked_sub(1)
-                .and_then(|pc| proto.code.get(pc));
+                .and_then(|pc| proto.code().get(pc));
             Some(
                 if previous.is_some_and(|i| {
                     // A native tail call retains this Lua frame until its
@@ -339,7 +339,7 @@ impl Vm {
             let c = &self.functions[slot_index(id.0)];
             let p = &self.programs[c.program].data.prototypes[c.prototype];
             self.frames[index].pc = p
-                .metadata
+                .metadata()
                 .iter()
                 .position(|m| m.hook_line != 0)
                 .unwrap_or(0) as u32
@@ -432,7 +432,7 @@ impl Vm {
             .filter(|&(i, _)| usize::from(i) == index)
             .map_or_else(
                 || {
-                    proto.metadata[..pc]
+                    proto.metadata()[..pc]
                         .iter()
                         .rposition(|m| m.hook_line != 0)
                         .unwrap_or(0)

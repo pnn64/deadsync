@@ -797,7 +797,7 @@ impl Vm {
             frame
                 .pc()
                 .saturating_sub(1)
-                .min(prototype.metadata.len() - 1),
+                .min(prototype.metadata().len() - 1),
         );
         let mut chunk = [0; 60];
         let used = crate::bytecode::chunk_id_into(program.source(prototype), &mut chunk);
@@ -836,7 +836,7 @@ impl Vm {
             frame
                 .pc()
                 .saturating_sub(1)
-                .min(prototype.metadata.len() - 1),
+                .min(prototype.metadata().len() - 1),
         );
         if line == 0 {
             return Vec::new();

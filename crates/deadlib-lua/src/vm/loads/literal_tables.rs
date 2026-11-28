@@ -236,19 +236,19 @@ mod tests {
         let original = compare(&mut vm, &source(0, 0));
         let matched = compare(&mut vm, &source(1000, 1000));
         assert_eq!(
-            original.data.prototypes[0].code.as_ptr(),
-            matched.data.prototypes[0].code.as_ptr(),
+            original.data.prototypes[0].code().as_ptr(),
+            matched.data.prototypes[0].code().as_ptr(),
         );
 
         let split = compare(&mut vm, &source(100, 200));
         let merged = compare(&mut vm, &source(150, 151));
         assert_ne!(
-            original.data.prototypes[0].code.as_ptr(),
-            split.data.prototypes[0].code.as_ptr(),
+            original.data.prototypes[0].code().as_ptr(),
+            split.data.prototypes[0].code().as_ptr(),
         );
         assert_ne!(
-            split.data.prototypes[0].code.as_ptr(),
-            merged.data.prototypes[0].code.as_ptr(),
+            split.data.prototypes[0].code().as_ptr(),
+            merged.data.prototypes[0].code().as_ptr(),
         );
         assert!(matches!(
             original.data.prototypes[0].constants()[0],

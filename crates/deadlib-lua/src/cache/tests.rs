@@ -93,8 +93,8 @@ fn numeric_callback_templates_keep_per_function_constants_and_lines() {
     let [_, first, second, different, _] = &*program.data.prototypes else {
         panic!("four functions and the entry chunk");
     };
-    assert!(std::ptr::eq(first.code.as_ref(), second.code.as_ref()));
-    assert!(!std::ptr::eq(first.code.as_ref(), different.code.as_ref()));
+    assert!(std::ptr::eq(first.code(), second.code()));
+    assert!(!std::ptr::eq(first.code(), different.code()));
     assert_eq!(second.debug_line(0), first.debug_line(0) + 1);
 
     let baseline = crate::compile_named(source, name).unwrap();
@@ -373,9 +373,9 @@ fn cache_bytecode_verification_and_decode_budgets_are_enforced() {
         let data = bad.data_mut();
         let p = &mut data.prototypes[data.entry as usize];
         match change {
-            0 => p.code[0].c = u32::MAX,
-            1 => p.metadata[0].gc_live = u32::MAX,
-            2 => p.metadata = Box::default(),
+            0 => p.instructions.code_mut()[0].c = u32::MAX,
+            1 => p.instructions.metadata_mut()[0].gc_live = u32::MAX,
+            2 => p.instructions.omit_metadata(),
             _ => p.registers = 0,
         }
         assert!(decode(&encode(&bad, source, b"=cache"), source, b"=cache").is_none());
@@ -455,11 +455,11 @@ fn constant_operands_and_logical_hook_windows_round_trip_in_the_new_wire_version
     {
         assert_eq!(a.debug.stack, b.debug.stack);
         assert_eq!(
-            a.code
+            a.code()
                 .iter()
                 .map(|i| (i.op, i.a, i.b, i.c))
                 .collect::<Vec<_>>(),
-            b.code
+            b.code()
                 .iter()
                 .map(|i| (i.op, i.a, i.b, i.c))
                 .collect::<Vec<_>>()

@@ -31,10 +31,10 @@ impl Vm {
         if prototype.vararg || prototype.compat_arg {
             return None;
         }
-        let code = if Self::sort_counter_prefix(&prototype.code, prototype.params) {
-            &prototype.code[3..]
+        let code = if Self::sort_counter_prefix(prototype.code(), prototype.params) {
+            &prototype.code()[3..]
         } else {
-            &*prototype.code
+            prototype.code()
         };
         let supported = match code {
             [first, ..] if first.op == Op::Return && first.c <= 1 => true,
@@ -87,8 +87,8 @@ impl Vm {
         }
         let constants = loaded.bound_constants(closure.prototype);
         let mut changed = None;
-        let mut code = &*prototype.code;
-        let mut metadata = &*prototype.metadata;
+        let mut code = prototype.code();
+        let mut metadata = prototype.metadata();
         if Self::sort_counter_prefix(code, prototype.params) {
             let get = code[0];
             let arithmetic = code[1];

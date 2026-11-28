@@ -1016,7 +1016,7 @@ mod tests {
             assert_eq!(direct.debug.stack, general.debug.stack, "{source:?}");
             assert!(
                 direct
-                    .code
+                    .code()
                     .iter()
                     .filter(|i| i.op == Op::Bool)
                     .all(|i| { i.b >= direct.debug.stack }),

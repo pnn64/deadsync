@@ -7,10 +7,10 @@ fn definition(proto: &Prototype, end: usize, register: u8) -> Option<(usize, Ins
     let mut last = None;
     let mut pc = 0;
     while pc < end {
-        let instruction = proto.code[pc];
+        let instruction = proto.code()[pc];
         let a = instruction.a;
         let test_only = matches!(instruction.op, Op::JumpFalse | Op::JumpTrue)
-            && (proto.metadata[pc].hook_line == 0
+            && (proto.metadata()[pc].hook_line == 0
                 || last.is_some_and(|(_, previous): (usize, Instruction)| {
                     previous.c as usize == pc
                         && matches!(
@@ -220,7 +220,7 @@ impl Vm {
         };
         let closure = &self.functions[slot_index(id.0)];
         let proto = &self.programs[closure.program].data.prototypes[closure.prototype];
-        let instruction = proto.code[frame.pc().checked_sub(1)?];
+        let instruction = proto.code()[frame.pc().checked_sub(1)?];
         let register = match instruction.op {
             Op::Call | Op::CallIter | Op::TailCall | Op::SetTable => usize::from(instruction.a),
             Op::GetTable | Op::Neg | Op::Len => usize::from(instruction.b),
@@ -262,7 +262,7 @@ impl Vm {
                 return None;
             }
             let pc = frame.pc().checked_sub(1)?;
-            let instruction = proto.code[pc];
+            let instruction = proto.code()[pc];
             if matches!(instruction.op, Op::Call | Op::CallIter | Op::TailCall)
                 && register == usize::from(instruction.a)
                 && let Ok(index) = proto

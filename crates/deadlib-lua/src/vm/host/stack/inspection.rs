@@ -379,7 +379,7 @@ impl NativeStack<'_, '_> {
                         self.call.vm.debug_frames(record.thread)[i]
                             .pc()
                             .saturating_sub(1)
-                            .min(proto.metadata.len() - 1),
+                            .min(proto.metadata().len() - 1),
                     ) as i32
                 }
                 _ => -1,

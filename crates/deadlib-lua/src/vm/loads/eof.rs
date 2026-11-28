@@ -16,7 +16,7 @@ pub(super) fn returns_nil(vm: &Vm, reader: Value) -> bool {
     let mut pc = 0;
     // Reject long or cyclic paths, and leave every VM value unchanged.
     for _ in 0..32 {
-        let Some(i) = prototype.code.get(pc).copied() else {
+        let Some(i) = prototype.code().get(pc).copied() else {
             return false;
         };
         let a = usize::from(i.a);

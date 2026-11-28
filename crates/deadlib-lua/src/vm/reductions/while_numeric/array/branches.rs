@@ -91,13 +91,14 @@ impl<'a> Plan<'a> {
             return None;
         };
         let closure = &vm.functions[slot_index(caller.0)];
-        let code = prototype.code.get(head..edge)?;
+        let code = prototype.code().get(head..edge)?;
         let update = code.iter().rfind(|i| i.op != Op::Close)?;
         if update.op != Op::Add || usize::from(prototype.registers) > MAX_REGISTERS {
             return None;
         }
         let sum = usize::from(update.a);
-        let live = prototype.gc_maps[prototype.metadata.get(edge + 1)?.gc_live as u16 as usize][0];
+        let live =
+            prototype.gc_maps[prototype.metadata().get(edge + 1)?.gc_live as u16 as usize][0];
         let mut captures = [None; MAX_CAPTURES];
         let mut tables = [TableId(0); MAX_CAPTURES];
         let mut table_count = 0;
@@ -504,7 +505,7 @@ impl Vm {
         edge: usize,
         prototype: &Prototype,
     ) -> Option<Reduction> {
-        let body = prototype.code.get(head..edge)?;
+        let body = prototype.code().get(head..edge)?;
         if body.len() > MAX_INSTRUCTIONS
             || !body
                 .iter()

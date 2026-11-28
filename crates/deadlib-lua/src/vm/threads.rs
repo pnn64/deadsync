@@ -960,7 +960,7 @@ impl Vm {
                 pair[0]
                     .pc
                     .checked_sub(1)
-                    .and_then(|pc| prototype.code.get(pc as usize))
+                    .and_then(|pc| prototype.code().get(pc as usize))
                     .is_some_and(|i| i.op == Op::CallIter)
             })
             .count();

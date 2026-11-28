@@ -64,7 +64,7 @@ impl Templates {
     ) -> Result<(), Error> {
         if prototype.upvalues.is_empty()
             && prototype.bindings.is_empty()
-            && prototype.code.iter().all(|i| i.op != Op::Closure)
+            && prototype.code().iter().all(|i| i.op != Op::Closure)
             && prototype.template_lines_valid()
         {
             if self.0.is_empty() {

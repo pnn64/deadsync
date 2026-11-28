@@ -161,13 +161,13 @@ impl Preamble {
 
     pub(super) fn function_target(&self, base: &ProgramData) -> Option<(usize, usize)> {
         let entry = &base.prototypes[base.entry as usize];
-        let first = entry.code.first()?;
+        let first = entry.code().first()?;
         if first.op != Op::Closure || first.b != 0 {
             return None;
         }
         let id = first.c as usize;
         let child = base.prototypes.get(id)?;
-        let [load, ret, end] = child.code.as_ref() else {
+        let [load, ret, end] = child.code() else {
             return None;
         };
         if load.op != Op::Load
@@ -219,7 +219,7 @@ impl Preamble {
         }
         let id = base.entry as usize;
         let entry = &base.prototypes[id];
-        let load = entry.code.first()?;
+        let load = entry.code().first()?;
         let constant = load.c as usize;
         if load.op != Op::Load
             || load.a != 0
@@ -415,8 +415,8 @@ mod tests {
             );
             if let Some(previous) = &previous {
                 assert!(std::ptr::eq(
-                    previous.data.prototypes[0].code.as_ref(),
-                    program.data.prototypes[0].code.as_ref()
+                    previous.data.prototypes[0].code(),
+                    program.data.prototypes[0].code()
                 ));
             }
             previous = Some(program);
@@ -430,7 +430,7 @@ mod tests {
         });
         let code = initializers
             .each_ref()
-            .map(|p| p.data.prototypes[0].code.as_ptr());
+            .map(|p| p.data.prototypes[0].code().as_ptr());
         assert_eq!(code[0], code[1]);
         assert_ne!(code[0], code[2]);
         assert_eq!(code[0], code[3]);

@@ -2240,7 +2240,7 @@ impl Vm {
             let mut pc = frame.pc();
             let base = frame.base;
             if pc == 0
-                && matches!(prototype.code.len(), 19 | 20)
+                && matches!(prototype.code().len(), 19 | 20)
                 && prototype.params == 1
                 && !prototype.vararg
                 && let Some((return_pc, value)) = self.try_table_search(function, prototype, base)
@@ -2279,7 +2279,7 @@ impl Vm {
                         upvalues: &self.upvalues,
                         threads: &mut self.threads,
                         thread: self.thread,
-                        code: &prototype.code,
+                        code: prototype.code(),
                         stop_before_for_loop: reduction_retry
                             .as_ref()
                             .filter(|retry| retry.frame == frame_index)
@@ -2385,7 +2385,7 @@ impl Vm {
                         resume_hints.clear();
                     }
                 }
-                let i = prototype.code[pc];
+                let i = prototype.code()[pc];
                 let a = base + usize::from(i.a);
                 if self.hooks.mask & (hooks::LINE | hooks::COUNT) != 0
                     && self.hook_instruction(frame_index, pc, prototype.hook_line(pc))?
@@ -2726,7 +2726,7 @@ impl Vm {
                         }
                         if self.frames.len() == frame_index + 1
                             && self.hooks.mask & (hooks::LINE | hooks::COUNT) == 0
-                            && let Some(next) = prototype.code.get(pc)
+                            && let Some(next) = prototype.code().get(pc)
                         {
                             match next.op {
                                 Op::Bool => {
@@ -2773,7 +2773,7 @@ impl Vm {
                         if i.b == crate::bytecode::NUMERIC_WHILE
                             && ignored_numeric_while != Some(pc - 1)
                             && !self.run_numeric_while(
-                                &prototype.code,
+                                prototype.code(),
                                 c,
                                 pc - 1,
                                 base,
@@ -2891,7 +2891,7 @@ impl Vm {
                             && i.b == 2
                             && i.c == 1
                             && self.registers[a] == Value::Native(debug::GET_INFO)
-                            && let Some(get) = prototype.code.get(pc)
+                            && let Some(get) = prototype.code().get(pc)
                             && get.op == Op::GetTable
                             && get.a == i.a
                             && usize::from(get.b) == usize::from(i.a)
@@ -2952,7 +2952,7 @@ impl Vm {
                                     &mut radix_cache,
                                     callee,
                                     radix_selector::Window {
-                                        code: &prototype.code,
+                                        code: prototype.code(),
                                         hints: &mut field_hints,
                                         caller: function,
                                         env,
@@ -3012,7 +3012,7 @@ impl Vm {
                                     if i.b == 2
                                         && i.c == 2
                                         && prototype
-                                            .code
+                                            .code()
                                             .get(pc + 3)
                                             .is_some_and(|next| next.op == Op::GetTable) =>
                                 {
@@ -3079,7 +3079,7 @@ impl Vm {
                             && !prototype.vararg
                             && !prototype.compat_arg
                             // The regular entry path can specialize these functions.
-                            && (prototype.params != 1 || !matches!(prototype.code.len(), 19 | 20))
+                            && (prototype.params != 1 || !matches!(prototype.code().len(), 19 | 20))
                             && self.restart_fixed_tail(
                                 frame_index,
                                 &mut frame,
@@ -3118,7 +3118,7 @@ impl Vm {
                             && matches!(self.registers[a], Value::Native(NEXT | PAIRS_NEXT))
                         {
                             if self.registers[a + 2] == Value::Nil {
-                                let _ = self.batch_checked_pairs(&prototype.code, pc - 1, base);
+                                let _ = self.batch_checked_pairs(prototype.code(), pc - 1, base);
                             }
                             if self.try_inline_next_pair(a, checkpoint_ready) {
                                 numeric_checkpoint_ready = true;
@@ -3196,7 +3196,7 @@ impl Vm {
             upvalues: &self.upvalues,
             threads: &self.threads,
             thread: self.thread,
-            code: &prototype.code,
+            code: prototype.code(),
             stop_before_for_loop,
             ignored_numeric_while: None,
             env: closure.env,

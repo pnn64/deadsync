@@ -48,7 +48,7 @@ fn decode(
     if size > registers.len()
         || prototype.compat_arg
         || !matches!(
-            prototype.code[0].op,
+            prototype.code()[0].op,
             Op::Move | Op::Load | Op::GetUpvalue | Op::Vararg | Op::Return
         )
     {
@@ -61,7 +61,7 @@ fn decode(
     let constants = program.bound_constants(closure.prototype);
     let mut top = 0;
     let mut high_water = size;
-    for (pc, instruction) in prototype.code.iter().take(MAX_INSTRUCTIONS).enumerate() {
+    for (pc, instruction) in prototype.code().iter().take(MAX_INSTRUCTIONS).enumerate() {
         let a = usize::from(instruction.a);
         let b = usize::from(instruction.b);
         let c = instruction.c as usize;

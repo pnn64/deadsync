@@ -573,7 +573,7 @@ mod tests {
             let closure = &vm.functions[slot_index(id.0)];
             code.push(
                 vm.programs[closure.program].data.prototypes[closure.prototype]
-                    .code
+                    .code()
                     .as_ptr(),
             );
             assert_eq!(vm.call(chunk, &[]).unwrap(), &[Value::Number(expected)]);
@@ -629,7 +629,7 @@ mod tests {
                 assert_eq!(vm.compile_spare.reader_intervals.plans.len(), 1);
                 let closure = &vm.functions[slot_index(id.0)];
                 let code = vm.programs[closure.program].data.prototypes[closure.prototype]
-                    .code
+                    .code()
                     .as_ptr();
                 if let Some(first) = entry_code {
                     assert_eq!(first, code);

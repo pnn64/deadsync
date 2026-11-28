@@ -80,7 +80,7 @@ impl Plan {
         if proto.vararg
             || proto.compat_arg
             || !proto.upvalues.is_empty()
-            || proto.code.len() > 32
+            || proto.code().len() > 32
             || registers > REGISTER_LIMIT
         {
             return None;
@@ -96,7 +96,7 @@ impl Plan {
             len: 0,
         };
         let mut write = None;
-        for (pc, i) in proto.code.iter().enumerate() {
+        for (pc, i) in proto.code().iter().enumerate() {
             let a = usize::from(i.a);
             let b = usize::from(i.b);
             let operand = |index: u32| {

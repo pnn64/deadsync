@@ -228,7 +228,7 @@ impl ResumeHints {
             captures: &closure.upvalues,
             upvalues: cx.upvalues,
             threads: cx.threads,
-            code: &prototype.code,
+            code: prototype.code(),
             parent: cx.thread,
             parent_registers: cx.registers,
         };
@@ -417,7 +417,7 @@ impl Vm {
         {
             return None;
         }
-        let plan = IndexYield::decode(&prototype.code, caller.pc(), suspended, base)?;
+        let plan = IndexYield::decode(prototype.code(), caller.pc(), suspended, base)?;
         let control = base + plan.control;
         let (Value::Number(index), Value::Number(limit), Value::Number(step)) = (
             state.registers[control],
@@ -515,7 +515,7 @@ impl Vm {
             return false;
         }
 
-        let index_yield = IndexYield::decode(&prototype.code, caller.pc(), suspended, base);
+        let index_yield = IndexYield::decode(prototype.code(), caller.pc(), suspended, base);
         if let Some(plan) = &index_yield
             && state.registers.len() == end + 6
         {
@@ -576,7 +576,7 @@ impl Vm {
             captures: &closure.upvalues,
             upvalues: &self.upvalues,
             threads: &self.threads,
-            code: &prototype.code,
+            code: prototype.code(),
             parent: self.thread,
             parent_registers: &self.registers,
         };

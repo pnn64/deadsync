@@ -185,7 +185,7 @@ impl Vm {
         {
             return Ok(None);
         }
-        let Some(plan) = KeyLoop::decode(self, &prototype.code, base, body, backedge) else {
+        let Some(plan) = KeyLoop::decode(self, prototype.code(), base, body, backedge) else {
             return Ok(None);
         };
         let frame = self.frames.len() - 1;

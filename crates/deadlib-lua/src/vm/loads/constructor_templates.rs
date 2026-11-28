@@ -253,7 +253,7 @@ impl Template {
         }
         let entry = base.entry as usize;
         let root = &base.prototypes[entry];
-        let mut closures = root.code.iter().filter(|i| i.op == Op::Closure);
+        let mut closures = root.code().iter().filter(|i| i.op == Op::Closure);
         for callback in &mut callbacks {
             let closure = closures.next()?;
             let prototype = &base.prototypes[closure.c as usize];
@@ -660,7 +660,7 @@ mod tests {
 
     fn code(program: &Program) -> *const crate::bytecode::Instruction {
         program.data.prototypes[program.data.entry as usize]
-            .code
+            .code()
             .as_ptr()
     }
 
@@ -676,8 +676,8 @@ mod tests {
         assert_eq!(code(&first), code(&variant));
         for id in 0..2 {
             assert_eq!(
-                first.data.prototypes[id].code.as_ptr(),
-                variant.data.prototypes[id].code.as_ptr()
+                first.data.prototypes[id].code().as_ptr(),
+                variant.data.prototypes[id].code().as_ptr()
             );
         }
         let collision = compile(&mut vm, &source("One", "Name", 4, 77));

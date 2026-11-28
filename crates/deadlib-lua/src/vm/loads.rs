@@ -1589,7 +1589,7 @@ mod tests {
             let closure = &vm.functions[slot_index(id.0)];
             let program = &vm.programs[closure.program];
             assert!(!program.parser_prototypes.is_empty());
-            program.data.prototypes[closure.prototype].code.as_ptr()
+            program.data.prototypes[closure.prototype].code().as_ptr()
         });
         assert_eq!(first, second);
     }

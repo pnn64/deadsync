@@ -65,7 +65,7 @@ pub(super) fn cannot_inspect_stack(vm: &Vm, reader: Value) -> bool {
     let prototype = &program.data.prototypes[closure.prototype];
     if prototype.compat_arg
         || usize::from(prototype.registers) > REGISTERS
-        || prototype.code.len() > STEPS
+        || prototype.code().len() > STEPS
     {
         return false;
     }
@@ -73,7 +73,7 @@ pub(super) fn cannot_inspect_stack(vm: &Vm, reader: Value) -> bool {
     Reader {
         vm,
         closure,
-        code: &prototype.code,
+        code: prototype.code(),
         constants: program.bound_constants(closure.prototype),
     }
     .check(

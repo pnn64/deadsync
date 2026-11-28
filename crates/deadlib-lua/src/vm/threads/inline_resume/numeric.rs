@@ -45,7 +45,7 @@ impl YieldBody {
         registers: &[Value],
     ) -> Option<Self> {
         let prototype = &program.data.prototypes[closure.prototype];
-        let code = &prototype.code;
+        let code = prototype.code();
         let constants = program.bound_constants(closure.prototype);
         let loop_pc = pc + usize::from(code.get(pc)?.op == Op::Close);
         let loop_instruction = code.get(loop_pc)?;

@@ -151,37 +151,6 @@ pub(crate) fn with_capacity<T>(capacity: usize) -> Result<Vec<T>, Error> {
     Ok(values)
 }
 
-/// Append one result to each reserved buffer per input on success.
-#[inline]
-pub(crate) fn append_reserved_pair<T, U: Copy, V: Copy>(
-    input: &[T],
-    first: &mut Vec<U>,
-    second: &mut Vec<V>,
-    mut emit: impl FnMut(usize, &T) -> Result<(U, V), Error>,
-) -> Result<(), Error> {
-    let count = input.len();
-    let first_len = first.len();
-    let second_len = second.len();
-    let first_slots = &mut first.spare_capacity_mut()[..count];
-    let second_slots = &mut second.spare_capacity_mut()[..count];
-    for ((index, source), (a, b)) in input
-        .iter()
-        .enumerate()
-        .zip(first_slots.iter_mut().zip(second_slots))
-    {
-        let (left, right) = emit(index, source)?;
-        a.write(left);
-        b.write(right);
-    }
-    // SAFETY: all three slices have count entries, and each iteration
-    // initialized both output slots. Their types are Copy, so an earlier
-    // error can leave the Vec lengths unchanged without dropping any value.
-    unsafe {
-        first.set_len(first_len + count);
-        second.set_len(second_len + count);
-    }
-    Ok(())
-}
 pub(crate) fn vec<T, const N: usize>(values: [T; N]) -> Result<Vec<T>, Error> {
     let mut out = with_capacity(N)?;
     out.extend(values);

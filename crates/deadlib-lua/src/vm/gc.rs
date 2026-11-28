@@ -541,8 +541,10 @@ fn frames_roots(
                 let visible_top =
                     hooks::stack_top(proto, *frame, frames.get(i + 1)).or_else(|| {
                         (i + 1 == frames.len()).then(|| {
-                            let previous =
-                                frame.pc().checked_sub(1).and_then(|pc| proto.code.get(pc));
+                            let previous = frame
+                                .pc()
+                                .checked_sub(1)
+                                .and_then(|pc| proto.code().get(pc));
                             if previous.is_some_and(|op| {
                                 matches!(op.op, Op::Call | Op::Vararg | Op::Move) && op.c == OPEN
                             }) {
@@ -556,8 +558,8 @@ fn frames_roots(
                     let end = visible_top.min(registers.len()).min(return_top);
                     register_roots_span(registers, frame.base.min(end)..end, live, work);
                 }
-                let pc = frame.pc().saturating_sub(1).min(proto.code.len() - 1);
-                let maps = proto.metadata[pc].gc_live;
+                let pc = frame.pc().saturating_sub(1).min(proto.code().len() - 1);
+                let maps = proto.metadata()[pc].gc_live;
                 // Finalization interrupts an already completed opcode. Its
                 // destination/results are live, unlike an outstanding Lua call.
                 let interrupt = frames
@@ -603,7 +605,7 @@ fn frames_roots(
                         fresh &= fresh - 1;
                     }
                 }
-                let instruction = proto.code[pc];
+                let instruction = proto.code()[pc];
                 if completed
                     && ((matches!(instruction.op, Op::Call | Op::Vararg | Op::Move)
                         && instruction.c == OPEN)

@@ -86,7 +86,7 @@ impl Consumer {
         };
         let closure = &vm.functions[slot_index(function.0)];
         let program = &vm.programs[closure.program];
-        let code = &program.data.prototypes[closure.prototype].code;
+        let code = &program.data.prototypes[closure.prototype].code();
         let constants = program.bound_constants(closure.prototype);
         let (exit, edge) = back_edge(code, pc + 6)?;
         let [
@@ -192,7 +192,7 @@ impl Producer {
         let closure = &vm.functions[slot_index(function.0)];
         let program = &vm.programs[closure.program];
         let prototype = &program.data.prototypes[closure.prototype];
-        let code = &prototype.code;
+        let code = prototype.code();
         let constants = program.bound_constants(closure.prototype);
         let pc = frame.pc();
         let [add, width, modulo, wrap] = *code.get(pc..pc + 4)? else {

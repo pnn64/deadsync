@@ -72,8 +72,8 @@ impl Vm {
         let closure = &self.functions[slot_index(function.0)];
         let program = &self.programs[closure.program];
         let prototype = &program.data.prototypes[closure.prototype];
+        let code = prototype.code();
         let PrototypeBody {
-            code,
             params,
             registers,
             vararg,

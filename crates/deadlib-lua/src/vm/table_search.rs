@@ -10,12 +10,12 @@ impl Vm {
         prototype: &Prototype,
         base: usize,
     ) -> Option<(usize, Value)> {
-        if prototype.code.len() == 19 {
+        if prototype.code().len() == 19 {
             return self.try_pairs_search(function, prototype, base);
         }
         // Match the compiler's lowering of the entire loop, including its
         // branches and return values. Global names are resolved below.
-        let code = &prototype.code;
+        let code = prototype.code();
         let next = code[2].c;
         let table = code[3].c;
         let missing = code[9].c;
@@ -84,7 +84,7 @@ impl Vm {
         prototype: &Prototype,
         base: usize,
     ) -> Option<(usize, Value)> {
-        let code = &prototype.code;
+        let code = prototype.code();
         let pairs = code[0].c;
         let table = code[1].c;
         let nil = code[7].c;

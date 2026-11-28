@@ -693,7 +693,7 @@ impl Vm {
         if self.hooks.mask & (super::hooks::LINE | super::hooks::COUNT) != 0 {
             return None;
         }
-        let code = &prototype.code;
+        let code = prototype.code();
         let loop_instruction = code[loop_pc];
         if loop_instruction.op != Op::ForLoop || usize::from(loop_instruction.a) != control {
             return None;
@@ -954,7 +954,11 @@ mod tests {
             let program = crate::compile(source).unwrap();
             let proto_index = program.data.entry as usize;
             let prototype = &program.data.prototypes[proto_index];
-            let prep = prototype.code.iter().find(|i| i.op == Op::ForPrep).unwrap();
+            let prep = prototype
+                .code()
+                .iter()
+                .find(|i| i.op == Op::ForPrep)
+                .unwrap();
             let mut vm = Vm::new();
             let function = vm.load_program(&program);
             let program_index = vm.functions[super::super::slot_index(function.0)].program;

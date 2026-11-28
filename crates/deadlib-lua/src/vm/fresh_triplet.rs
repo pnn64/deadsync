@@ -72,7 +72,7 @@ fn find_fill_end(prototype: &Prototype, begin: usize) -> Option<usize> {
     if prototype.debug.native.is_some() {
         return None;
     }
-    let code = &prototype.code;
+    let code = prototype.code();
     let table = code[begin - 1].a;
     let mut end = begin;
     while end - begin < MAX_FILL_INSTRUCTIONS && fills_temporary(*code.get(end)?, table) {
@@ -92,7 +92,7 @@ fn find_fill_end(prototype: &Prototype, begin: usize) -> Option<usize> {
         return None;
     }
     let after = end + 2;
-    let before_map = prototype.metadata.get(after)?.gc_live as u16 as usize;
+    let before_map = prototype.metadata().get(after)?.gc_live as u16 as usize;
     let register = usize::from(table);
     if prototype.gc_maps[before_map][register / 64] & (1 << (register % 64)) != 0
         || prototype.debug.locals().iter().any(|local| {

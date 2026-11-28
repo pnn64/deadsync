@@ -74,11 +74,11 @@ impl Layouts {
         let prototype = &vm.programs[function.program].data.prototypes[function.prototype];
         let pc = (stack.pc as usize)
             .saturating_sub(1)
-            .min(prototype.code.len() - 1);
+            .min(prototype.code().len() - 1);
         // The Lua instruction awaits its native yield frame. Its before-map
         // owns the Lua slots. The yield frame's arguments have been moved,
         // and its native scratch starts above the physical stack cutoff.
-        let map = prototype.metadata[pc].gc_live as u16 as usize;
+        let map = prototype.metadata()[pc].gc_live as u16 as usize;
         let slots = prototype.gc_maps[map][0]
             .checked_shl(u32::from(stack.base))
             .unwrap_or(0);

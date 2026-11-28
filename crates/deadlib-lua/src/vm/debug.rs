@@ -316,7 +316,7 @@ impl Vm {
                     let pc = self.debug_frames(thread)[i]
                         .pc()
                         .saturating_sub(1)
-                        .min(proto.metadata.len() - 1);
+                        .min(proto.metadata().len() - 1);
                     proto.debug_line(pc)
                 }
                 _ => -1,
@@ -568,7 +568,7 @@ impl Vm {
                     return None;
                 }
                 let limit = if proto.debug.native.is_some() {
-                    let instruction = proto.code[(pc as usize).min(proto.code.len() - 1)];
+                    let instruction = proto.code()[(pc as usize).min(proto.code().len() - 1)];
                     if frames.get(index + 1).is_some()
                         && matches!(instruction.op, Op::Call | Op::CallIter | Op::TailCall)
                     {
@@ -584,7 +584,7 @@ impl Vm {
                         })
                         .min(proto.debug_registers())
                 };
-                let pc = (pc as usize).min(proto.metadata.len() - 1);
+                let pc = (pc as usize).min(proto.metadata().len() - 1);
                 if let Ok(i) = proto
                     .debug
                     .calls()
@@ -599,7 +599,7 @@ impl Vm {
                         LocalSlot::Register(frame.base + usize::from(register)),
                     ));
                 }
-                let live = &proto.gc_maps[proto.metadata[pc].gc_live as u16 as usize];
+                let live = &proto.gc_maps[proto.metadata()[pc].gc_live as u16 as usize];
                 let mut wanted = n.checked_sub(named)?;
                 for r in 0..limit {
                     if live[r / 64] & !active[r / 64] & (1u64 << (r % 64)) != 0 {

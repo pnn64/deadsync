@@ -255,7 +255,7 @@ impl Vm {
             return Ok(None);
         }
 
-        let new = prototype.code[pc - 1];
+        let new = prototype.code()[pc - 1];
         // The active function keeps its bound strings alive. Slot generations
         // disambiguate constructors even if a previous function was collected.
         let seen = if let Some((owner, entry, snapshot)) = &mut cache.wide
@@ -276,7 +276,7 @@ impl Vm {
             cache.wide = Some((function, pc, None));
             false
         };
-        let code = &prototype.code;
+        let code = prototype.code();
         let closure = &self.functions[slot_index(function.0)];
         let constants = self.programs[closure.program].bound_constants(closure.prototype);
         let Ok(capacity) = allocation_hint(if new.c == 0 { u32::from(new.b) } else { new.c })
@@ -401,7 +401,7 @@ impl Vm {
         {
             return Ok(None);
         }
-        let instruction = prototype.code[pc - 1];
+        let instruction = prototype.code()[pc - 1];
         let Ok(capacity) = allocation_hint(u32::from(instruction.b)) else {
             return Ok(None);
         };
@@ -416,7 +416,7 @@ impl Vm {
             let closure = &self.functions[slot_index(function.0)];
             let constants = self.programs[closure.program].bound_constants(closure.prototype);
             let template = Template::decode(
-                &prototype.code,
+                prototype.code(),
                 constants,
                 pc,
                 capacity,

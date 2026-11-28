@@ -121,9 +121,12 @@ pub(crate) fn compile_literal_return(
         &[],
         &[],
     )?;
+    reused
+        .instructions
+        .try_copy_from(&instructions, &metadata)?;
     prototypes.push(Prototype::new(
         PrototypeBody {
-            code: copy_boxed(&instructions, Some(reused.code))?,
+            instructions: reused.instructions,
             gc_maps: RegisterMaps::Prefix { start: 0, len: 2 },
             original_constants: constants.try_into_boxed_slice()?,
             constant_strings: strings,
@@ -132,7 +135,6 @@ pub(crate) fn compile_literal_return(
             debug,
             ..PrototypeBody::default()
         },
-        copy_boxed(&metadata, Some(reused.metadata))?,
         [0; 2],
     ));
     let program = Program::try_new_reusing_name(prototypes, 0, name, name_storage)?;
@@ -169,10 +171,10 @@ fn fixed_literal_prototypes_match_general_compilation() {
             "{source:?}"
         );
         assert_eq!(&*actual.gc_maps, &*expected.gc_maps, "{source:?}");
-        for (i, j) in actual.code.iter().zip(expected.code.iter()) {
+        for (i, j) in actual.code().iter().zip(expected.code().iter()) {
             assert_eq!((i.op, i.a, i.b, i.c), (j.op, j.a, j.b, j.c), "{source:?}");
         }
-        for (i, j) in actual.metadata.iter().zip(expected.metadata.iter()) {
+        for (i, j) in actual.metadata().iter().zip(expected.metadata().iter()) {
             assert_eq!(
                 (i.line, i.hook_line, i.gc_live),
                 (j.line, j.hook_line, j.gc_live),

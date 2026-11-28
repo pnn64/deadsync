@@ -259,8 +259,8 @@ mod tests {
         };
         assert_eq!(bytes(&program), bytes(&reference));
         let children = &program.data.prototypes[..4];
-        assert_eq!(children[0].code.as_ptr(), children[2].code.as_ptr());
-        assert_eq!(children[1].code.as_ptr(), children[3].code.as_ptr());
-        assert_ne!(children[0].code.as_ptr(), children[1].code.as_ptr());
+        assert_eq!(children[0].code().as_ptr(), children[2].code().as_ptr());
+        assert_eq!(children[1].code().as_ptr(), children[3].code().as_ptr());
+        assert_ne!(children[0].code().as_ptr(), children[1].code().as_ptr());
     }
 }

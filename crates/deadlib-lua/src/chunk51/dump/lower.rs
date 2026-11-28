@@ -73,12 +73,12 @@ struct Gap {
 }
 
 pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error> {
-    let n = p.code.len();
+    let n = p.code().len();
     let mut skip = fallible::repeat(false, n)?;
     let mut methods = fallible::repeat(None, n)?;
     let mut gaps = Vec::new();
     let mut captured = [0u64; 4];
-    for instruction in &p.code {
+    for instruction in p.code() {
         if instruction.op == Op::Closure && instruction.b == 0 {
             for upvalue in &data.prototypes[instruction.c as usize].upvalues {
                 if let Upvalue::Local(register) = *upvalue {
@@ -88,9 +88,9 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
         }
     }
     for pc in 2..n {
-        let get = p.code[pc];
-        let key = p.code[pc - 1];
-        let receiver = p.code[pc - 2];
+        let get = p.code()[pc];
+        let key = p.code()[pc - 1];
+        let receiver = p.code()[pc - 2];
         if get.op == Op::GetTable
             && key.op == Op::Load
             && receiver.op == Op::Move
@@ -106,7 +106,7 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
             methods[pc] = Some(if key.c < 256 { key.c | 256 } else { get.c });
         }
     }
-    for (pc, i) in p.code.iter().enumerate() {
+    for (pc, i) in p.code().iter().enumerate() {
         if matches!(i.op, Op::JumpFalse | Op::JumpTrue) && i.b == COMPARE_BRANCH
             || i.op == Op::Jump && i.b == BOOLEAN_SKIP
         {
@@ -115,7 +115,7 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
     }
     // Recognize the compiler's iterator-call sequence. Native TFORLOOP owns
     // its call scratch slots and implicit nil test, so no helper locals leak.
-    for (pc, i) in p.code.iter().enumerate() {
+    for (pc, i) in p.code().iter().enumerate() {
         if i.op != Op::CallIter {
             continue;
         }
@@ -125,7 +125,7 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
         let a = u16::from(i.a);
         let c = i.c as u16;
         for offset in 0..3 {
-            let mv = p.code[pc - 3 + offset];
+            let mv = p.code()[pc - 3 + offset];
             if mv.op != Op::Move
                 || u16::from(mv.a) != a + offset as u16
                 || mv.b + 3 != u16::from(mv.a)
@@ -134,17 +134,17 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
             }
             skip[pc - 3 + offset] = true;
         }
-        if p.code[pc + 1].op != Op::Load
-            || p.code[pc + 2].op != Op::Eq
-            || p.code[pc + 3].op != Op::JumpTrue
-            || p.code[pc + 4].op != Op::Move
+        if p.code()[pc + 1].op != Op::Load
+            || p.code()[pc + 2].op != Op::Eq
+            || p.code()[pc + 3].op != Op::JumpTrue
+            || p.code()[pc + 4].op != Op::Move
         {
             return Err(fail());
         }
         skip[pc + 1..pc + 5].fill(true);
         gaps.try_push(Gap {
             start: pc + 5,
-            end: p.code[pc + 3].c as usize,
+            end: p.code()[pc + 3].c as usize,
             register: a + c,
             count: c.max(3) + 1 - c,
         })?;
@@ -163,7 +163,7 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
     let mut next_gap = 0;
     let mut next_local = 0;
     let mut captured_scopes: Vec<(u16, u32)> = Vec::new();
-    for (pc, i) in p.code.iter().enumerate() {
+    for (pc, i) in p.code().iter().enumerate() {
         captured_scopes.retain(|&(_, end)| pc <= end as usize);
         scopes.retain(|g| pc < g.end);
         while next_gap < gaps.len() && gaps[next_gap].start <= pc {
@@ -209,7 +209,7 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
             Op::Load => {
                 if i.b == 0 {
                     out.reg(a)?;
-                    if p.code
+                    if p.code()
                         .get(pc + 1)
                         .is_some_and(|next| next.op == Op::Jump && next.b == BOOLEAN_SKIP)
                     {
@@ -303,11 +303,11 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                 out.abc(21, a, b, u32::from(c))?;
             }
             Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge => {
-                let branch = p.code.get(pc + 1).filter(|next| {
+                let branch = p.code().get(pc + 1).filter(|next| {
                     matches!(next.op, Op::JumpFalse | Op::JumpTrue) && next.b == COMPARE_BRANCH
                 });
                 let (dest, invert) =
-                    if let Some(next) = p.code.get(pc + 1).filter(|n| n.op == Op::Bool) {
+                    if let Some(next) = p.code().get(pc + 1).filter(|n| n.op == Op::Bool) {
                         (mapped(u16::from(next.a)), next.c as u16)
                     } else {
                         (a, 0)
@@ -381,7 +381,7 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                 out.reg(a + i.c as u16 - 1)?;
                 out.abc(33, a - 3, 0, i.c)?;
                 out.jump(22, 0, pc + 5)?;
-                out.jump(22, 0, p.code[pc + 3].c as usize)?;
+                out.jump(22, 0, p.code()[pc + 3].c as usize)?;
             }
             Op::Return | Op::Vararg => {
                 out.reg(a)?;

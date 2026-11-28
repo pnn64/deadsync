@@ -509,7 +509,7 @@ impl Recipe {
             Value::Number(value) => Some(Input::Constant(value)),
             _ => None,
         };
-        for instruction in prototype.code.iter().take(MAX_OPS + 1) {
+        for instruction in prototype.code().iter().take(MAX_OPS + 1) {
             let a = usize::from(instruction.a);
             let b = u32::from(instruction.b);
             let c = instruction.c;

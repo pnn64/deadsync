@@ -51,8 +51,8 @@ impl Vm {
             return None;
         }
         let constants = loaded.bound_constants(closure.prototype);
-        let mut code = &*prototype.code;
-        let mut metadata = &*prototype.metadata;
+        let mut code = prototype.code();
+        let mut metadata = prototype.metadata();
         let mut counter = None;
         let mut changed = None;
         if Self::sort_counter_prefix(code, prototype.params) {

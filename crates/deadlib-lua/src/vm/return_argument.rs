@@ -33,11 +33,11 @@ impl Cache {
         if proto.vararg || proto.compat_arg {
             return None;
         }
-        let first = proto.code[0];
+        let first = proto.code()[0];
         let (argument, pc) = match first.op {
             Op::Return if first.c == 1 => (first.a, 0),
             Op::Move if first.c == 0 => {
-                let result = proto.code.get(1)?;
+                let result = proto.code().get(1)?;
                 if result.op != Op::Return || result.c != 1 || result.a != first.a {
                     return None;
                 }

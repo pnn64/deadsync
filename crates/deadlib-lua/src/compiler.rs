@@ -422,18 +422,16 @@ impl<'a> Compiler<'a> {
         };
         let id = self.prototypes.len() as u32;
         let instruction_count = f.code.len();
-        let mut code = reusable_vec(
-            instruction_count,
-            old_body.as_mut().map(|p| std::mem::take(&mut p.code)),
-        )?;
-        let mut metadata = reusable_vec(
-            instruction_count,
-            old_body.as_mut().map(|p| std::mem::take(&mut p.metadata)),
-        )?;
+        let mut instructions = old_body
+            .as_mut()
+            .map_or_else(crate::memory::PackedCode::default, |p| {
+                std::mem::take(&mut p.instructions)
+            });
         let mut previous: Option<Instruction> = None;
         let first_line = f.defined[0].clamp(1, u32::MAX - 63);
         let mut nearby_lines = 0u64;
-        fallible::append_reserved_pair(&f.code, &mut code, &mut metadata, |pc, emitted| {
+        instructions.try_write(instruction_count, |pc| {
+            let emitted = &f.code[pc];
             let mut instruction = emitted.instruction;
             // Active lines include comparisons and branches whose individual
             // hook events are coalesced below.
@@ -506,26 +504,31 @@ impl<'a> Compiler<'a> {
                 },
             ))
         })?;
-        let sort_lines = !f.active_lines.is_empty();
-        fallible::reserve(&mut f.active_lines, nearby_lines.count_ones() as usize)?;
-        while nearby_lines != 0 {
-            f.active_lines
-                .push(first_line + nearby_lines.trailing_zeros());
-            nearby_lines &= nearby_lines - 1;
-        }
-        if sort_lines {
+        let active_lines = if f.active_lines.is_empty() {
+            crate::memory::ActiveLines::Mask {
+                first: first_line,
+                bits: nearby_lines,
+            }
+        } else {
+            fallible::reserve(&mut f.active_lines, nearby_lines.count_ones() as usize)?;
+            while nearby_lines != 0 {
+                f.active_lines
+                    .push(first_line + nearby_lines.trailing_zeros());
+                nearby_lines &= nearby_lines - 1;
+            }
             f.active_lines.sort_unstable();
             f.active_lines.dedup();
-        }
+            crate::memory::ActiveLines::Slice(&f.active_lines)
+        };
         let mut debug = old_body
             .as_mut()
             .map_or_else(DebugInfo::default, |p| std::mem::take(&mut p.debug));
         debug.stack = f.debug_stack;
-        debug.storage.try_replace(
+        debug.storage.try_replace_with_lines(
             &mut f.debug_upvalues,
             &mut f.debug_locals,
             &mut f.debug_calls,
-            &f.active_lines,
+            active_lines,
             &f.debug_names,
             &f.debug_temporaries,
         )?;
@@ -536,7 +539,7 @@ impl<'a> Compiler<'a> {
         let constants = f.constants.finish_reusing(old_constants)?;
         self.prototypes.try_push(Prototype::new(
             PrototypeBody {
-                code: code.try_into_boxed_slice()?,
+                instructions,
                 gc_maps: if f.gc_maps.is_empty() {
                     RegisterMaps::Prefix {
                         start: f.gc_prefix_start,
@@ -562,7 +565,6 @@ impl<'a> Compiler<'a> {
                 debug,
                 ..PrototypeBody::default()
             },
-            metadata.try_into_boxed_slice()?,
             f.defined,
         ))?;
         f.reset();

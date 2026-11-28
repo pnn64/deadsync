@@ -92,7 +92,7 @@ fn fill_loop(code: &[Instruction], start: usize, table: u8) -> Option<(usize, us
 
 #[inline]
 fn table_dead(prototype: &Prototype, pc: usize, table: usize) -> bool {
-    let Some(metadata) = prototype.metadata.get(pc) else {
+    let Some(metadata) = prototype.metadata().get(pc) else {
         return false;
     };
     let before = metadata.gc_live as u16 as usize;
@@ -114,7 +114,7 @@ impl Vm {
         program: usize,
         prototype_index: usize,
     ) -> Option<usize> {
-        let code = &prototype.code;
+        let code = prototype.code();
         let table = code[start - 1].a;
         let (prep, edge, store) = fill_loop(code, start, table)?;
         let count = usize::from(prototype.registers);

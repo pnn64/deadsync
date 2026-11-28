@@ -320,14 +320,19 @@ mod tests {
         code[STEP] = true_word;
         code[count - 1] = 30 | (2 << 23);
         let mut lines = vec![1; count];
-        prototype.metadata = vec![
-            crate::bytecode::InstructionMetadata {
-                line: 1,
-                ..Default::default()
-            };
-            count
-        ]
-        .into_boxed_slice();
+        let instruction = prototype.code()[0];
+        prototype
+            .instructions
+            .try_write(count, |_| {
+                Ok((
+                    instruction,
+                    crate::bytecode::InstructionMetadata {
+                        line: 1,
+                        ..Default::default()
+                    },
+                ))
+            })
+            .unwrap();
         let mut pcs = (0..=count as u32).collect::<Vec<_>>();
         relax(
             &mut code,

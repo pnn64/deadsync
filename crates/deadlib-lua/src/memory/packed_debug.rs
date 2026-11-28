@@ -29,6 +29,20 @@ struct Ends {
     temporaries: usize,
 }
 
+pub(crate) enum ActiveLines<'a> {
+    Slice(&'a [u32]),
+    Mask { first: u32, bits: u64 },
+}
+
+impl ActiveLines<'_> {
+    fn len(&self) -> usize {
+        match self {
+            Self::Slice(lines) => lines.len(),
+            Self::Mask { bits, .. } => bits.count_ones() as usize,
+        }
+    }
+}
+
 /// Debug records and byte pools published together from reusable compiler buffers.
 #[derive(Default)]
 pub(crate) struct PackedDebug {
@@ -46,6 +60,25 @@ impl PackedDebug {
         locals: &mut Vec<DebugLocal>,
         calls: &mut Vec<DebugCall>,
         lines: &[u32],
+        names: &[u8],
+        temporaries: &[u8],
+    ) -> Result<(), Error> {
+        self.try_replace_with_lines(
+            upvalues,
+            locals,
+            calls,
+            ActiveLines::Slice(lines),
+            names,
+            temporaries,
+        )
+    }
+
+    pub(crate) fn try_replace_with_lines(
+        &mut self,
+        upvalues: &mut Vec<DebugName>,
+        locals: &mut Vec<DebugLocal>,
+        calls: &mut Vec<DebugCall>,
+        lines: ActiveLines<'_>,
         names: &[u8],
         temporaries: &[u8],
     ) -> Result<(), Error> {
@@ -80,7 +113,19 @@ impl PackedDebug {
             Self::move_records(upvalues, base.cast());
             Self::move_records(locals, base.add(upvalue_end).cast());
             Self::move_records(calls, base.add(local_end).cast());
-            ptr::copy_nonoverlapping(lines.as_ptr(), base.add(call_end).cast(), lines.len());
+            let mut line = base.add(call_end).cast::<u32>();
+            match lines {
+                ActiveLines::Slice(lines) => {
+                    ptr::copy_nonoverlapping(lines.as_ptr(), line, lines.len());
+                }
+                ActiveLines::Mask { first, mut bits } => {
+                    while bits != 0 {
+                        line.write(first.wrapping_add(bits.trailing_zeros()));
+                        line = line.add(1);
+                        bits &= bits - 1;
+                    }
+                }
+            }
             ptr::copy_nonoverlapping(names.as_ptr(), base.add(line_end), names.len());
             ptr::copy_nonoverlapping(temporaries.as_ptr(), base.add(name_end), temporaries.len());
         }
@@ -251,7 +296,17 @@ mod tests {
         let copy = packed.clone();
         let capacity = packed.heap_bytes();
         packed
-            .try_replace(&mut upvalues, &mut locals, &mut calls, &[9], b"other", &[])
+            .try_replace_with_lines(
+                &mut upvalues,
+                &mut locals,
+                &mut calls,
+                ActiveLines::Mask {
+                    first: 3,
+                    bits: (1 << 6) | (1 << 17),
+                },
+                b"other",
+                &[],
+            )
             .unwrap();
         assert_eq!(packed.heap_bytes(), capacity);
         assert!(
@@ -266,7 +321,7 @@ mod tests {
         ] {
             assert!(matches!(name, DebugName::Owned(bytes) if bytes.as_ref() == expected));
         }
-        assert_eq!(packed.active_lines(), [9]);
+        assert_eq!(packed.active_lines(), [9, 20]);
         assert_eq!(copy.active_lines(), [3, 17]);
         assert_eq!(copy.names(), b"name");
         assert_eq!(copy.temporaries(), [1, 2]);

@@ -440,8 +440,7 @@ impl std::ops::DerefMut for RegisterMaps {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PrototypeBody {
-    pub code: Box<[Instruction]>,
-    pub metadata: Box<[InstructionMetadata]>,
+    pub instructions: crate::memory::PackedCode,
     pub gc_maps: RegisterMaps,
     /// The pool of the original body. Use `Prototype::constants` for an instance.
     pub original_constants: Box<[Constant]>,
@@ -453,6 +452,18 @@ pub(crate) struct PrototypeBody {
     pub upvalues: Box<[Upvalue]>,
     pub bindings: Box<[ClosureBinding]>,
     pub debug: DebugInfo,
+}
+
+impl PrototypeBody {
+    #[inline]
+    pub(crate) fn code(&self) -> &[Instruction] {
+        self.instructions.code()
+    }
+
+    #[inline]
+    pub(crate) fn metadata(&self) -> &[InstructionMetadata] {
+        self.instructions.metadata()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -517,12 +528,7 @@ impl std::ops::DerefMut for Prototype {
 }
 
 impl Prototype {
-    pub(crate) fn new(
-        mut body: PrototypeBody,
-        metadata: Box<[InstructionMetadata]>,
-        defined: [u32; 2],
-    ) -> Self {
-        body.metadata = metadata;
+    pub(crate) fn new(body: PrototypeBody, defined: [u32; 2]) -> Self {
         Self {
             storage: PrototypeStorage::Owned(body),
             defined,
@@ -532,7 +538,7 @@ impl Prototype {
     }
 
     fn shift_metadata(body: &mut PrototypeBody, bias: u32) {
-        for metadata in &mut *body.metadata {
+        for metadata in body.instructions.metadata_mut() {
             if metadata.line != 0 {
                 metadata.line = metadata.line.wrapping_add(bias);
             }
@@ -569,18 +575,18 @@ impl Prototype {
 
     #[inline]
     pub(crate) fn instruction_line(&self, pc: usize) -> u32 {
-        self.adjust_line(self.metadata[pc].line)
+        self.adjust_line(self.metadata()[pc].line)
     }
 
     #[inline]
     pub(crate) fn hook_line(&self, pc: usize) -> u32 {
-        self.adjust_hook_line(self.metadata[pc].hook_line)
+        self.adjust_hook_line(self.metadata()[pc].hook_line)
     }
 
     pub(crate) fn template_lines_valid(&self) -> bool {
         let lines = self.defined[0]..=self.defined[1];
         self.defined[0] != 0
-            && self.metadata.iter().all(|m| {
+            && self.metadata().iter().all(|m| {
                 lines.contains(&self.adjust_line(m.line))
                     && (m.hook_line == 0 || lines.contains(&self.adjust_line(m.hook_line)))
             })
@@ -841,8 +847,7 @@ impl ProgramData {
                 }
                 PrototypeStorage::Owned(_) => {}
             }
-            bytes += std::mem::size_of_val(prototype.code.as_ref())
-                + std::mem::size_of_val(prototype.metadata.as_ref())
+            bytes += prototype.instructions.heap_bytes()
                 + prototype.debug.heap_bytes()
                 + prototype.gc_maps.heap_bytes()
                 + std::mem::size_of_val(prototype.upvalues.as_ref())
@@ -916,7 +921,7 @@ impl Program {
 
     /// Return the number of register instructions.
     pub fn instruction_count(&self) -> usize {
-        self.data.prototypes.iter().map(|p| p.code.len()).sum()
+        self.data.prototypes.iter().map(|p| p.code().len()).sum()
     }
 
     /// Return the number of statically reserved register slots.
@@ -1155,7 +1160,7 @@ impl Prototype {
         let fail = |pc: usize, message: &'static str| {
             Error::new_static(
                 ErrorKind::Bytecode,
-                self.metadata
+                self.metadata()
                     .get(pc)
                     .map_or(0, |m| self.adjust_line(m.line)),
                 message,
@@ -1174,12 +1179,12 @@ impl Prototype {
                     || n.stack > self.registers
                     || n.wire.names > self.debug.upvalues().len()
             })
-            || self.metadata.len() != self.code.len()
-            || self.metadata.iter().any(|m| {
+            || self.metadata().len() != self.code().len()
+            || self.metadata().iter().any(|m| {
                 (m.gc_live as u16 as usize) >= gc_map_count
                     || ((m.gc_live >> 16) as usize) >= gc_map_count
             })
-            || self.code.is_empty()
+            || self.code().is_empty()
             || self.constants().iter().any(|constant| {
                 matches!(constant, Constant::PooledString { start, end }
                     if start > end || *end as usize > self.constant_strings.len())
@@ -1195,13 +1200,13 @@ impl Prototype {
             || self.debug.active_lines().windows(2).any(|l| l[0] >= l[1])
             || self.debug.locals().iter().any(|l| {
                 l.start > l.end
-                    || l.end as usize > self.code.len()
+                    || l.end as usize > self.code().len()
                     || l.register >= self.registers
                     || l.name.bytes(self.debug.names()).is_none()
             })
             || self.debug.calls().windows(2).any(|c| c[0].pc >= c[1].pc)
             || self.debug.calls().iter().any(|c| {
-                let Some(i) = self.code.get(c.pc as usize) else {
+                let Some(i) = self.code().get(c.pc as usize) else {
                     return true;
                 };
                 !matches!(i.op, Op::Call | Op::TailCall | Op::CallIter)
@@ -1219,7 +1224,7 @@ impl Prototype {
                             r >= i.a
                                 || u16::from(r) >= self.registers
                                 || self.gc_maps
-                                    [self.metadata[c.pc as usize].gc_live as u16 as usize]
+                                    [self.metadata()[c.pc as usize].gc_live as u16 as usize]
                                     [usize::from(r) / 64]
                                     & (1u64 << (r % 64))
                                     == 0
@@ -1228,7 +1233,7 @@ impl Prototype {
         {
             return Err(fail(0, "invalid program layout"));
         }
-        for (pc, i) in self.code.iter().enumerate() {
+        for (pc, i) in self.code().iter().enumerate() {
             let reg = |r: u32| {
                 if r < u32::from(self.registers) {
                     Ok(())
@@ -1329,10 +1334,10 @@ impl Prototype {
                         && (i.c > 1
                             || pc == 0
                             || !matches!(
-                                self.code[pc - 1].op,
+                                self.code()[pc - 1].op,
                                 Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge
                             )
-                            || u16::from(self.code[pc - 1].a) != i.b)
+                            || u16::from(self.code()[pc - 1].a) != i.b)
                     {
                         return Err(fail(pc, "invalid comparison materialization"));
                     }
@@ -1385,10 +1390,10 @@ impl Prototype {
                         || (i.b == COMPARE_BRANCH
                             && (pc == 0
                                 || !matches!(
-                                    self.code[pc - 1].op,
+                                    self.code()[pc - 1].op,
                                     Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge
                                 )
-                                || self.code[pc - 1].a != i.a))
+                                || self.code()[pc - 1].a != i.a))
                     {
                         return Err(fail(pc, "invalid comparison branch"));
                     }
@@ -1399,8 +1404,8 @@ impl Prototype {
                         && (i.b != BOOLEAN_SKIP
                             || pc == 0
                             || i.c as usize != pc + 2
-                            || !self.code.get(pc + 1).is_some_and(|next| {
-                                let previous = self.code[pc - 1];
+                            || !self.code().get(pc + 1).is_some_and(|next| {
+                                let previous = self.code()[pc - 1];
                                 previous.op == Op::Load
                                     && next.op == Op::Load
                                     && previous.a == next.a
@@ -1437,16 +1442,16 @@ impl Prototype {
             if matches!(
                 i.op,
                 Op::Jump | Op::JumpFalse | Op::JumpTrue | Op::ForPrep | Op::ForLoop
-            ) && i.c as usize >= self.code.len()
+            ) && i.c as usize >= self.code().len()
             {
                 return Err(fail(pc, "jump target out of bounds"));
             }
             if matches!(
                 i.op,
                 Op::Jump | Op::JumpFalse | Op::JumpTrue | Op::ForPrep | Op::ForLoop
-            ) && (self.code[i.c as usize].op == Op::Bool
+            ) && (self.code()[i.c as usize].op == Op::Bool
                 || matches!(
-                    self.code[i.c as usize],
+                    self.code()[i.c as usize],
                     Instruction {
                         op: Op::JumpFalse | Op::JumpTrue,
                         b: COMPARE_BRANCH,
@@ -1460,7 +1465,8 @@ impl Prototype {
             {
                 return Err(fail(pc, "jump into comparison materialization"));
             }
-            if pc + 1 == self.code.len() && !matches!(i.op, Op::Return | Op::Jump | Op::TailCall) {
+            if pc + 1 == self.code().len() && !matches!(i.op, Op::Return | Op::Jump | Op::TailCall)
+            {
                 return Err(fail(pc, "instruction can fall off end of program"));
             }
         }
@@ -1529,10 +1535,7 @@ mod tests {
         assert_eq!(second.defined, [2; 2]);
         assert_eq!(first.instruction_line(0), 1);
         assert_eq!(second.instruction_line(0), 2);
-        assert!(std::ptr::eq(
-            first.metadata.as_ref(),
-            second.metadata.as_ref()
-        ));
+        assert!(std::ptr::eq(first.metadata(), second.metadata()));
 
         let data = program.data_mut();
         data.prototypes[1].line_bias = 0;
@@ -1546,19 +1549,20 @@ mod tests {
             let mut p = good.clone();
             let data = p.data_mut();
             let proto = &mut data.prototypes[data.entry as usize];
-            let boolean = proto.code.iter().position(|i| i.op == Op::Bool).unwrap();
+            let boolean = proto.code().iter().position(|i| i.op == Op::Bool).unwrap();
             match corrupt {
-                0 => proto.code[boolean].b = proto.registers,
-                1 => proto.code[boolean].c = 2,
+                0 => proto.instructions.code_mut()[boolean].b = proto.registers,
+                1 => proto.instructions.code_mut()[boolean].c = 2,
                 2 => {
                     let jump = proto
-                        .code
+                        .instructions
+                        .code_mut()
                         .iter_mut()
                         .find(|i| matches!(i.op, Op::Jump | Op::JumpFalse | Op::JumpTrue))
                         .unwrap();
                     jump.c = boolean as u32;
                 }
-                _ => proto.metadata = Box::new([]),
+                _ => proto.instructions.omit_metadata(),
             }
             assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
         }
@@ -1571,7 +1575,7 @@ mod tests {
             let mut p = good.clone();
             let data = p.data_mut();
             let prototype = &mut data.prototypes[data.entry as usize];
-            prototype.code[pc] = Instruction {
+            prototype.instructions.code_mut()[pc] = Instruction {
                 op: Op::Jump,
                 a: 0,
                 b: 0,
@@ -1579,7 +1583,7 @@ mod tests {
             };
             assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
             let data = p.data_mut();
-            data.prototypes[data.entry as usize].code[pc] = Instruction {
+            data.prototypes[data.entry as usize].instructions.code_mut()[pc] = Instruction {
                 op: Op::Load,
                 a: 0,
                 b: 0,
@@ -1587,7 +1591,7 @@ mod tests {
             };
             assert!(p.verify().is_err());
             let data = p.data_mut();
-            data.prototypes[data.entry as usize].code[pc] = Instruction {
+            data.prototypes[data.entry as usize].instructions.code_mut()[pc] = Instruction {
                 op: Op::Move,
                 a: 0,
                 b: u16::MAX,
@@ -1605,28 +1609,31 @@ mod tests {
             let data = p.data_mut();
             let proto = &mut data.prototypes[data.entry as usize];
             let branch = proto
-                .code
+                .code()
                 .iter()
                 .position(|i| matches!(i.op, Op::JumpFalse | Op::JumpTrue) && i.b == 1)
                 .unwrap();
             let skip = proto
-                .code
+                .code()
                 .iter()
                 .position(|i| i.op == Op::Jump && i.b == 2)
                 .unwrap();
             let jump = proto
-                .code
+                .code()
                 .iter()
                 .position(|i| i.op == Op::Jump && i.b == 0)
                 .unwrap();
             match corrupt {
-                0 => proto.code[branch].b = 2,
-                1 => proto.code[branch].a = (proto.code[branch].a + 1) % proto.registers as u8,
-                2 => proto.code[skip].b = 1,
-                3 => proto.code[skip].c -= 1,
-                4 => proto.code[skip - 1].c = 0,
-                5 => proto.code[jump].c = branch as u32,
-                _ => proto.code[jump].c = skip as u32,
+                0 => proto.instructions.code_mut()[branch].b = 2,
+                1 => {
+                    proto.instructions.code_mut()[branch].a =
+                        (proto.code()[branch].a + 1) % proto.registers as u8
+                }
+                2 => proto.instructions.code_mut()[skip].b = 1,
+                3 => proto.instructions.code_mut()[skip].c -= 1,
+                4 => proto.instructions.code_mut()[skip - 1].c = 0,
+                5 => proto.instructions.code_mut()[jump].c = branch as u32,
+                _ => proto.instructions.code_mut()[jump].c = skip as u32,
             }
             assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
         }
@@ -1636,10 +1643,10 @@ mod tests {
     fn verifier_bounds_constant_operands_and_source_debug_windows() {
         let good = crate::compile(b"local a=2;local t={key=a};return a+3,3-a,t.key").unwrap();
         let proto = &good.data.prototypes[good.data.entry as usize];
-        assert!(proto.code.iter().any(|i| i.op.rk_c() && i.c >= RK));
+        assert!(proto.code().iter().any(|i| i.op.rk_c() && i.c >= RK));
         assert!(
             proto
-                .code
+                .code()
                 .iter()
                 .any(|i| i.op.rk_b() && u32::from(i.b) >= RK)
         );
@@ -1649,9 +1656,30 @@ mod tests {
             let p = &mut data.prototypes[data.entry as usize];
             let count = p.constants().len() as u32;
             match corrupt {
-                0 => p.code.iter_mut().find(|i| i.op.rk_b()).unwrap().b = (RK + count) as u16,
-                1 => p.code.iter_mut().find(|i| i.op.rk_c()).unwrap().c = RK + count,
-                2 => p.code.iter_mut().find(|i| i.op == Op::GetTable).unwrap().b = RK as u16,
+                0 => {
+                    p.instructions
+                        .code_mut()
+                        .iter_mut()
+                        .find(|i| i.op.rk_b())
+                        .unwrap()
+                        .b = (RK + count) as u16
+                }
+                1 => {
+                    p.instructions
+                        .code_mut()
+                        .iter_mut()
+                        .find(|i| i.op.rk_c())
+                        .unwrap()
+                        .c = RK + count
+                }
+                2 => {
+                    p.instructions
+                        .code_mut()
+                        .iter_mut()
+                        .find(|i| i.op == Op::GetTable)
+                        .unwrap()
+                        .b = RK as u16
+                }
                 3 => {
                     let constant = p
                         .original_constants
@@ -1677,8 +1705,8 @@ mod tests {
             let data = p.data_mut();
             let prototype = &mut data.prototypes[data.entry as usize];
             match corrupt {
-                0 => prototype.metadata = Box::new([]),
-                1 => prototype.metadata[0].gc_live = u32::MAX,
+                0 => prototype.instructions.omit_metadata(),
+                1 => prototype.instructions.metadata_mut()[0].gc_live = u32::MAX,
                 _ => prototype.gc_maps[0][3] = 1u64 << 63,
             }
             assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
@@ -1720,7 +1748,7 @@ mod tests {
                     if corrupt == 6 {
                         lines = vec![3, 2];
                     } else {
-                        temporaries = vec![proto.code[calls[0].pc as usize].a];
+                        temporaries = vec![proto.code()[calls[0].pc as usize].a];
                         calls[0].temporaries = 0..1;
                     }
                     proto

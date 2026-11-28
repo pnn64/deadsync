@@ -91,7 +91,7 @@ impl Plan {
             *slot = Slot::source(source)?;
         }
         let constants = program.bound_constants(closure.prototype);
-        let code = &prototype.code;
+        let code = prototype.code();
         let mut plan = Self {
             operations: [ZERO; MAX_OPS],
             count: 0,

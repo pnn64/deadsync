@@ -459,10 +459,12 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
         &[],
         &temporaries,
     )?;
+    let mut instructions = crate::memory::PackedCode::default();
+    instructions.try_copy_from(&out.code, &out.metadata)?;
     Ok(Prototype::new(
         PrototypeBody {
             gc_maps: RegisterMaps::Owned(masks.try_into_boxed_slice()?),
-            code: out.code.try_into_boxed_slice()?,
+            instructions,
             original_constants: out.constants.try_into_boxed_slice()?,
             constant_strings: Box::default(),
             registers,
@@ -492,7 +494,6 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
             },
             ..PrototypeBody::default()
         },
-        out.metadata.try_into_boxed_slice()?,
         p.defined,
     ))
 }
