@@ -31,7 +31,9 @@ pub fn parse_residual_block_cavlc(
     // This ordering lets the placement loop walk from the highest scan
     // position down to DC without reordering.
 
-    let mut levels = vec![0i32; tc];
+    // A coeff_token contains at most 16 coefficients.
+    let mut levels = [0i32; 16];
+    let levels = &mut levels[..tc];
     let t1 = trailing_ones as usize;
 
     // Trailing ones signs (highest freq first, stored at beginning)
