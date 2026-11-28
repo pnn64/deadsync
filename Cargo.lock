@@ -1441,10 +1441,35 @@ version = "0.1.0"
 dependencies = [
  "deadlib-image",
  "deadlib-render-core",
+ "deadlib-video-h264",
+ "deadlib-video-hevc",
+ "deadlib-video-mpeg2",
+ "deadlib-video-mpeg4",
+ "deadlib-video-vp9",
  "log",
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "deadlib-video-h264"
+version = "0.1.0"
+
+[[package]]
+name = "deadlib-video-hevc"
+version = "0.1.0"
+
+[[package]]
+name = "deadlib-video-mpeg2"
+version = "0.1.0"
+
+[[package]]
+name = "deadlib-video-mpeg4"
+version = "0.1.0"
+
+[[package]]
+name = "deadlib-video-vp9"
+version = "0.1.0"
 
 [[package]]
 name = "deadsync"

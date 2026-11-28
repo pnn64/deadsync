@@ -162,6 +162,43 @@ pub(crate) struct PictureState {
     pub(crate) crop_y: u32,
 }
 
+impl PictureState {
+    fn save_for_recovery(&self, saved: &mut Option<Self>) {
+        let Some(backup) = saved.as_mut().filter(|backup| {
+            backup.frame.y.len() == self.frame.y.len()
+                && backup.frame.u.len() == self.frame.u.len()
+                && backup.scratch.mb_info.len() == self.scratch.mb_info.len()
+        }) else {
+            *saved = Some(self.clone());
+            return;
+        };
+        macro_rules! copy_fields {
+            ($kind:ident, $dst:expr, $src:expr; $($field:ident),+ $(,)?; $($copied:ident),*) => {
+                let $kind { $($field,)+ $($copied: _,)* } = $src;
+                $($dst.$field.clone_from($field);)+
+            };
+        }
+        copy_fields!(Frame, backup.frame, &self.frame;
+            width, height, y, u, v, pic_order_cnt, chroma_format, bit_depth;
+        );
+        copy_fields!(PictureScratch, backup.scratch, &self.scratch;
+            nc_luma, nc_cb, nc_cr, mv_store_l0, mv_store_l1, ref_idx_store_l0,
+            reference_keys, ref_idx_store_l1, mvd_store, mvd_store_l1, mb_info,
+            i4x4_modes, mb_cbp, mb_chroma_pred, mb_is_8x8dct, mb_skip,
+            mb_is_direct, blk_is_direct, is_i16x16, mb_slice_id,
+            slice_deblock, mb_field_decoding;
+        );
+        copy_fields!(PictureState, backup, self;
+            frame_num, poc, field_poc, nal_unit_type, nal_ref_idc, current_slice_id,
+            prev_mb_qp, last_qp_delta_nonzero, mmco_ops, adaptive_ref_pic_marking,
+            long_term_reference_flag, is_intra_slice, chroma_qp_index_offset,
+            second_chroma_qp_index_offset, mb_width, mb_height, mbaff_frame_flag,
+            field_pic_flag, bottom_field_flag, frame_height, max_frame_num, crop_x, crop_y;
+            frame, scratch
+        );
+    }
+}
+
 /// Reusable macroblock storage. Motion arrays leave with reference pictures.
 #[derive(Clone, Default)]
 pub(crate) struct PictureScratch {
@@ -281,6 +318,7 @@ pub struct Decoder {
     dpb: Dpb,
     /// In-progress picture being assembled from one or more slices.
     pending: Option<PictureState>,
+    continuation_backup: Option<PictureState>,
     scratch: PictureScratch,
     recycled_frame: Option<Frame>,
     #[cfg(feature = "surface")]
@@ -306,6 +344,7 @@ impl Decoder {
             pps_table: BTreeMap::new(),
             dpb: Dpb::new(0).recycle_pictures(),
             pending: None,
+            continuation_backup: None,
             scratch: PictureScratch::default(),
             recycled_frame: None,
             #[cfg(feature = "surface")]
@@ -376,12 +415,11 @@ impl Decoder {
                 // Since decode_slice takes self.pending via take(), we must
                 // save a backup for continuation slices so we can restore it
                 // if the decode fails mid-slice.
-                let had_pending = !is_new_picture && self.pending.is_some();
-                let pending_backup = if had_pending {
-                    self.pending.clone()
-                } else {
-                    None
-                };
+                let continuation = self.pending.as_ref().filter(|_| !is_new_picture);
+                let had_pending = continuation.is_some();
+                if let Some(state) = continuation {
+                    state.save_for_recovery(&mut self.continuation_backup);
+                }
                 match self.decode_slice(nal) {
                     Ok(()) => {}
                     Err(_e) if self.pending.is_some() => {}
@@ -389,7 +427,7 @@ impl Decoder {
                         // decode_slice consumed self.pending but failed before
                         // reassembling it. Restore the backup so already-decoded
                         // MBs from earlier slices are preserved.
-                        self.pending = pending_backup;
+                        self.pending = self.continuation_backup.take();
                     }
                     Err(e) => return Err(e),
                 }
@@ -2539,5 +2577,74 @@ mod tests {
         let next = decoder.flush().unwrap();
         assert_eq!(next.y.as_ptr(), pointer);
         assert!(next.y.iter().all(|&sample| sample == 0x80));
+    }
+
+    #[test]
+    fn continuation_checkpoint_reuses_storage_and_restores_picture_on_error() {
+        use crate::bitstream::BitWriter;
+
+        let mut sps = BitWriter::default();
+        sps.u(8, 66).u(8, 0).u(8, 10).ue(0).ue(0).ue(2);
+        sps.ue(1).u(1, 0).ue(2).ue(0); // Three macroblocks in one row.
+        sps.u(1, 1).u(1, 1).u(1, 0).u(1, 0);
+        let pps_stream = redundant_picture_stream(0, 0);
+        let pps = parse_annex_b(&pps_stream);
+        let mut decoder = Decoder::new();
+        decoder
+            .decode_nal(&NalUnit {
+                nal_ref_idc: 3,
+                nal_unit_type: NalUnitType::Sps,
+                rbsp: sps.finish().into(),
+            })
+            .unwrap();
+        decoder.decode_nal(&pps[1]).unwrap();
+
+        let slice = |first_mb, sample, truncated| {
+            let mut bits = BitWriter::default();
+            bits.ue(first_mb).ue(7).ue(0).u(4, 0).ue(0).ue(0);
+            bits.u(1, 0).u(1, 0).se(0).ue(1);
+            bits.ue(25).align();
+            for _ in 0..384 {
+                bits.u(8, sample);
+            }
+            if truncated {
+                bits.ue(25).align().u(8, sample);
+            }
+            NalUnit {
+                nal_ref_idc: 3,
+                nal_unit_type: NalUnitType::SliceIdr,
+                rbsp: bits.finish().into(),
+            }
+        };
+        decoder.decode_nal(&slice(0, 0x20, false)).unwrap();
+        decoder.decode_nal(&slice(1, 0x40, false)).unwrap();
+        let backup_plane = decoder
+            .continuation_backup
+            .as_ref()
+            .unwrap()
+            .frame
+            .y
+            .as_ptr();
+        decoder.decode_nal(&slice(1, 0x40, false)).unwrap();
+        assert_eq!(
+            decoder
+                .continuation_backup
+                .as_ref()
+                .unwrap()
+                .frame
+                .y
+                .as_ptr(),
+            backup_plane
+        );
+
+        decoder.decode_nal(&slice(1, 0x60, true)).unwrap();
+        assert!(
+            decoder.continuation_backup.is_none(),
+            "the broken slice should restore the checkpoint"
+        );
+        decoder.decode_nal(&slice(2, 0x80, false)).unwrap();
+        let frame = decoder.flush().unwrap();
+        let row = [[0x20; 16], [0x40; 16], [0x80; 16]].concat();
+        assert_eq!(frame.y, row.repeat(16));
     }
 }

@@ -55,6 +55,39 @@ impl fmt::Display for Error {
 
 impl core::error::Error for Error {}
 
+/// Header information for an MPEG-1 or MPEG-2 video elementary stream.
+pub struct SequenceInfo {
+    pub width: u32,
+    pub height: u32,
+    pub frame_rate: (u32, u32),
+    pub bit_rate: u64,
+}
+
+/// Inspect the initial sequence without allocating reconstructed pictures.
+pub fn sequence_info(bytes: &[u8]) -> Result<SequenceInfo> {
+    let mut units = units(bytes);
+    let unit = units.find(|unit| unit.code == 0xb3).ok_or(Error::NoVideo)?;
+    let mut sequence = Sequence::parse(unit.payload)?;
+    for unit in units {
+        if unit.code == 0x00 || unit.code == 0xb3 {
+            break;
+        }
+        if unit.code == 0xb5 {
+            let mut bits = Bits::new(unit.payload);
+            if bits.read(4)? == 1 {
+                sequence.extend(&mut bits)?;
+            }
+        }
+    }
+    sequence.check_dimensions()?;
+    Ok(SequenceInfo {
+        width: sequence.width as u32,
+        height: sequence.height as u32,
+        frame_rate: sequence.frame_rate,
+        bit_rate: u64::from(sequence.bit_rate) * 400,
+    })
+}
+
 /// The coding type of a frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PictureKind {

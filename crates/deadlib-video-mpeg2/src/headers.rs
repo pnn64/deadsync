@@ -23,6 +23,7 @@ pub(crate) struct Sequence {
     pub(crate) width: usize,
     pub(crate) height: usize,
     pub(crate) frame_rate: (u32, u32),
+    pub(crate) bit_rate: u32,
     pub(crate) matrices: [[u8; 64]; 4],
     pub(crate) progressive: bool,
     pub(crate) extended: bool,
@@ -49,7 +50,7 @@ impl Sequence {
             8 => (60, 1),
             _ => return Err(Error::Invalid("frame rate code")),
         };
-        bits.skip(18)?;
+        let bit_rate = bits.read(18)?;
         bits.marker()?;
         bits.skip(11)?;
         let intra = read_matrix(&mut bits)?.unwrap_or(INTRA);
@@ -58,6 +59,7 @@ impl Sequence {
             width,
             height,
             frame_rate,
+            bit_rate,
             matrices: [intra, inter, intra, inter],
             progressive: true,
             extended: false,
@@ -80,7 +82,7 @@ impl Sequence {
         self.width |= (bits.read(2)? as usize) << 12;
         self.height |= (bits.read(2)? as usize) << 12;
         self.check_dimensions()?;
-        bits.skip(12)?;
+        self.bit_rate |= bits.read(12)? << 18;
         bits.marker()?;
         bits.skip(9)?; // VBV extension and low-delay flag.
         self.frame_rate.0 *= bits.read(2)? + 1;

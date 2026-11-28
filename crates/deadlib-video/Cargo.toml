@@ -7,6 +7,11 @@ license = "GPL-3.0"
 [dependencies]
 deadlib-render-core = { path = "../deadlib-render-core" }
 deadlib-image = { path = "../deadlib-image" }
+deadlib-video-h264 = { path = "../deadlib-video-h264", features = ["surface"] }
+deadlib-video-hevc = { path = "../deadlib-video-hevc" }
+deadlib-video-mpeg2 = { path = "../deadlib-video-mpeg2" }
+deadlib-video-mpeg4 = { path = "../deadlib-video-mpeg4" }
+deadlib-video-vp9 = { path = "../deadlib-video-vp9" }
 log = "0.4.35"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

@@ -5,13 +5,16 @@ pub(crate) struct Layer {
     pub(crate) width: usize,
     pub(crate) height: usize,
     time_bits: u8,
+    pub(crate) time_resolution: i64,
+    pub(crate) low_delay: bool,
     pub(crate) resync: bool,
 }
 
 impl Layer {
     pub(crate) fn parse(payload: &[u8]) -> Result<Self> {
         let mut bits = Bits::new(payload);
-        bits.skip(9)?; // Random access flag and video object type.
+        bits.skip(1)?; // Random access flag.
+        let object_type = bits.read(8)?;
         let version = if bits.flag()? {
             let version = bits.read(4)?;
             bits.skip(3)?;
@@ -22,18 +25,21 @@ impl Layer {
         if bits.read(4)? == 15 {
             bits.skip(16)?; // Extended pixel aspect ratio.
         }
-        if bits.flag()? {
+        let low_delay = if bits.flag()? {
             if bits.read(2)? != 1 {
                 return Err(Error::Unsupported("chroma format other than 4:2:0"));
             }
-            bits.skip(1)?; // Low-delay flag.
+            let low_delay = bits.flag()?;
             if bits.flag()? {
                 for length in [15, 15, 15, 14, 15] {
                     bits.skip(length)?;
                     bits.marker()?;
                 }
             }
-        }
+            low_delay
+        } else {
+            object_type == 1
+        };
         if bits.read(2)? != 0 {
             return Err(Error::Unsupported("nonrectangular video object"));
         }
@@ -100,6 +106,8 @@ impl Layer {
             width,
             height,
             time_bits,
+            time_resolution: i64::from(resolution),
+            low_delay,
             resync,
         })
     }
@@ -111,6 +119,9 @@ pub(crate) struct Picture {
     pub(crate) dc_threshold: i32,
     pub(crate) quantizer: i32,
     pub(crate) f_code: u8,
+    pub(crate) b_code: u8,
+    pub(crate) modulo_time: i64,
+    pub(crate) time_increment: i64,
 }
 
 impl Picture {
@@ -118,11 +129,15 @@ impl Picture {
         let kind = match bits.read(2)? {
             0 => PictureKind::I,
             1 => PictureKind::P,
-            _ => return Err(Error::Unsupported("B or sprite pictures")),
+            2 => PictureKind::B,
+            _ => return Err(Error::Unsupported("sprite pictures")),
         };
-        while bits.flag()? {} // Modulo time base.
+        let mut modulo_time = 0;
+        while bits.flag()? {
+            modulo_time += 1;
+        }
         bits.marker()?;
-        bits.skip(layer.time_bits)?;
+        let time_increment = i64::from(bits.read(layer.time_bits)?);
         bits.marker()?;
         if !bits.flag()? {
             return Ok(None);
@@ -133,12 +148,13 @@ impl Picture {
         if quantizer == 0 {
             return Err(Error::Invalid("zero picture quantizer"));
         }
-        let f_code = if kind == PictureKind::P {
-            let code = bits.read(3)? as u8;
-            if code == 0 {
-                return Err(Error::Invalid("zero motion vector f_code"));
-            }
-            code
+        let f_code = if kind == PictureKind::I {
+            1
+        } else {
+            motion_code(bits)?
+        };
+        let b_code = if kind == PictureKind::B {
+            motion_code(bits)?
         } else {
             1
         };
@@ -148,6 +164,9 @@ impl Picture {
             dc_threshold,
             quantizer,
             f_code,
+            b_code,
+            modulo_time,
+            time_increment,
         }))
     }
 
@@ -163,10 +182,10 @@ impl Picture {
             return Ok(false);
         }
         let mut probe = *bits;
-        let length = if self.kind == PictureKind::I {
-            17
-        } else {
-            16 + self.f_code
+        let length = match self.kind {
+            PictureKind::I => 17,
+            PictureKind::P => 16 + self.f_code,
+            PictureKind::B => 16 + self.f_code.max(self.b_code).max(2),
         };
         if probe.skip(stuffing).is_err() || probe.peek(length) != 1 {
             return Ok(false);
@@ -186,12 +205,23 @@ impl Picture {
             probe.skip(layer.time_bits)?;
             probe.marker()?;
             probe.skip(5)?; // VOP type and intra DC threshold.
-            if self.kind == PictureKind::P {
+            if self.kind != PictureKind::I {
                 probe.skip(3)?; // Repeated forward f_code.
+            }
+            if self.kind == PictureKind::B {
+                probe.skip(3)?; // Repeated backward f_code.
             }
         }
         self.quantizer = quantizer;
         *bits = probe;
         Ok(true)
     }
+}
+
+fn motion_code(bits: &mut Bits<'_>) -> Result<u8> {
+    let code = bits.read(3)? as u8;
+    if code == 0 {
+        return Err(Error::Invalid("zero motion vector code"));
+    }
+    Ok(code)
 }

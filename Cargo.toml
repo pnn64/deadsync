@@ -82,6 +82,11 @@ members = [
     "crates/deadsync-updater",
     "crates/deadsync-version",
     "crates/deadlib-video",
+    "crates/deadlib-video-h264",
+    "crates/deadlib-video-hevc",
+    "crates/deadlib-video-mpeg2",
+    "crates/deadlib-video-mpeg4",
+    "crates/deadlib-video-vp9",
 ]
 resolver = "3"
 
@@ -178,6 +183,22 @@ opt-level = 3
 opt-level = 3
 
 [profile.dev.package.deadlib-image-bmp]
+opt-level = 3
+
+# Video decoding runs during gameplay in development builds as well.
+[profile.dev.package.deadlib-video-h264]
+opt-level = 3
+
+[profile.dev.package.deadlib-video-hevc]
+opt-level = 3
+
+[profile.dev.package.deadlib-video-mpeg2]
+opt-level = 3
+
+[profile.dev.package.deadlib-video-mpeg4]
+opt-level = 3
+
+[profile.dev.package.deadlib-video-vp9]
 opt-level = 3
 
 # Song-Lua Sound actors can preload full-length music. Keep their decoder and

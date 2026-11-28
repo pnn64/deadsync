@@ -50,6 +50,18 @@ impl Plane {
         }
     }
 
+    pub(crate) fn average<const N: usize>(&mut self, other: &Self, [x, y]: [usize; 2]) {
+        for row in y..y + N {
+            let start = row * self.stride + x;
+            for (dst, &src) in self.samples[start..start + N]
+                .iter_mut()
+                .zip(&other.samples[start..start + N])
+            {
+                *dst = (u16::from(*dst) + u16::from(src)).div_ceil(2) as u8;
+            }
+        }
+    }
+
     pub(crate) fn predict<const W: usize>(
         &mut self,
         source: &Self,
@@ -120,6 +132,7 @@ mod x86 {
 pub struct Frame {
     pub(crate) planes: [Plane; 3],
     kind: PictureKind,
+    pub(crate) presentation_time: Option<(i64, i64)>,
 }
 
 impl Frame {
@@ -132,6 +145,7 @@ impl Frame {
                 Plane::new(cw, ch, 8),
             ],
             kind,
+            presentation_time: None,
         }
     }
 
@@ -141,6 +155,7 @@ impl Frame {
         }
         // Reconstruction writes every macroblock, including skipped ones.
         self.kind = kind;
+        self.presentation_time = None;
         self
     }
 
@@ -159,5 +174,10 @@ impl Frame {
 
     pub fn picture_kind(&self) -> PictureKind {
         self.kind
+    }
+
+    /// Presentation time and its clock frequency as signaled by MPEG-4 Visual.
+    pub fn presentation_time(&self) -> Option<(i64, i64)> {
+        self.presentation_time
     }
 }

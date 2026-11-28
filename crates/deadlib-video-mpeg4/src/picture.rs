@@ -59,6 +59,15 @@ impl<T: Copy + Default> Grid<T> {
 pub(crate) struct Workspace {
     motion: Grid<Vector>,
     predictors: [Grid<block::Predictor>; 3],
+    next_motion: Vec<Colocated>,
+    backward_prediction: Option<Frame>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct Colocated {
+    vectors: [Vector; 4],
+    four_vectors: bool,
+    skipped: bool,
 }
 
 struct Macroblock {
@@ -133,8 +142,17 @@ pub(crate) fn decode(
         Some(frame) => frame.reuse(layer.width, layer.height, picture.kind),
         None => Frame::new(layer.width, layer.height, picture.kind),
     };
-    let Workspace { motion, predictors } = workspace;
+    let Workspace {
+        motion,
+        predictors,
+        next_motion,
+        ..
+    } = workspace;
     motion.reset(columns, rows, 1);
+    next_motion.clear();
+    if !layer.low_delay {
+        next_motion.resize(columns * rows, Colocated::default());
+    }
     for (grid, shift) in predictors.iter_mut().zip([1, 0, 0]) {
         grid.reset(columns, rows, shift);
     }
@@ -155,6 +173,13 @@ pub(crate) fn decode(
             if !mb.intra {
                 let reference = reference.ok_or(Error::MissingReference)?;
                 let vectors = motion_vectors(bits, motion, [2 * x, 2 * y], &mb, picture.f_code)?;
+                if let Some(next) = next_motion.get_mut(address) {
+                    *next = Colocated {
+                        vectors,
+                        four_vectors: mb.four_vectors,
+                        skipped: mb.skipped,
+                    };
+                }
                 predict(
                     &mut frame,
                     reference,
@@ -186,6 +211,130 @@ pub(crate) fn decode(
             }
         }
     }
+    Ok(frame)
+}
+
+pub(crate) fn decode_bidirectional(
+    bits: &mut Bits<'_>,
+    layer: Layer,
+    mut picture: Picture,
+    references: [&Frame; 2],
+    span: [i64; 2],
+    spare: Option<Frame>,
+    workspace: &mut Workspace,
+) -> Result<Frame> {
+    let columns = layer.width.div_ceil(16);
+    let rows = layer.height.div_ceil(16);
+    if workspace.next_motion.len() != columns * rows {
+        return Err(Error::MissingReference);
+    }
+    let frame_for = |spare: Option<Frame>| match spare {
+        Some(frame) => frame.reuse(layer.width, layer.height, PictureKind::B),
+        None => Frame::new(layer.width, layer.height, PictureKind::B),
+    };
+    let mut frame = frame_for(spare);
+    let mut backward = frame_for(workspace.backward_prediction.take());
+    for y in 0..rows {
+        let mut predictors = [[0; 2]; 2];
+        for x in 0..columns {
+            let address = y * columns + x;
+            if layer.resync
+                && address != 0
+                && picture.packet(bits, layer, address, columns * rows)?
+            {
+                predictors = [[0; 2]; 2];
+            }
+            let position = [x, y];
+            let next = workspace.next_motion[address];
+            if next.skipped {
+                predict(
+                    &mut frame,
+                    references[0],
+                    position,
+                    [[0; 2]; 4],
+                    false,
+                    false,
+                );
+                continue;
+            }
+            let direct_skip = bits.flag()?;
+            let (mode, pattern) = if direct_skip {
+                (0, 0)
+            } else {
+                let no_pattern = bits.flag()?;
+                let mut mode = 0;
+                while !bits.flag()? {
+                    mode += 1;
+                    if mode == 4 {
+                        return Err(Error::Invalid("bidirectional macroblock mode"));
+                    }
+                }
+                let pattern = if no_pattern { 0 } else { bits.read(6)? };
+                if mode != 0 && pattern != 0 && bits.flag()? {
+                    let delta = if bits.flag()? { 2 } else { -2 };
+                    picture.quantizer = (picture.quantizer + delta).clamp(1, 31);
+                }
+                (mode, pattern)
+            };
+            let mut vectors = [[[0; 2]; 4]; 2];
+            if mode == 0 {
+                let mut delta = [0; 2];
+                if !direct_skip {
+                    delta = [motion_delta(bits, 0)?, motion_delta(bits, 0)?];
+                }
+                let [offset, distance] = span;
+                for (i, vector) in next.vectors.into_iter().enumerate() {
+                    for axis in 0..2 {
+                        let motion = i64::from(vector[axis]);
+                        vectors[0][i][axis] = (motion * offset / distance) as i32 + delta[axis];
+                        vectors[1][i][axis] = if delta[axis] == 0 {
+                            (motion * (offset - distance) / distance) as i32
+                        } else {
+                            vectors[0][i][axis] - vector[axis]
+                        };
+                    }
+                }
+            } else {
+                for (direction, code) in [picture.f_code, picture.b_code].into_iter().enumerate() {
+                    if mode == 1 || mode == 3 - direction {
+                        let predictor = &mut predictors[direction];
+                        *predictor = [
+                            motion_component(bits, predictor[0], code)?,
+                            motion_component(bits, predictor[1], code)?,
+                        ];
+                        vectors[direction] = [*predictor; 4];
+                    }
+                }
+            }
+            let four = mode == 0 && next.four_vectors;
+            if mode == 2 {
+                predict(&mut frame, references[1], position, vectors[1], four, false);
+            } else {
+                predict(&mut frame, references[0], position, vectors[0], four, false);
+                if mode != 3 {
+                    predict(
+                        &mut backward,
+                        references[1],
+                        position,
+                        vectors[1],
+                        four,
+                        false,
+                    );
+                    frame.planes[0].average::<16>(&backward.planes[0], [16 * x, 16 * y]);
+                    for plane in 1..3 {
+                        frame.planes[plane].average::<8>(&backward.planes[plane], [8 * x, 8 * y]);
+                    }
+                }
+            }
+            for (i, (plane, bx, by)) in block_positions(x, y).into_iter().enumerate() {
+                if pattern & (32 >> i) != 0 {
+                    let samples = block::inter::<false>(bits, picture.quantizer)?;
+                    frame.planes[plane].write::<false>([8 * bx, 8 * by], &samples);
+                }
+            }
+        }
+    }
+    workspace.backward_prediction = Some(backward);
     Ok(frame)
 }
 

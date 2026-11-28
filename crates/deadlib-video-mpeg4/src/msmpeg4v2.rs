@@ -62,6 +62,7 @@ impl MsMpeg4v2Decoder {
         let reference = match header.kind {
             PictureKind::I => None,
             PictureKind::P => Some(self.reference.as_deref().ok_or(Error::MissingReference)?),
+            PictureKind::B => return Err(Error::Unsupported("bidirectional MP42 pictures")),
         };
         let mut frame = match self.spare.take() {
             Some(frame) => frame.reuse(self.width, self.height, header.kind),

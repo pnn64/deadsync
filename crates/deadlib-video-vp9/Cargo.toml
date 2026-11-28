@@ -8,5 +8,3 @@ license = "MIT"
 repository = "https://github.com/pnn64/deadsync"
 keywords = ["vp9", "video", "decoder"]
 categories = ["multimedia::video"]
-
-[workspace]

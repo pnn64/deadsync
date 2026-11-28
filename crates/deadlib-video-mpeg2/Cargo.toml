@@ -8,5 +8,3 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/pnn64/deadsync"
 keywords = ["mpeg1", "mpeg2", "h262", "video", "decoder"]
 categories = ["multimedia::video"]
-
-[workspace]

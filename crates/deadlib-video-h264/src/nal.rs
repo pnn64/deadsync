@@ -77,6 +77,19 @@ pub struct NalUnit<'a> {
     pub rbsp: Cow<'a, [u8]>,
 }
 
+impl NalUnit<'_> {
+    /// Whether an IDR NAL incorrectly declares an inter-coded slice.
+    pub fn is_inter_idr(&self) -> bool {
+        if self.nal_unit_type != NalUnitType::SliceIdr {
+            return false;
+        }
+        let mut bits = crate::bitstream::BitstreamReader::new(&self.rbsp);
+        bits.read_ue()
+            .and_then(|_| bits.read_ue())
+            .is_ok_and(|kind| matches!(kind % 5, 0 | 1 | 3))
+    }
+}
+
 /// Split an Annex B bytestream into NAL units.
 ///
 /// Handles both 3-byte (`00 00 01`) and 4-byte (`00 00 00 01`) start codes
@@ -96,44 +109,29 @@ pub struct NalUnit<'a> {
 /// }
 /// ```
 pub fn parse_annex_b(data: &[u8]) -> Vec<NalUnit<'_>> {
-    let mut nals = Vec::new();
-    // Find first start code
-    let mut i = match find_start_code(data, 0) {
-        Some((pos, _)) => pos,
-        None => return nals,
-    };
+    annex_b_units(data).collect()
+}
 
-    loop {
-        // i points to first byte after start code (the NAL header byte)
-        if i >= data.len() {
-            break;
-        }
-
-        // Find the next start code to determine where this NAL ends
-        let nal_end = match find_start_code(data, i) {
-            Some((pos, sc_start)) => {
-                let end = sc_start;
-                // Strip trailing zeros before the start code
-                let mut e = end;
-                while e > i && data[e - 1] == 0 {
-                    e -= 1;
+/// Iterate through Annex B units without collecting a NAL table.
+pub fn annex_b_units(data: &[u8]) -> impl Iterator<Item = NalUnit<'_>> + '_ {
+    let mut offset = find_start_code(data, 0).map(|(start, _)| start);
+    core::iter::from_fn(move || {
+        while let Some(start) = offset {
+            offset = None;
+            let mut end = data.len();
+            if let Some((next, prefix)) = find_start_code(data, start) {
+                offset = Some(next);
+                end = prefix;
+                while end > start && data[end - 1] == 0 {
+                    end -= 1;
                 }
-                (e, Some(pos))
             }
-            None => (data.len(), None),
-        };
-
-        if let Some(nal) = parse_nal_bytes(&data[i..nal_end.0]) {
-            nals.push(nal);
+            if let Some(nal) = parse_nal_bytes(&data[start..end]) {
+                return Some(nal);
+            }
         }
-
-        match nal_end.1 {
-            Some(pos) => i = pos,
-            None => break,
-        }
-    }
-
-    nals
+        None
+    })
 }
 
 /// Parse a single NAL unit from raw bytes (header byte + payload).
@@ -295,29 +293,25 @@ pub fn parse_avcc_config(data: &[u8]) -> Result<AvccConfig<'_>, &'static str> {
 /// `parse_avcc_config` and fed to the decoder before any sample NALs.
 /// An invalid length size returns no NALs. A truncated NAL ends parsing.
 pub fn parse_avcc(data: &[u8], length_size: usize) -> Vec<NalUnit<'_>> {
-    let mut nals = Vec::new();
-    if length_size != 1 && length_size != 2 && length_size != 4 {
-        return nals;
-    }
-    let mut i = 0;
-    while length_size <= data.len() - i {
-        let len = match length_size {
-            1 => data[i] as usize,
-            2 => u16::from_be_bytes([data[i], data[i + 1]]) as usize,
-            4 => u32::from_be_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]) as usize,
-            _ => unreachable!(),
+    avcc_units(data, length_size).collect()
+}
+
+/// Iterate through length-prefixed NALs without collecting a NAL table.
+pub fn avcc_units(mut data: &[u8], length_size: usize) -> impl Iterator<Item = NalUnit<'_>> + '_ {
+    core::iter::from_fn(move || loop {
+        let (length, tail) = data.split_at_checked(length_size)?;
+        let length = match length {
+            [a] => usize::from(*a),
+            [a, b] => usize::from(u16::from_be_bytes([*a, *b])),
+            [a, b, c, d] => u32::from_be_bytes([*a, *b, *c, *d]) as usize,
+            _ => return None,
         };
-        i += length_size;
-        if len > data.len() - i {
-            // Truncated NAL — stop parsing
-            break;
+        let (nal, next) = tail.split_at_checked(length)?;
+        data = next;
+        if let Some(nal) = parse_nal_bytes(nal) {
+            return Some(nal);
         }
-        if let Some(nal) = parse_nal_bytes(&data[i..i + len]) {
-            nals.push(nal);
-        }
-        i += len;
-    }
-    nals
+    })
 }
 
 /// Find the next start code starting from `offset`.

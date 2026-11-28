@@ -1,7 +1,7 @@
 use deadlib_video_mpeg4::{
     decode_avi, decode_elementary_stream, Error, Frame, MsMpeg4v2Decoder, PictureKind,
 };
-use PictureKind::{I, P};
+use PictureKind::{B, I, P};
 
 const STREAM: &[u8] = include_bytes!("fixtures/progressive.m4v");
 // Hashes of visible YCbCr samples from FFmpeg 7.1 with -idct simple.
@@ -44,6 +44,32 @@ fn decodes_intra_and_predicted_pictures_with_video_packets() {
     let mut frames = Vec::new();
     decode_elementary_stream(STREAM, |frame| frames.push(fingerprint(&frame, [160, 90]))).unwrap();
     assert_eq!(frames, EXPECTED);
+}
+
+#[test]
+fn displays_bidirectional_pictures_before_their_future_reference() {
+    let mut frames = Vec::new();
+    decode_elementary_stream(include_bytes!("fixtures/bframes.m4v"), |frame| {
+        frames.push(fingerprint(&frame, [96, 64]));
+    })
+    .unwrap();
+    assert_eq!(
+        frames,
+        [
+            (I, 0x3f4b16fe8a75d369),
+            (B, 0xe0ab7a5f3667f0b7),
+            (B, 0x723c3595651542e5),
+            (P, 0x73acf1b76a52d41f),
+            (B, 0x8c82f4429a46c234),
+            (B, 0xe758a3b7ddefa33c),
+            (P, 0x7f8162e822de8ab5),
+            (B, 0x2f925f9bf35f58ca),
+            (B, 0xdc722541d62aca0d),
+            (I, 0x65a92e51997dff3),
+            (B, 0x03e84dd147296ace),
+            (P, 0x4361f6ddaafad4c9),
+        ]
+    );
 }
 
 #[test]

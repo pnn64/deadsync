@@ -54,6 +54,14 @@ impl AviDecoder {
         }
         Ok(())
     }
+
+    fn finish(&mut self, mut output: impl FnMut(Arc<Frame>)) {
+        if let Self::Visual(decoder) = self {
+            if let Some(frame) = decoder.finish() {
+                output(frame);
+            }
+        }
+    }
 }
 
 /// Decodes the first supported MPEG-4 Visual or MP42 video track in a RIFF AVI file.
@@ -97,6 +105,9 @@ pub fn decode_avi(bytes: &[u8], mut output: impl FnMut(Arc<Frame>)) -> Result<()
                 }
             }
         }
+    }
+    if let Some((_, mut decoder)) = stream {
+        decoder.finish(emit);
     }
     if !found {
         return Err(Error::NoVideo);

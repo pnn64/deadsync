@@ -1,4 +1,10 @@
 pub use deadlib_render_core::{Yuv420Image, YuvConversion};
+mod avi;
+mod matroska;
+mod mp4;
+mod native;
+mod packet;
+
 use deadlib_image::RgbaImage;
 use log::warn;
 use serde::Deserialize;
@@ -75,17 +81,44 @@ impl Drop for VideoFrame {
 struct DecoderWorker {
     frame_tx: SyncSender<QueuedFrame>,
     recycle_tx: SyncSender<Vec<u8>>,
-    recycle_rx: Receiver<Vec<u8>>,
-    buffer_pool_misses: Arc<AtomicU64>,
+    buffers: FrameBuffers,
     stop: Arc<AtomicBool>,
     child: Arc<Mutex<Option<Child>>>,
+}
+
+struct FrameBuffers {
+    recycled: Receiver<Vec<u8>>,
+    frame_bytes: usize,
+    unallocated: usize,
+    misses: Arc<AtomicU64>,
+}
+
+impl FrameBuffers {
+    fn take(&mut self) -> Vec<u8> {
+        match self.recycled.try_recv() {
+            Ok(mut raw) => {
+                if raw.len() != self.frame_bytes {
+                    raw.resize(self.frame_bytes, 0);
+                }
+                raw
+            }
+            Err(TryRecvError::Empty | TryRecvError::Disconnected) => {
+                if self.unallocated == 0 {
+                    self.misses.fetch_add(1, Ordering::Relaxed);
+                } else {
+                    self.unallocated -= 1;
+                }
+                vec![0; self.frame_bytes]
+            }
+        }
+    }
 }
 
 /// Asynchronous decoder with a bounded frame queue and reusable pixel pool.
 ///
 /// The worker owns decode writes; the game thread uses a nonblocking receive and
 /// the upload queue returns displayed buffers. Both channels live for one
-/// `Player`. Startup preallocates one buffer per queued frame, one in-flight
+/// `Player`. The pool grows on demand to cover the frame queue, one in-flight
 /// upload, and one worker decode. Exhaustion falls back to one allocation and
 /// increments `buffer_pool_misses`; there is no scan or eviction. Buffers are
 /// destroyed with the player and outstanding uploads. Normal game-thread work is
@@ -184,7 +217,27 @@ impl Drop for Player {
 }
 
 pub fn open(path: &Path, looped: bool) -> Result<LoadedVideo, String> {
-    let info = probe(path, looped)?;
+    let native_failure = match native::Video::open(path, looped) {
+        Ok(Some(video)) => {
+            let info = video.info;
+            let (poster_tx, poster_rx) = sync_channel(1);
+            let player = open_native_player(video, path, Some(poster_tx))?;
+            match poster_rx.recv() {
+                Ok(Ok(poster)) => {
+                    return Ok(LoadedVideo {
+                        info,
+                        poster,
+                        player,
+                    });
+                }
+                Ok(Err(error)) => error,
+                Err(_) => "native video decoder stopped before its first picture".into(),
+            }
+        }
+        Ok(None) => "unsupported native video format".into(),
+        Err(error) => error,
+    };
+    let info = probe(path, looped).map_err(|error| format!("{native_failure}. {error}"))?;
     let poster = load_poster_with_info(path, info)?;
     let player = open_player_with_info(path, info)?;
     Ok(LoadedVideo {
@@ -195,47 +248,85 @@ pub fn open(path: &Path, looped: bool) -> Result<LoadedVideo, String> {
 }
 
 pub fn load_poster(path: &Path) -> Result<RgbaImage, String> {
+    if let Some(mut video) = native_video(path, false)
+        && let Ok(poster) = video.poster()
+    {
+        return Ok(poster);
+    }
     load_poster_with_info(path, probe(path, false)?)
 }
 
 pub fn open_player(path: &Path, looped: bool) -> Result<Player, String> {
+    if let Some(video) = native_video(path, looped) {
+        return open_native_player(video, path, None);
+    }
     open_player_with_info(path, probe(path, looped)?)
 }
 
 /// Probe decoded texture dimensions without starting a decoder. Load-time only.
 pub fn dimensions(path: &Path) -> Result<(u32, u32), String> {
-    let info = probe(path, false)?;
+    let info = match native_video(path, false) {
+        Some(video) => video.info,
+        None => probe(path, false)?,
+    };
     Ok((info.width, info.height))
 }
 
+fn native_video(path: &Path, looped: bool) -> Option<native::Video> {
+    match native::Video::open(path, looped) {
+        Ok(video) => video,
+        Err(error) => {
+            log::debug!("Native video index for '{}': {error}", path.display());
+            None
+        }
+    }
+}
+
 fn open_player_with_info(path: &Path, info: Info) -> Result<Player, String> {
+    open_with_worker(info, |worker| {
+        spawn_worker(path.to_path_buf(), info, worker)
+    })
+}
+
+fn open_native_player(
+    video: native::Video,
+    path: &Path,
+    poster: Option<SyncSender<Result<RgbaImage, String>>>,
+) -> Result<Player, String> {
+    let path = path.to_owned();
+    open_with_worker(video.info, |worker| {
+        thread::Builder::new()
+            .name("video-decode".into())
+            .spawn(move || decode_native(video, worker, poster, &path))
+            .map_err(|error| format!("could not start native video decoder: {error}"))
+    })
+}
+
+fn open_with_worker(
+    info: Info,
+    spawn: impl FnOnce(DecoderWorker) -> Result<JoinHandle<()>, String>,
+) -> Result<Player, String> {
     let max_frames = queue_capacity(info);
     let (frame_tx, frame_rx) = sync_channel(max_frames);
     // Besides the bounded queue, one buffer can be in the upload queue and one
     // can be held by the worker while it blocks on a full decoded-frame queue.
     let buffer_count = max_frames.saturating_add(2);
     let (recycle_tx, recycle_rx) = sync_channel(buffer_count);
-    let frame_bytes = yuv420_frame_bytes(info);
-    for _ in 0..buffer_count {
-        recycle_tx
-            .try_send(vec![0; frame_bytes])
-            .expect("new video recycle channel must have room");
-    }
     let stop = Arc::new(AtomicBool::new(false));
     let buffer_pool_misses = Arc::new(AtomicU64::new(0));
     let child = Arc::new(Mutex::new(None));
-    let worker = spawn_worker(
-        path.to_path_buf(),
-        info,
-        DecoderWorker {
-            frame_tx,
-            recycle_tx: recycle_tx.clone(),
-            recycle_rx,
-            buffer_pool_misses: buffer_pool_misses.clone(),
-            stop: stop.clone(),
-            child: child.clone(),
+    let worker = spawn(DecoderWorker {
+        frame_tx,
+        recycle_tx: recycle_tx.clone(),
+        buffers: FrameBuffers {
+            recycled: recycle_rx,
+            frame_bytes: yuv420_frame_bytes(info),
+            unallocated: buffer_count,
+            misses: buffer_pool_misses.clone(),
         },
-    )?;
+        stop: stop.clone(),
+        child: child.clone(),
+    })?;
     Ok(Player {
         info,
         frame_rx: Some(frame_rx),
@@ -248,12 +339,97 @@ fn open_player_with_info(path: &Path, info: Info) -> Result<Player, String> {
     })
 }
 
+fn decode_native(
+    mut video: native::Video,
+    mut worker: DecoderWorker,
+    mut poster: Option<SyncSender<Result<RgbaImage, String>>>,
+    path: &Path,
+) {
+    let info = video.info;
+    let frame_step = 1.0 / info.fps.max(1.0);
+    let mut frame_index = 0u64;
+    loop {
+        if worker.stop.load(Ordering::Relaxed) {
+            return;
+        }
+        let start = frame_index;
+        let result = video.decode_one_pass(
+            || worker.stop.load(Ordering::Relaxed),
+            |frame, slots| {
+                if let Some(sender) = poster.take() {
+                    let image = native::to_rgba(frame, info);
+                    let converted = image.is_ok();
+                    if sender.send(image).is_err() || !converted {
+                        return Ok(false);
+                    }
+                }
+                for _ in 0..slots {
+                    if worker.stop.load(Ordering::Relaxed) {
+                        return Ok(false);
+                    }
+                    let mut raw = worker.buffers.take();
+                    native::pack(frame, info, &mut raw)?;
+                    let image = Yuv420Image::from_raw_with_conversion(
+                        info.width,
+                        info.height,
+                        raw,
+                        info.conversion,
+                    )
+                    .ok_or("native decoder produced an invalid YUV420 frame")?;
+                    let pts_sec = frame_index as f32 * frame_step;
+                    frame_index = frame_index.saturating_add(1);
+                    if let Err(error) = worker.frame_tx.send(QueuedFrame { pts_sec, image }) {
+                        recycle_frame_buffer(&worker.recycle_tx, error.0.image);
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            },
+        );
+        match result {
+            Ok(true) if info.looped && frame_index != start => {}
+            Ok(_) => {
+                if let Some(sender) = poster.take() {
+                    let _ = sender.send(Err("video has no displayed picture".into()));
+                }
+                return;
+            }
+            Err(error) => {
+                if let Some(sender) = poster.take() {
+                    let _ = sender.send(Err(error));
+                } else if !worker.stop.load(Ordering::Relaxed) {
+                    warn!(
+                        "Native video decode failed for '{}': {error}",
+                        path.display()
+                    );
+                    // Start from the same clock so FFmpeg's frame-rate filter
+                    // and loop boundaries remain aligned with queued frames.
+                    match open_ffmpeg_stream(path, info, &worker) {
+                        Ok(stdout) => decode_loop(stdout, info, worker, frame_index),
+                        Err(error) => warn!("Video compatibility decoder unavailable: {error}"),
+                    }
+                }
+                return;
+            }
+        }
+    }
+}
+
 fn spawn_worker(
     path: PathBuf,
     info: Info,
     worker: DecoderWorker,
 ) -> Result<JoinHandle<()>, String> {
-    let mut child = decode_command(&path, info).spawn().map_err(|e| {
+    let stdout = open_ffmpeg_stream(&path, info, &worker)?;
+    Ok(thread::spawn(move || decode_loop(stdout, info, worker, 0)))
+}
+
+fn open_ffmpeg_stream(
+    path: &Path,
+    info: Info,
+    worker: &DecoderWorker,
+) -> Result<ChildStdout, String> {
+    let mut child = decode_command(path, info).spawn().map_err(|e| {
         format!(
             "failed to start ffmpeg decoder for '{}': {e}",
             path.display()
@@ -268,19 +444,17 @@ fn spawn_worker(
     if let Ok(mut slot) = worker.child.lock() {
         *slot = Some(child);
     }
-    Ok(thread::spawn(move || decode_loop(stdout, info, worker)))
+    Ok(stdout)
 }
 
-fn decode_loop(mut stdout: ChildStdout, info: Info, worker: DecoderWorker) {
+fn decode_loop(mut stdout: ChildStdout, info: Info, worker: DecoderWorker, skip_frames: u64) {
     let DecoderWorker {
         frame_tx,
         recycle_tx,
-        recycle_rx,
-        buffer_pool_misses,
+        mut buffers,
         stop,
         child: child_slot,
     } = worker;
-    let frame_bytes = yuv420_frame_bytes(info);
     let frame_step = 1.0 / info.fps.max(1.0);
     let mut frame_index = 0u64;
 
@@ -288,7 +462,7 @@ fn decode_loop(mut stdout: ChildStdout, info: Info, worker: DecoderWorker) {
         if stop.load(Ordering::Relaxed) {
             break;
         }
-        let mut raw = take_frame_buffer(&recycle_rx, frame_bytes, &buffer_pool_misses);
+        let mut raw = buffers.take();
         match read_frame(&mut stdout, &mut raw) {
             Ok(true) => {}
             Ok(false) => break,
@@ -305,6 +479,10 @@ fn decode_loop(mut stdout: ChildStdout, info: Info, worker: DecoderWorker) {
         };
         let pts_sec = frame_index as f32 * frame_step;
         frame_index = frame_index.saturating_add(1);
+        if frame_index <= skip_frames {
+            recycle_frame_buffer(&recycle_tx, image);
+            continue;
+        }
         if let Err(error) = frame_tx.send(QueuedFrame { pts_sec, image }) {
             recycle_frame_buffer(&recycle_tx, error.0.image);
             break;
@@ -316,26 +494,6 @@ fn decode_loop(mut stdout: ChildStdout, info: Info, worker: DecoderWorker) {
     {
         let _ = child.kill();
         let _ = child.wait();
-    }
-}
-
-fn take_frame_buffer(
-    recycle_rx: &Receiver<Vec<u8>>,
-    frame_bytes: usize,
-    buffer_pool_misses: &AtomicU64,
-) -> Vec<u8> {
-    let mut raw = match recycle_rx.try_recv() {
-        Ok(raw) => raw,
-        Err(TryRecvError::Empty | TryRecvError::Disconnected) => {
-            buffer_pool_misses.fetch_add(1, Ordering::Relaxed);
-            return vec![0; frame_bytes];
-        }
-    };
-    if raw.len() == frame_bytes {
-        raw
-    } else {
-        raw.resize(frame_bytes, 0);
-        raw
     }
 }
 
@@ -513,8 +671,7 @@ pub fn runtime_bin_dir() -> Option<PathBuf> {
     std::env::current_dir().ok().map(|dir| dir.join("bin"))
 }
 
-/// True when both `ffmpeg` and `ffprobe` resolve, i.e. video playback
-/// will work.
+/// Whether the optional FFmpeg compatibility tools resolve.
 #[must_use]
 pub fn ffmpeg_available() -> bool {
     tool_is_available("ffmpeg") && tool_is_available("ffprobe")
@@ -721,9 +878,9 @@ struct ProbeFormat<'a> {
 #[cfg(test)]
 mod tests {
     use super::{
-        Info, Player, ProbeOutput, ProbeStream, QueuedFrame, Yuv420Image, YuvConversion,
-        clamp_play_time, decode_command, fallback_tool_path, parse_duration, parse_rate,
-        primary_tool_path, probe_conversion, resolve_tool_path_in_dirs, take_frame_buffer,
+        FrameBuffers, Info, Player, ProbeOutput, ProbeStream, QueuedFrame, Yuv420Image,
+        YuvConversion, clamp_play_time, decode_command, fallback_tool_path, parse_duration,
+        parse_rate, primary_tool_path, probe_conversion, resolve_tool_path_in_dirs,
     };
     use std::{
         fs,
@@ -907,27 +1064,37 @@ mod tests {
     }
 
     #[test]
-    fn take_frame_buffer_reuses_recycled_buffer() {
+    fn frame_pool_reuses_recycled_buffer() {
         let (recycle_tx, recycle_rx) = sync_channel(1);
         recycle_tx.try_send(vec![7, 7, 7, 7]).unwrap();
 
-        let misses = AtomicU64::new(0);
-        let raw = take_frame_buffer(&recycle_rx, 4, &misses);
+        let mut buffers = FrameBuffers {
+            recycled: recycle_rx,
+            frame_bytes: 4,
+            unallocated: 1,
+            misses: Arc::new(AtomicU64::new(0)),
+        };
+        let raw = buffers.take();
 
         assert_eq!(raw, vec![7, 7, 7, 7]);
-        assert_eq!(misses.load(Ordering::Relaxed), 0);
-        assert!(recycle_rx.try_recv().is_err());
+        assert_eq!(buffers.misses.load(Ordering::Relaxed), 0);
+        assert_eq!(buffers.unallocated, 1);
+        assert!(buffers.recycled.try_recv().is_err());
     }
 
     #[test]
-    fn take_frame_buffer_counts_pool_exhaustion() {
+    fn frame_pool_allocates_on_demand_and_counts_exhaustion() {
         let (_recycle_tx, recycle_rx) = sync_channel(1);
-        let misses = AtomicU64::new(0);
-
-        let raw = take_frame_buffer(&recycle_rx, 4, &misses);
-
-        assert_eq!(raw, vec![0; 4]);
-        assert_eq!(misses.load(Ordering::Relaxed), 1);
+        let mut buffers = FrameBuffers {
+            recycled: recycle_rx,
+            frame_bytes: 4,
+            unallocated: 1,
+            misses: Arc::new(AtomicU64::new(0)),
+        };
+        assert_eq!(buffers.take(), vec![0; 4]);
+        assert_eq!(buffers.misses.load(Ordering::Relaxed), 0);
+        assert_eq!(buffers.take(), vec![0; 4]);
+        assert_eq!(buffers.misses.load(Ordering::Relaxed), 1);
     }
 
     #[test]
