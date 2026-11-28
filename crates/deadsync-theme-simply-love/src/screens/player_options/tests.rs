@@ -3672,6 +3672,7 @@ pub(super) mod tests {
                         left,
                         &row.choice_offsets,
                         &row.choice_widths,
+                        [f32::NEG_INFINITY, f32::INFINITY],
                         200.0,
                         row.choice_height,
                         1.0,
@@ -6069,6 +6070,136 @@ pub(super) mod tests {
             super::NavWrap::Clamp,
         ));
         assert_eq!(state.pane().inline_choice_x[P1], target_x);
+    }
+
+    #[test]
+    fn scroll_to_reveal_moves_minimally_and_clamps() {
+        use super::inline_nav::scroll_to_reveal;
+        // Already visible: unchanged.
+        assert_eq!(scroll_to_reveal(0.0, [20.0, 60.0], 100.0, 10.0, 500.0), 0.0);
+        // Past the right edge: scroll just enough to keep the margin.
+        assert_eq!(
+            scroll_to_reveal(0.0, [150.0, 190.0], 100.0, 10.0, 500.0),
+            100.0
+        );
+        // Past the left edge after scrolling right.
+        assert_eq!(
+            scroll_to_reveal(100.0, [40.0, 80.0], 100.0, 10.0, 500.0),
+            30.0
+        );
+        // Clamped at both ends.
+        assert_eq!(scroll_to_reveal(50.0, [0.0, 20.0], 100.0, 10.0, 500.0), 0.0);
+        assert_eq!(
+            scroll_to_reveal(0.0, [580.0, 600.0], 100.0, 10.0, 500.0),
+            500.0
+        );
+    }
+
+    #[test]
+    fn wide_inline_row_scrolls_focused_choice_into_view() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let row_idx = (0..state.pane().row_map.len())
+            .find(|&row_idx| {
+                state.pane().row_map.get_at(row_idx).is_some_and(|row| {
+                    super::row_supports_inline_nav(row) && row.choices.len() >= 3
+                })
+            })
+            .expect("Main pane has an inline row with three or more choices");
+        // Stretch every choice so the row is far wider than its frame.
+        let row_id = state.pane().row_map.id_at(row_idx);
+        {
+            let row = state.pane_mut().row_map.get_mut(row_id).unwrap();
+            let n = row.choices.len();
+            row.choice_widths = vec![400.0; n].into_boxed_slice();
+            row.choice_offsets = (0..n)
+                .map(|i| i as f32 * (400.0 + super::INLINE_CHOICE_SPACING))
+                .collect();
+            row.selected_choice_index[P1] = n - 1;
+        }
+        state.pane_mut().selected_row[P1] = row_idx;
+        state.pane_mut().arcade_row_focus[P1] = false;
+        super::inline_nav::sync_inline_intent_from_row(&mut state, P1, row_idx);
+        let active = state.active;
+        super::inline_nav::retarget_inline_scroll(&mut state, active, true);
+
+        let row = state.pane().row_map.get_at(row_idx).unwrap();
+        let last_choice = row.choices.len() - 1;
+        let max_scroll = super::inline_nav::inline_row_max_scroll(&state, row_idx, row);
+        assert!(max_scroll > 0.0);
+        assert_eq!(
+            super::inline_nav::inline_row_scroll(&state, row_idx),
+            max_scroll
+        );
+        let cursor =
+            super::super::cursor_dest_for_player(&state, &asset_manager, P1).expect("cursor");
+        let view_left = super::inline_nav::inline_choice_left_x_for_row(&state, row_idx);
+        let view_right = super::inline_nav::inline_choice_view_right();
+        assert!(cursor.0 > view_left && cursor.0 < view_right);
+        let row_y = state.pane().row_tweens[row_idx].y();
+        let hints = |state: &super::State| -> Vec<(String, f32)> {
+            super::get_actors(state, &asset_manager)
+                .iter()
+                .filter_map(|actor| match actor {
+                    deadlib_present::actors::Actor::Text {
+                        offset, content, z, ..
+                    } if *z == super::Z_ROW_FOREGROUND
+                        && matches!(content.as_str(), "<" | ">")
+                        && (offset[1] - row_y).abs() < 0.01 =>
+                    {
+                        Some((content.as_str().to_owned(), offset[0]))
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        // Scrolled to the end: only the left edge hides choices.
+        assert_eq!(hints(&state), vec![("<".to_owned(), view_left)]);
+
+        // A middle choice leaves choices hidden on both sides, and the
+        // focused choice stays clear of both hints.
+        {
+            assert!(last_choice >= 2, "the row needs a middle choice");
+            assert!(super::inline_nav::move_inline_focus(
+                &mut state,
+                P1,
+                -1,
+                super::NavWrap::Clamp,
+            ));
+            super::inline_nav::retarget_inline_scroll(&mut state, active, true);
+            let row = state.pane().row_map.get_at(row_idx).unwrap();
+            let scroll = super::inline_nav::inline_row_scroll(&state, row_idx);
+            let left = view_left + row.choice_offsets[last_choice - 1] - scroll;
+            let right = left + row.choice_widths[last_choice - 1];
+            let slot = super::inline_nav::SCROLL_HINT_SLOT;
+            assert!(left >= view_left + slot && right <= view_right - slot);
+            assert_eq!(
+                hints(&state),
+                vec![("<".to_owned(), view_left), (">".to_owned(), view_right)]
+            );
+        }
+
+        // Moving back to the first choice scrolls home again.
+        let focus = super::inline_nav::focused_inline_choice_index(&state, P1, row_idx).unwrap();
+        assert!(super::inline_nav::move_inline_focus(
+            &mut state,
+            P1,
+            -(focus as isize),
+            super::NavWrap::Clamp,
+        ));
+        super::inline_nav::retarget_inline_scroll(&mut state, active, true);
+        assert_eq!(super::inline_nav::inline_row_scroll(&state, row_idx), 0.0);
+        assert_eq!(hints(&state), vec![(">".to_owned(), view_right)]);
+    }
+
+    #[test]
+    fn hidden_edges_follow_the_scroll() {
+        use super::inline_nav::inline_row_hidden_edges;
+        assert_eq!(inline_row_hidden_edges(0.0, 0.0), [false, false]);
+        assert_eq!(inline_row_hidden_edges(0.0, 100.0), [false, true]);
+        assert_eq!(inline_row_hidden_edges(40.0, 100.0), [true, true]);
+        assert_eq!(inline_row_hidden_edges(100.0, 100.0), [true, false]);
     }
 
     fn cycle_test_row(choices: &[&str], initial: [usize; 2]) -> Row {

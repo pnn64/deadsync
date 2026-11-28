@@ -139,6 +139,17 @@ pub(super) fn row_layout_params() -> (f32, f32) {
     (first_row_center_y, frame_h + row_gap)
 }
 
+/// Row frames share the help box's left edge and width (underlay.lua).
+#[inline(always)]
+pub(super) fn row_frame_left() -> f32 {
+    widescale(13.0, 30.666)
+}
+
+#[inline(always)]
+pub(super) fn row_frame_width() -> f32 {
+    widescale(614.0, 792.0)
+}
+
 #[inline(always)]
 pub(super) fn player_option_column_x(player_idx: usize) -> f32 {
     if player_idx == P2 {
@@ -163,6 +174,8 @@ pub(super) fn init_row_tweens(
             to_y: y,
             from_a: alpha,
             to_a: alpha,
+            from_scroll: 0.0,
+            to_scroll: 0.0,
             t: 1.0,
         })
         .collect()
@@ -287,11 +300,9 @@ fn retarget_row_tween(tween: &mut RowTween, y: f32, alpha: f32) {
     if (y - tween.to_y).abs() <= 0.01 && alpha == tween.to_a {
         return;
     }
-    tween.from_y = tween.y();
-    tween.from_a = tween.a();
+    tween.restart_from_current();
     tween.to_y = y;
     tween.to_a = alpha;
-    tween.t = 0.0;
 }
 
 #[inline(always)]
@@ -415,10 +426,8 @@ pub(super) fn cursor_dest_for_player_with_visibility(
     let width_ref = widescale(180.0, 220.0);
 
     // Shared geometry for Music Rate centering (must match get_actors()).
-    let help_box_w = widescale(614.0, 792.0);
-    let help_box_x = widescale(13.0, 30.666);
-    let row_left = help_box_x;
-    let row_width = help_box_w;
+    let row_left = row_frame_left();
+    let row_width = row_frame_width();
     let item_col_left = row_left + TITLE_BG_WIDTH;
     let item_col_w = row_width - TITLE_BG_WIDTH;
     let music_rate_center_x = item_col_left + item_col_w * 0.5;
@@ -478,7 +487,9 @@ pub(super) fn cursor_dest_for_player_with_visibility(
             .min(row.choices.len().saturating_sub(1));
         let draw_w = *row.choice_widths.get(focus_idx)? * choice_scale;
         let [offset_x, offset_y] = inline_choice_position(row, focus_idx);
-        let center_x = choice_inner_left + offset_x + draw_w * 0.5;
+        let center_x = choice_inner_left - inline_row_scroll_target(state, row_idx)
+            + offset_x
+            + draw_w * 0.5;
 
         let mut size_t = draw_w / width_ref;
         if !size_t.is_finite() {
