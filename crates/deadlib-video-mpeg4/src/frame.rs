@@ -91,14 +91,24 @@ impl Plane {
 
     #[cold]
     fn extend_edge(&self, [x, y]: [i32; 2], span: usize, rows: usize, tile: &mut [u8]) {
+        let left = if x < 0 {
+            (x.unsigned_abs() as usize).min(span)
+        } else {
+            0
+        };
+        let start = x.clamp(0, self.width as i32 - 1) as usize;
+        let count = (span - left).min(self.width - start);
         for row in 0..rows {
             let sy = (y + row as i32).clamp(0, self.height as i32 - 1) as usize;
             let src = &self.samples[sy * self.stride..][..self.width];
             let dst = &mut tile[row * span..][..span];
-            for (column, sample) in dst.iter_mut().enumerate() {
-                let sx = (x + column as i32).clamp(0, self.width as i32 - 1) as usize;
-                *sample = src[sx];
+            if count == span {
+                dst.copy_from_slice(&src[start..start + span]);
+                continue;
             }
+            dst[..left].fill(src[0]);
+            dst[left..left + count].copy_from_slice(&src[start..start + count]);
+            dst[left + count..].fill(src[self.width - 1]);
         }
     }
 }
@@ -179,5 +189,37 @@ impl Frame {
     /// Presentation time and its clock frequency as signaled by MPEG-4 Visual.
     pub fn presentation_time(&self) -> Option<(i64, i64)> {
         self.presentation_time
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn edge_extension_matches_individual_sample_clamping() {
+        let mut plane = Plane::new(9, 7, 8);
+        for (i, sample) in plane.samples.iter_mut().enumerate() {
+            *sample = (i * 73 + i / 3) as u8;
+        }
+        for x in -18..=18 {
+            for y in -18..=18 {
+                for (span, rows) in [(8, 8), (9, 8), (16, 17), (17, 17)] {
+                    let mut tile = [0; 289];
+                    plane.extend_edge([x, y], span, rows, &mut tile);
+                    for row in 0..rows {
+                        for column in 0..span {
+                            let sx = (x + column as i32).clamp(0, 8) as usize;
+                            let sy = (y + row as i32).clamp(0, 6) as usize;
+                            assert_eq!(
+                                tile[row * span + column],
+                                plane.samples[sy * plane.stride + sx]
+                            );
+                        }
+                    }
+                    assert!(tile[span * rows..].iter().all(|&v| v == 0));
+                }
+            }
+        }
     }
 }
