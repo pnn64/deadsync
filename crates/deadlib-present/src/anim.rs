@@ -239,13 +239,13 @@ pub fn smooth(dur: f32) -> SegmentBuilder {
     SegmentBuilder::new(Ease::Smooth, dur)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub enum EffectClock {
     Time,
     Beat,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub enum EffectMode {
     None,
     DiffuseBlink,

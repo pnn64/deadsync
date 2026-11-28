@@ -131,3 +131,64 @@ impl fmt::Debug for SongLuaSplineCoefficientView<'_> {
         f.debug_list().entries(self.iter()).finish()
     }
 }
+
+/// Persisted as the dense point list. Paged curves decode dense: the values
+/// are the same, the page sharing across a layer is not kept.
+impl bincode::Encode for SongLuaSplineCoefficients {
+    fn encode<E: bincode::enc::Encoder>(
+        &self,
+        encoder: &mut E,
+    ) -> Result<(), bincode::error::EncodeError> {
+        self.iter()
+            .collect::<Vec<SongLuaSplinePointCoefficients>>()
+            .encode(encoder)
+    }
+}
+
+impl<Context> bincode::Decode<Context> for SongLuaSplineCoefficients {
+    fn decode<D: bincode::de::Decoder<Context = Context>>(
+        decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        Vec::<SongLuaSplinePointCoefficients>::decode(decoder).map(Self::from)
+    }
+}
+
+impl<'de, Context> bincode::BorrowDecode<'de, Context> for SongLuaSplineCoefficients {
+    fn borrow_decode<D: bincode::de::BorrowDecoder<'de, Context = Context>>(
+        decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        Vec::<SongLuaSplinePointCoefficients>::borrow_decode(decoder).map(Self::from)
+    }
+}
+
+#[cfg(test)]
+mod codec_tests {
+    use super::*;
+
+    #[test]
+    fn paged_and_dense_curves_survive_the_bake_codec() {
+        let point = |seed: f32| [[seed, 1.0, 2.0, 3.0], [seed + 0.5; 4], [-seed; 4]];
+        let points: Vec<_> = (0..SONG_LUA_SPLINE_PAGE_POINTS + 3)
+            .map(|index| point(index as f32))
+            .collect();
+        let pages: Vec<[SongLuaSplineAxisPage; 3]> = points
+            .chunks(SONG_LUA_SPLINE_PAGE_POINTS)
+            .map(|page| std::array::from_fn(|axis| page.iter().map(|point| point[axis]).collect()))
+            .collect();
+        let paged = SongLuaSplineCoefficients::Paged(Arc::new(SongLuaSplinePages::new(
+            points.len(),
+            pages.into(),
+        )));
+        let dense = SongLuaSplineCoefficients::from(points);
+        assert_eq!(paged, dense);
+
+        let config = bincode::config::standard();
+        for curve in [paged, dense] {
+            let bytes = bincode::encode_to_vec(&curve, config).unwrap();
+            let (decoded, used): (SongLuaSplineCoefficients, usize) =
+                bincode::decode_from_slice(&bytes, config).unwrap();
+            assert_eq!(used, bytes.len());
+            assert_eq!(decoded, curve);
+        }
+    }
+}

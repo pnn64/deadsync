@@ -341,6 +341,8 @@ pub struct MeshVertex {
     serde::Deserialize,
     bytemuck::Pod,
     bytemuck::Zeroable,
+    bincode::Encode,
+    bincode::Decode,
 )]
 pub struct TexturedMeshVertex {
     /// Object-space normal; w selects texgen (bit 0 primary, bit 1 additive).
@@ -509,7 +511,7 @@ pub struct SpriteInstanceRaw {
 }
 
 /// Which winding to discard. Encoded identically in every mesh shader.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
 #[repr(u8)]
 pub enum CullMode {
     #[default]

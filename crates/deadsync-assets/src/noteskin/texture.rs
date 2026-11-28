@@ -212,6 +212,31 @@ pub struct SpriteSlot {
     pub model_auto_rot_z_keys: Arc<[ModelAutoRotKey]>,
 }
 
+/// A slot owns texture registrations and a process-unique identity, so it has
+/// no persisted form yet. The song-Lua bake cache requires a codec for every
+/// overlay; failing here makes it skip bakes that hold noteskin actors instead
+/// of storing slots that could not be drawn after a reload.
+const SLOT_NOT_PERSISTABLE: &str = "noteskin actors cannot be persisted";
+
+impl bincode::Encode for SpriteSlot {
+    fn encode<E: bincode::enc::Encoder>(
+        &self,
+        _encoder: &mut E,
+    ) -> Result<(), bincode::error::EncodeError> {
+        Err(bincode::error::EncodeError::Other(SLOT_NOT_PERSISTABLE))
+    }
+}
+
+impl<Context> bincode::Decode<Context> for SpriteSlot {
+    fn decode<D: bincode::de::Decoder<Context = Context>>(
+        _decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        Err(bincode::error::DecodeError::Other(SLOT_NOT_PERSISTABLE))
+    }
+}
+
+bincode::impl_borrow_decode!(SpriteSlot);
+
 impl Clone for SpriteSlot {
     fn clone(&self) -> Self {
         Self {

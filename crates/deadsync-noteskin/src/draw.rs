@@ -37,7 +37,7 @@ pub struct ModelMesh {
     pub material: Option<ModelMaterial>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct ModelMaterial {
     pub ambient: [f32; 4],
     pub diffuse: [f32; 4],

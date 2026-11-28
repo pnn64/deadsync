@@ -210,12 +210,26 @@ pub fn prepare_song_lua(
         }
     };
     context.bake_progress = bake_progress.clone().filter(|_| !live);
-    let prepared = deadsync_song_lua::playback::prepare_song_lua_with_runtime_fallback(
-        song,
-        &context,
-        compile_song_lua,
-        compile_song_lua_layers,
-    );
+    let prepared = match deadsync_assets::song_lua::song_lua_bake_cache() {
+        // The cache itself bypasses runtime mode and reports what it did.
+        Some(cache) => {
+            deadsync_song_lua::bake_cache::prepare_song_lua_cached(
+                cache,
+                song,
+                &context,
+                &[],
+                compile_song_lua,
+                compile_song_lua_layers,
+            )
+            .0
+        }
+        None => deadsync_song_lua::playback::prepare_song_lua_with_runtime_fallback(
+            song,
+            &context,
+            compile_song_lua,
+            compile_song_lua_layers,
+        ),
+    };
     if !live && let Some(progress) = bake_progress {
         progress.complete();
     }

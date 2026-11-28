@@ -261,6 +261,7 @@ fn dispatch(call: &mut HostCall<'_>) -> Result<(), Error> {
                 {
                     Ok(bytes.clone())
                 } else {
+                    crate::bake_inputs::file(&state.path);
                     std::fs::read(&state.path)
                 };
                 match loaded {

@@ -6,6 +6,7 @@ use crate::{
 use std::{
     collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
+    path::{Path, PathBuf},
 };
 
 fn decode_string_in_place<Context, D>(
@@ -592,3 +593,29 @@ where
         Ok(set)
     }
 }
+
+// Paths use the upstream bincode encoding: a UTF-8 string. A path that is not
+// valid Unicode cannot be persisted and fails the encode instead of being
+// silently altered.
+impl Encode for Path {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
+        match self.to_str() {
+            Some(text) => text.encode(encoder),
+            None => Err(EncodeError::Other("path contains invalid UTF-8 characters")),
+        }
+    }
+}
+
+impl Encode for PathBuf {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
+        self.as_path().encode(encoder)
+    }
+}
+
+impl<Context> Decode<Context> for PathBuf {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
+        Ok(String::decode(decoder)?.into())
+    }
+}
+
+crate::impl_borrow_decode!(PathBuf);

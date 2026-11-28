@@ -36,6 +36,7 @@ fn extension_is(path: &Path, extension: &str) -> bool {
 }
 
 pub(super) fn load(path: &Path) -> Result<String, String> {
+    crate::bake_inputs::file(path);
     let input = fs::read_to_string(path).map_err(|error| error.to_string())?;
     let root = read_tree(&input).map_err(|error| format!("{}: {error}", path.display()))?;
     let mut output = String::from("return ");
@@ -206,6 +207,7 @@ fn resolve(directory: &Path, file: &str) -> Result<PathBuf, String> {
 }
 
 fn sprite(output: &mut String, path: &Path) -> Result<(), String> {
+    crate::bake_inputs::file(path);
     let input = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
     let mut in_sprite = false;
     for line in input.lines().map(str::trim) {

@@ -101,6 +101,9 @@ fn random_callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         .function_data::<RandomState>()
         .expect("random binding")
         .clone();
+    // The stream starts from a wall-time seed, so a draw can never be
+    // reproduced for a later session. Seeding alone decides nothing.
+    crate::bake_inputs::volatile("a script drew from the random stream");
     let value = match call.arguments().len() {
         0 => state.lock().real(),
         1 | 2 => {

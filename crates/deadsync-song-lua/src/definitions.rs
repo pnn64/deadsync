@@ -315,6 +315,7 @@ fn resolve_path(path: &Path, optional: bool) -> Result<Option<PathBuf>, String> 
         if !resolved.extension().is_some_and(|ext| ext == "redir") {
             return Ok(Some(resolved));
         }
+        crate::bake_inputs::file(&resolved);
         let contents = fs::read_to_string(&resolved).map_err(|error| error.to_string())?;
         let target = contents.lines().next().unwrap_or_default();
         if target.is_empty() {

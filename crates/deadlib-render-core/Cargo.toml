@@ -12,6 +12,7 @@ name = "frame_compare"
 required-features = ["test-util"]
 
 [dependencies]
+bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 bytemuck = { version = "1.25.2", features = ["derive"] }
 glam = "0.34.3"
 rustc-hash = "2.1.3"

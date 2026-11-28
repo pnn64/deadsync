@@ -11404,6 +11404,7 @@ pub fn init_paths(dirs: &AppDirs) -> Result<(), &'static str> {
     }
     deadsync_config::runtime::init_paths(dirs.config_path(), dirs.judgment_palettes_path())?;
     deadsync_assets::init_paths(dirs.asset_paths(cwd.as_deref()))?;
+    deadsync_assets::song_lua::init_song_lua_bake_cache(dirs.song_lua_bake_cache_dir());
     deadsync_profile::app_runtime::init_paths(
         dirs.profiles_root(),
         dirs.default_player_options_path(),

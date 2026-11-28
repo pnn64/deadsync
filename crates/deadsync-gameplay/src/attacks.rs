@@ -1000,7 +1000,7 @@ pub enum SongLuaColumnTransformTarget {
 }
 
 /// Immutable snapshot of an enabled column handler.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaSplineData {
     /// Position mode replaces ArrowEffects. Offset mode adds to it.
     pub absolute: bool,
@@ -1256,7 +1256,7 @@ fn solve_song_lua_spline_into(
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaColumnSplineFrame {
     pub second: f32,
     /// Disabled handlers have no curve.
@@ -1268,7 +1268,7 @@ pub struct SongLuaColumnSplineFrame {
 /// Immutable curves shared with the notefield. Baked tracks retain changed
 /// reference frames; Runtime publishes its latest frame per lane.
 /// A query does one binary search per lane, then constant-time note sampling.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaColumnSplineTrack {
     pub player: usize,
     pub column: usize,

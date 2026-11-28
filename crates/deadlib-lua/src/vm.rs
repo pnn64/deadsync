@@ -681,6 +681,9 @@ const _: () = assert!(std::mem::size_of::<Frame>() == 72);
 #[derive(Debug)]
 pub struct Vm {
     lua51_table_order: bool,
+    // Called before each io/os library function runs; see
+    // `set_process_library_observer`.
+    process_library_observer: Option<fn()>,
     registers: Buffer<Value>,
     programs: Arena<LoadedProgram>,
     functions: Arena<Closure>,
@@ -823,6 +826,7 @@ impl Vm {
         builtin_envs.resize(CONT_RAW as usize, None);
         let mut vm = Self {
             lua51_table_order: false,
+            process_library_observer: None,
             registers: Buffer::new_in(memory.clone()),
             programs: Arena::new_in(memory.clone()),
             functions: Arena::identified_in(memory.clone()),
@@ -1003,6 +1007,16 @@ impl Vm {
         self.open_package(loaded)?;
         self.reset_gc_debt();
         Ok(())
+    }
+
+    /// Observe every standard-library operation that reads or changes state
+    /// outside this VM: the `io` and `os` libraries (files, the environment,
+    /// the clock, other processes) and source files read by the native
+    /// `loadfile`, `dofile` and `require`. The observer runs before each such
+    /// operation and cannot alter it. An embedder that caches script results
+    /// uses it to learn that a result depends on that state.
+    pub fn set_process_library_observer(&mut self, observer: Option<fn()>) {
+        self.process_library_observer = observer;
     }
 
     /// Set an optional instruction limit for each call to [`Self::execute`].

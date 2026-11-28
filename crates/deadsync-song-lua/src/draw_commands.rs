@@ -5,7 +5,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use std::{fmt, hash::Hash, sync::Arc};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, bincode::Encode, bincode::Decode)]
 pub enum DrawSource {
     Overlay(usize),
     Player(usize),
@@ -15,7 +15,7 @@ pub enum DrawSource {
     ScreenLayer(usize),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bincode::Encode, bincode::Decode)]
 pub enum DrawOp {
     Begin {
         capture: usize,
@@ -234,7 +234,34 @@ impl RemappedDrawPrograms {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+/// Persisted as the expanded operation list. Decoding rebuilds the shared
+/// program, so poses shared between invocations decode as separate values.
+impl bincode::Encode for DrawOps {
+    fn encode<E: bincode::enc::Encoder>(
+        &self,
+        encoder: &mut E,
+    ) -> Result<(), bincode::error::EncodeError> {
+        self.iter().collect::<Vec<DrawOp>>().encode(encoder)
+    }
+}
+
+impl<Context> bincode::Decode<Context> for DrawOps {
+    fn decode<D: bincode::de::Decoder<Context = Context>>(
+        decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        Vec::<DrawOp>::decode(decoder).map(Self::from)
+    }
+}
+
+impl<'de, Context> bincode::BorrowDecode<'de, Context> for DrawOps {
+    fn borrow_decode<D: bincode::de::BorrowDecoder<'de, Context = Context>>(
+        decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        Vec::<DrawOp>::borrow_decode(decoder).map(Self::from)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct DrawFrame {
     pub second: f32,
     /// A command/update submission, played once before ordinary scene drawing.
@@ -677,6 +704,37 @@ fn convert(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draw_ops_survive_the_bake_codec() {
+        let draw = |x| DrawOp::Draw {
+            source: DrawSource::Overlay(3),
+            state: SongLuaOverlayState {
+                x,
+                ..Default::default()
+            },
+            parents: Arc::from([SongLuaOverlayState::default()]),
+            inherited_diffuse: [1.0, 0.5, 0.25, 1.0],
+            inherited_glow: [0.0; 4],
+            camera: Some(SongLuaOverlayState::default()),
+            vertices: None,
+        };
+        let ops = DrawOps::from(vec![
+            DrawOp::Begin {
+                capture: 1,
+                preserve: true,
+            },
+            draw(12.0),
+            draw(42.0),
+            DrawOp::Finish { capture: 1 },
+        ]);
+        let config = bincode::config::standard();
+        let bytes = bincode::encode_to_vec(&ops, config).unwrap();
+        let (decoded, used): (DrawOps, usize) = bincode::decode_from_slice(&bytes, config).unwrap();
+        assert_eq!(used, bytes.len());
+        assert_eq!(decoded, ops);
+        assert_eq!(decoded.len(), 4);
+    }
 
     #[test]
     fn shared_program_keeps_each_invocation_pose_and_target_boundary() {

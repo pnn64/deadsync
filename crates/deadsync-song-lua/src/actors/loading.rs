@@ -238,6 +238,7 @@ fn resolve(song_dir: &Path, current: Option<&Path>, path: &str) -> Result<PathBu
         {
             return Ok(resolved);
         }
+        crate::bake_inputs::file(&resolved);
         let contents = fs::read_to_string(&resolved).map_err(|error| error.to_string())?;
         let target = contents.lines().next().unwrap_or_default().trim();
         if target.is_empty() {

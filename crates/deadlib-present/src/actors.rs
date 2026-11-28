@@ -177,7 +177,7 @@ pub enum Background {
     Texture(&'static str),
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub enum TextAlign {
     #[default]
     Left,
@@ -1108,7 +1108,7 @@ impl RetainedActorFrame {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct TextAttribute {
     pub start: usize,
     pub length: usize,
