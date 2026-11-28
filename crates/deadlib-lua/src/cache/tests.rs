@@ -125,6 +125,8 @@ fn source_cache_round_trips_complete_metadata_and_number_bits() {
             constants.push(Constant::Number(f64::from_bits(bits)));
             p.original_constants=constants.into_boxed_slice();
         }
+        // Freeze the edited prototypes and rebuild their derived binding ranges.
+        let program = Program::try_from_data(data.clone()).unwrap();
         let bytes=encode(&program,source,b"@cache-source.lua");
         let loaded=decode(&bytes,source,b"@cache-source.lua").unwrap();
         assert_eq!(bytes,encode(&loaded,source,b"@cache-source.lua"));

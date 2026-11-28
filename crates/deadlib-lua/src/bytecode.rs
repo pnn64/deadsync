@@ -478,6 +478,8 @@ pub(crate) struct Prototype {
     storage: PrototypeStorage,
     pub defined: [u32; 2],
     line_bias: u32,
+    /// Position in a loaded program's contiguous constant buffer.
+    bound_constant_range: std::ops::Range<usize>,
 }
 
 impl std::ops::Deref for Prototype {
@@ -528,6 +530,7 @@ impl Prototype {
             storage: PrototypeStorage::Owned(body),
             defined,
             line_bias: 0,
+            bound_constant_range: 0..0,
         }
     }
 
@@ -597,6 +600,11 @@ impl Prototype {
         }
     }
 
+    #[inline]
+    pub(crate) fn bound_constant_range(&self) -> std::ops::Range<usize> {
+        self.bound_constant_range.clone()
+    }
+
     pub(crate) fn constants(&self) -> &[Constant] {
         match &self.storage {
             PrototypeStorage::Substituted {
@@ -652,6 +660,7 @@ impl Prototype {
             line_bias: self
                 .line_bias
                 .wrapping_add(line.wrapping_sub(self.defined[1])),
+            bound_constant_range: 0..0,
         }
     }
 
@@ -683,6 +692,7 @@ impl Prototype {
             },
             defined: [self.defined[0].wrapping_add(delta), end],
             line_bias: self.line_bias.wrapping_add(delta),
+            bound_constant_range: 0..0,
         }
     }
 
@@ -701,6 +711,7 @@ pub(crate) struct ProgramData {
     pub entry: u32,
     pub name: Box<[u8]>,
     pub sources: Box<[Box<[u8]>]>,
+    pub bound_constant_count: usize,
     // A VM retains the shared code without holding a host handle.
     host_owners: AtomicUsize,
 }
@@ -762,16 +773,34 @@ impl ProgramData {
     }
 
     pub(crate) fn new(
-        prototypes: Box<[Prototype]>,
+        mut prototypes: Box<[Prototype]>,
         entry: u32,
         name: Box<[u8]>,
         sources: Box<[Box<[u8]>]>,
     ) -> Self {
+        let mut bound_end = 0usize;
+        for index in 0..prototypes.len() {
+            let prototype = &prototypes[index];
+            let range = match prototype.shared_owner() {
+                Some(owner) if (owner as usize) < index => {
+                    prototypes[owner as usize].bound_constant_range()
+                }
+                // A forward owner is rejected by verification before the program can load.
+                Some(owner) if owner as usize != index => 0..0,
+                _ => {
+                    let start = bound_end;
+                    bound_end = bound_end.saturating_add(prototype.constants().len());
+                    start..bound_end
+                }
+            };
+            prototypes[index].bound_constant_range = range;
+        }
         Self {
             prototypes,
             entry,
             name,
             sources,
+            bound_constant_count: bound_end,
             host_owners: AtomicUsize::new(1),
         }
     }
@@ -995,6 +1024,7 @@ impl Program {
                 storage,
                 defined: p.defined,
                 line_bias: p.line_bias,
+                bound_constant_range: 0..0,
             });
         }
         let program = Self::try_new(prototypes, base.entry, &base.name)?;

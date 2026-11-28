@@ -398,11 +398,7 @@ fn jobs_bytes(substitutions: &[strings::Substitution]) -> usize {
 pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
     let native_roots = p.parser_prototypes.capacity() * size_of::<ParserPrototypeId>()
         + p.debug_strings.capacity() * size_of::<StringId>();
-    let mut bytes = p.constants.capacity() * size_of::<Buffer<Value>>()
-        + p.constants
-            .iter()
-            .map(|k| k.capacity() * size_of::<Value>())
-            .sum::<usize>();
+    let mut bytes = p.constants.capacity() * size_of::<Value>();
     bytes += p.upvalue_names.capacity() * size_of::<Buffer<StringId>>()
         + p.upvalue_names
             .iter()
@@ -1622,9 +1618,7 @@ impl Vm {
                 Trace::CellAgain(i) => work.extend(edge(self.cell_value(i))),
                 Trace::Program(i) => {
                     if self.programs.mark_slot(i) {
-                        for k in &self.programs[i].constants {
-                            work.extend(k.iter().copied().filter_map(edge));
-                        }
+                        work.extend(self.programs[i].constants.iter().copied().filter_map(edge));
                         for names in &self.programs[i].upvalue_names {
                             work.extend(names.iter().map(|&name| Trace::String(name)));
                         }

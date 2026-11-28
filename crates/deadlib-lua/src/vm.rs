@@ -496,7 +496,7 @@ impl StaticStrings {
 struct LoadedProgram {
     data: crate::memory::Shared<ProgramData>,
     _budget: crate::memory::Reservation,
-    constants: Buffer<Buffer<Value>>,
+    constants: Buffer<Value>,
     upvalue_names: Buffer<Buffer<StringId>>,
     debug_strings: Buffer<StringId>,
     // Non-owning prototype map. Each live closure traces only its own subtree.
@@ -507,10 +507,7 @@ struct LoadedProgram {
 impl LoadedProgram {
     #[inline]
     fn bound_constants(&self, prototype: usize) -> &[Value] {
-        let owner = self.data.prototypes[prototype]
-            .shared_owner()
-            .map_or(prototype, |owner| owner as usize);
-        &self.constants[owner]
+        &self.constants[self.data.prototypes[prototype].bound_constant_range()]
     }
 }
 
@@ -1527,13 +1524,12 @@ impl Vm {
     fn bind_new_program(&mut self, program: &Program) -> Result<FunctionId, Error> {
         let memory = self.programs.memory().clone();
         let budget = memory.reserve_external(|| program.heap_bytes())?;
-        let (mut constants, mut reused) =
-            if let Some(buffers) = self.compile_spare.bindings.take(&program.data, &memory) {
-                (buffers.constants, Some(buffers.values))
-            } else {
-                (Buffer::new_in(memory.clone()), None)
-            };
-        constants.try_reserve_exact(program.data.prototypes.len())?;
+        let mut constants = self
+            .compile_spare
+            .bindings
+            .take(&program.data, &memory)
+            .unwrap_or_else(|| Buffer::new_in(memory.clone()));
+        constants.try_reserve_exact(program.data.bound_constant_count)?;
         // An empty name table represents a program without any named captures.
         let mut upvalue_names = Buffer::new_in(memory.clone());
         let has_names = program
@@ -1545,16 +1541,12 @@ impl Vm {
             upvalue_names.try_reserve_exact(program.data.prototypes.len())?;
         }
         for (index, prototype) in program.data.prototypes.iter().enumerate() {
-            let mut values = reused
-                .take()
-                .unwrap_or_else(|| Buffer::new_in(memory.clone()));
             if !prototype
                 .shared_owner()
                 .is_some_and(|owner| owner as usize != index)
             {
-                values.try_reserve_exact(prototype.constants().len())?;
                 for k in prototype.constants() {
-                    values.push(match k {
+                    constants.push(match k {
                         Constant::Nil => Value::Nil,
                         Constant::Boolean(v) => Value::Boolean(*v),
                         Constant::Number(v) => Value::Number(*v),
@@ -1566,7 +1558,6 @@ impl Vm {
                     });
                 }
             }
-            constants.push(values);
             if has_names {
                 let defined_names = prototype.debug.upvalue_names();
                 let mut names = Buffer::new_in(memory.clone());
@@ -1580,6 +1571,7 @@ impl Vm {
                 upvalue_names.push(names);
             }
         }
+        debug_assert_eq!(constants.len(), program.data.bound_constant_count);
         let loaded = LoadedProgram {
             data: program.data.clone(),
             _budget: budget,
@@ -2228,6 +2220,9 @@ impl Vm {
             }
             let data = held.as_ref().expect("executing program");
             let prototype = &data.prototypes[proto_index];
+            // The range is fixed for the activation. Borrow the buffer only
+            // when reading a value so disjoint VM arenas can still grow.
+            let constant_range = prototype.bound_constant_range();
             let mut pc = frame.pc();
             let base = frame.base;
             if pc == 0
@@ -2262,7 +2257,7 @@ impl Vm {
                     let can_change_field_liveness = self.gc_can_change_field_liveness();
                     let mut cx = simple::Context {
                         registers: &mut self.registers,
-                        constants: self.programs[program_index].bound_constants(proto_index),
+                        constants: &self.programs[program_index].constants[constant_range.clone()],
                         field_hints: &mut field_hints,
                         tables: &mut self.tables,
                         strings: &self.strings.bytes,
@@ -2430,7 +2425,7 @@ impl Vm {
                         // hook can already have replaced them before execution.
                         if i.b == 0 {
                             self.registers[a] =
-                                self.programs[program_index].bound_constants(proto_index)[c];
+                                self.programs[program_index].constants[constant_range.clone()][c];
                         }
                     }
                     Op::Move if i.c == OPEN => {
@@ -2451,11 +2446,11 @@ impl Vm {
                     }
                     Op::GetGlobal => self.get_table(
                         Value::Table(env),
-                        self.programs[program_index].bound_constants(proto_index)[c],
+                        self.programs[program_index].constants[constant_range.clone()][c],
                         a,
                     )?,
                     Op::SetGlobal => {
-                        let key = self.programs[program_index].bound_constants(proto_index)[c];
+                        let key = self.programs[program_index].constants[constant_range.clone()][c];
                         let value = self.registers[a];
                         if !matches!(key, Value::String(name)
                             if self.tables[slot_index(env.0)].set_existing_string_scalar(name, value))
@@ -2641,7 +2636,7 @@ impl Vm {
                     }
                     Op::GetTable => {
                         let target = self.registers[b];
-                        let key = self.operand_value(base, program_index, proto_index, i.c);
+                        let key = self.operand_value(base, program_index, &constant_range, i.c);
                         if let Value::Table(id) = target
                             && self.tables[slot_index(id.0)].metatable().is_none()
                         {
@@ -2652,9 +2647,13 @@ impl Vm {
                     }
                     Op::SetTable => {
                         let target = self.registers[a];
-                        let key =
-                            self.operand_value(base, program_index, proto_index, u32::from(i.b));
-                        let value = self.operand_value(base, program_index, proto_index, i.c);
+                        let key = self.operand_value(
+                            base,
+                            program_index,
+                            &constant_range,
+                            u32::from(i.b),
+                        );
+                        let value = self.operand_value(base, program_index, &constant_range, i.c);
                         if let Value::Table(id) = target
                             && self.tables[slot_index(id.0)].metatable().is_none()
                         {
@@ -2667,9 +2666,13 @@ impl Vm {
                         }
                     }
                     Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow => {
-                        let left =
-                            self.operand_value(base, program_index, proto_index, u32::from(i.b));
-                        let right = self.operand_value(base, program_index, proto_index, i.c);
+                        let left = self.operand_value(
+                            base,
+                            program_index,
+                            &constant_range,
+                            u32::from(i.b),
+                        );
+                        let right = self.operand_value(base, program_index, &constant_range, i.c);
                         if let (Value::Number(x), Value::Number(y)) = (left, right) {
                             self.registers[a] = Value::Number(Self::number_op(i.op, x, y));
                         } else {
@@ -2677,9 +2680,13 @@ impl Vm {
                         }
                     }
                     Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge => {
-                        let left =
-                            self.operand_value(base, program_index, proto_index, u32::from(i.b));
-                        let right = self.operand_value(base, program_index, proto_index, i.c);
+                        let left = self.operand_value(
+                            base,
+                            program_index,
+                            &constant_range,
+                            u32::from(i.b),
+                        );
+                        let right = self.operand_value(base, program_index, &constant_range, i.c);
                         if let (Value::Number(x), Value::Number(y)) = (left, right) {
                             self.registers[a] = Value::Boolean(match i.op {
                                 Op::Eq => x == y,
@@ -2876,7 +2883,7 @@ impl Vm {
                             && self.try_debug_name_field(
                                 a,
                                 frame_index,
-                                self.programs[program_index].bound_constants(proto_index)
+                                self.programs[program_index].constants[constant_range.clone()]
                                     [(get.c - crate::bytecode::RK) as usize],
                             )
                         {
@@ -3165,11 +3172,17 @@ impl Vm {
     }
 
     #[inline]
-    fn operand_value(&self, base: usize, program: usize, prototype: usize, operand: u32) -> Value {
+    fn operand_value(
+        &self,
+        base: usize,
+        program: usize,
+        constant_range: &std::ops::Range<usize>,
+        operand: u32,
+    ) -> Value {
         if operand < crate::bytecode::RK {
             self.registers[base + operand as usize]
         } else {
-            self.programs[program].bound_constants(prototype)
+            self.programs[program].constants[constant_range.clone()]
                 [(operand - crate::bytecode::RK) as usize]
         }
     }

@@ -207,15 +207,11 @@ impl Vm {
                     .fold(program.debug_strings.len(), |count, names| {
                         count.saturating_add(names.len())
                     });
-                let upper = program.constants.iter().fold(names, |count, constants| {
-                    count.saturating_add(constants.len())
-                });
+                let upper = names.saturating_add(program.constants.len());
                 if upper.saturating_sub(1) <= work.capacity() - work.len() {
                     return Ok(());
                 }
-                program.constants.iter().fold(names, |count, constants| {
-                    count.saturating_add(constants.iter().copied().filter_map(edge).count())
-                })
+                names.saturating_add(program.constants.iter().copied().filter_map(edge).count())
             }
             // Remaining items queue at most one edge, reusing their own slot.
             _ => return Ok(()),
