@@ -119,3 +119,7 @@ See the [results and reproduction instructions](results/windows-x86_64-20261128-
 The [second ITG3 pass](results/windows-x86_64-20261128-itg3-pass2/README.md)
 starts from the first pass's optimized decoder and measures signed inverse
 quantization, equal-quantizer AC prediction and power-of-two motion wrapping.
+
+The [third ITG3 pass](results/windows-x86_64-20261128-itg3-pass3/README.md)
+measures fused motion codes, row-based edge extension and exact reciprocal
+DC prediction, and records the rejected inverse-transform candidate.

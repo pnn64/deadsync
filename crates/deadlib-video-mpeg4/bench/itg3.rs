@@ -183,7 +183,10 @@ fn main() {
         0
     );
     #[cfg(itg_kernels)]
-    if mode == "quant" || mode == "motion" {
+    if matches!(
+        mode.as_str(),
+        "quant" | "motion" | "edge" | "transform" | "dcpredict"
+    ) {
         let data = std::fs::read(&args[4]).unwrap();
         macro_rules! replay {
             ($record:ident, $batch:ident, $exact:ident, $reps:expr) => {{
@@ -211,10 +214,23 @@ fn main() {
                 }
             }};
         }
-        if mode == "quant" {
-            replay!(PerfQuant, perf_quant_batch, perf_quant_exact, 256);
-        } else {
-            replay!(PerfMotion, perf_motion_batch, perf_motion_exact, 128);
+        match mode.as_str() {
+            "quant" => replay!(PerfQuant, perf_quant_batch, perf_quant_exact, 256),
+            "motion" => replay!(PerfMotion, perf_motion_batch, perf_motion_exact, 128),
+            "edge" => replay!(PerfEdge, perf_edge_batch, perf_edge_exact, 256),
+            "transform" => replay!(
+                PerfTransform,
+                perf_transform_batch,
+                perf_transform_exact,
+                128
+            ),
+            "dcpredict" => replay!(
+                PerfDcPredict,
+                perf_dcpredict_batch,
+                perf_dcpredict_exact,
+                1024
+            ),
+            _ => unreachable!(),
         }
         return;
     }
@@ -272,6 +288,11 @@ fn main() {
         {
             baseline::write_quant_trace(&format!("{}.quant", args[5]));
             baseline::write_motion_trace(&format!("{}.motion", args[5]));
+        }
+        #[cfg(itg_capture_pixels)]
+        {
+            baseline::write_edges(&format!("{}.edge", args[5]));
+            baseline::write_transforms(&format!("{}.transform", args[5]));
         }
         return;
     }

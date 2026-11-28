@@ -105,6 +105,43 @@ pub fn perf_dc_exact(records: &[PerfIntra<'_>]) -> alloc::vec::Vec<(i32, usize)>
     records.iter().map(PerfIntra::dc).collect()
 }
 
+pub struct PerfDcPredict {
+    dc: i32,
+    scale: i32,
+}
+
+impl PerfDcPredict {
+    pub fn parse(data: &[u8]) -> alloc::vec::Vec<Self> {
+        PerfIntra::parse(data)
+            .into_iter()
+            .map(|record| {
+                let [left, diagonal, above] = record.neighbors;
+                let top = (left.dc - diagonal.dc).abs() < (diagonal.dc - above.dc).abs();
+                Self {
+                    dc: if top { above.dc } else { left.dc },
+                    scale: dc_scale(record.quantizer, record.plane),
+                }
+            })
+            .collect()
+    }
+
+    fn run(&self) -> i32 {
+        visual_dc_prediction(self.dc, self.scale)
+    }
+}
+
+pub fn perf_dcpredict_batch(records: &[PerfDcPredict], repeats: usize) {
+    for _ in 0..repeats {
+        for record in records {
+            core::hint::black_box(core::hint::black_box(record).run());
+        }
+    }
+}
+
+pub fn perf_dcpredict_exact(records: &[PerfDcPredict]) -> alloc::vec::Vec<i32> {
+    records.iter().map(PerfDcPredict::run).collect()
+}
+
 pub struct PerfQuant {
     q: i32,
     levels: [i32; 64],
