@@ -60,17 +60,17 @@ impl Plane {
         let source_y = y as i32 + (motion[1] >> 1);
         let fraction = ((motion[1] & 1) << 1 | (motion[0] & 1)) as usize;
         let dst = &mut self.samples[y * self.stride + x..];
-        let height = source.samples.len() / source.stride;
         let span = W + (fraction & 1);
         let rows = W + (fraction >> 1);
         if source_x >= 0
             && source_y >= 0
             && source_x as usize + span <= source.stride
-            && source_y as usize + rows <= height
+            && (source_y as usize + rows) * source.stride <= source.samples.len()
         {
             let src = &source.samples[source_y as usize * source.stride + source_x as usize..];
             crate::motion::predict::<W>(dst, self.stride, src, source.stride, fraction, average);
         } else {
+            let height = source.samples.len() / source.stride;
             let mut tile = [0; 17 * 17];
             source.extend_edge(source_x, source_y, span, rows, height, &mut tile);
             crate::motion::predict::<W>(dst, self.stride, &tile, span, fraction, average);
@@ -207,6 +207,66 @@ impl Frame {
 #[cfg(test)]
 mod tests {
     use super::Plane;
+
+    #[test]
+    fn prediction_uses_padded_dimensions_at_every_edge() {
+        fn check<const W: usize>(width: usize, height: usize, rows: usize) {
+            let mut source = Plane::new(width, height, W, rows);
+            for (index, pixel) in source.samples.iter_mut().enumerate() {
+                *pixel = (index * 37 + (index / source.stride) * 17) as u8;
+            }
+            let mut destination = Plane::new(width, height, W, rows);
+            for x in [0, source.stride - W] {
+                for y in [0, rows - W] {
+                    for dx in [-4096i32, -33, -3, -1, 0, 1, 2, 31, 4095] {
+                        for dy in [-4096i32, -33, -3, -1, 0, 1, 2, 31, 4095] {
+                            for average in [false, true] {
+                                destination.samples.fill(211);
+                                let mut expected = destination.samples.clone();
+                                for row in 0..W {
+                                    for col in 0..W {
+                                        let tap = |ox: i32, oy: i32| {
+                                            let sx = (x as i32 + (dx >> 1) + col as i32 + ox)
+                                                .clamp(0, source.stride as i32 - 1);
+                                            let sy = (y as i32 + (dy >> 1) + row as i32 + oy)
+                                                .clamp(0, rows as i32 - 1);
+                                            u16::from(
+                                                source.samples
+                                                    [sy as usize * source.stride + sx as usize],
+                                            )
+                                        };
+                                        let predicted = match ((dy & 1) << 1) | (dx & 1) {
+                                            0 => tap(0, 0),
+                                            1 => (tap(0, 0) + tap(1, 0) + 1) >> 1,
+                                            2 => (tap(0, 0) + tap(0, 1) + 1) >> 1,
+                                            _ => {
+                                                (tap(0, 0) + tap(1, 0) + tap(0, 1) + tap(1, 1) + 2)
+                                                    >> 2
+                                            }
+                                        };
+                                        expected[(y + row) * destination.stride + x + col] =
+                                            if average {
+                                                ((predicted + 211 + 1) >> 1) as u8
+                                            } else {
+                                                predicted as u8
+                                            };
+                                    }
+                                }
+                                destination.predict::<W>(x, y, &source, [dx, dy], average);
+                                assert_eq!(
+                                    destination.samples, expected,
+                                    "{W}, {x}, {y}, {dx}, {dy}, {average}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Non-progressive sequence padding can extend beyond the visible height.
+        check::<16>(19, 34, 64);
+        check::<8>(10, 17, 32);
+    }
 
     #[test]
     fn block_clips_wide_residuals_for_intra_and_prediction() {
