@@ -94,7 +94,7 @@ function Build-Library([string] $source, [string] $name, [string] $variant) {
         $frame = Join-Path $dir 'frame.rs'
         $lib = Join-Path $dir 'lib.rs'
         Add-Content -Encoding UTF8 $frame ("`n" + (Get-Content -Raw -LiteralPath $hooks))
-        Add-Content -Encoding UTF8 $lib "`npub use frame::{PerfPlane, perf_inverse_batch};"
+        Add-Content -Encoding UTF8 $lib "`npub use frame::{PerfPlane, perf_inverse_batch, perf_inverse_values};"
         if ($variant -eq 'capture') {
             $extra += @('--cfg', 'itg_capture')
             Add-Content -Encoding UTF8 $lib "`npub use frame::write_trace;"

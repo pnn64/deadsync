@@ -96,24 +96,7 @@ mod x86 {
                 return outer_rows(rows[0], rows[7]);
             }
 
-            let rows = rows.map(|values| horizontal(values));
-            let columns = transpose(rows);
-            let dc_bias = _mm_cvtsi32_si128(i32::from(COLUMN_BIAS));
-            let columns = columns.map(|column| {
-                let biased = _mm_add_epi16(column, dc_bias);
-                line::<COLUMN_SHIFT>(biased, _mm_setzero_si128())
-            });
-
-            let mut output = [0; 64];
-            for (row, values) in output
-                .as_chunks_mut::<8>()
-                .0
-                .iter_mut()
-                .zip(transpose(columns))
-            {
-                _mm_storeu_si128(row.as_mut_ptr().cast(), values);
-            }
-            output
+            vertical(rows.map(|values| horizontal(values)))
         }
     }
 
@@ -203,35 +186,47 @@ mod x86 {
     }
 
     #[inline(always)]
-    unsafe fn transpose(rows: [__m128i; 8]) -> [__m128i; 8] {
+    unsafe fn vertical(mut rows: [__m128i; 8]) -> [i16; 64] {
+        const FREQUENCIES: [(usize, usize); 4] = [(0, 2), (4, 6), (1, 3), (5, 7)];
         unsafe {
-            let [a, b, c, d, e, f, g, h] = rows;
-            let ab = [_mm_unpacklo_epi16(a, b), _mm_unpackhi_epi16(a, b)];
-            let cd = [_mm_unpacklo_epi16(c, d), _mm_unpackhi_epi16(c, d)];
-            let ef = [_mm_unpacklo_epi16(e, f), _mm_unpackhi_epi16(e, f)];
-            let gh = [_mm_unpacklo_epi16(g, h), _mm_unpackhi_epi16(g, h)];
-            let [p, q, r, s] = [
-                _mm_unpacklo_epi32(ab[0], cd[0]),
-                _mm_unpackhi_epi32(ab[0], cd[0]),
-                _mm_unpacklo_epi32(ab[1], cd[1]),
-                _mm_unpackhi_epi32(ab[1], cd[1]),
-            ];
-            let [t, u, v, w] = [
-                _mm_unpacklo_epi32(ef[0], gh[0]),
-                _mm_unpackhi_epi32(ef[0], gh[0]),
-                _mm_unpacklo_epi32(ef[1], gh[1]),
-                _mm_unpackhi_epi32(ef[1], gh[1]),
-            ];
-            [
-                _mm_unpacklo_epi64(p, t),
-                _mm_unpackhi_epi64(p, t),
-                _mm_unpacklo_epi64(q, u),
-                _mm_unpackhi_epi64(q, u),
-                _mm_unpacklo_epi64(r, v),
-                _mm_unpackhi_epi64(r, v),
-                _mm_unpacklo_epi64(s, w),
-                _mm_unpackhi_epi64(s, w),
-            ]
+            // Pair vertical frequencies across four columns at once, avoiding
+            // transposes before and after the vertical transform. Keep the
+            // same wrapping 16-bit bias and 32-bit sums as the line transform.
+            rows[0] = _mm_add_epi16(rows[0], _mm_set1_epi16(COLUMN_BIAS));
+            let pairs = FREQUENCIES.map(|(a, b)| {
+                [
+                    _mm_unpacklo_epi16(rows[a], rows[b]),
+                    _mm_unpackhi_epi16(rows[a], rows[b]),
+                ]
+            });
+            let mut output = [0i16; 64];
+            for (y, basis) in BASIS[..4].iter().enumerate() {
+                let weights = FREQUENCIES
+                    .map(|(a, b)| _mm_set1_epi32((basis[a] & 0xffff) | (basis[b] << 16)));
+                let halves = [0, 1].map(|half| {
+                    let even = _mm_add_epi32(
+                        _mm_madd_epi16(pairs[0][half], weights[0]),
+                        _mm_madd_epi16(pairs[1][half], weights[1]),
+                    );
+                    let odd = _mm_add_epi32(
+                        _mm_madd_epi16(pairs[2][half], weights[2]),
+                        _mm_madd_epi16(pairs[3][half], weights[3]),
+                    );
+                    (
+                        _mm_srai_epi32::<COLUMN_SHIFT>(_mm_add_epi32(even, odd)),
+                        _mm_srai_epi32::<COLUMN_SHIFT>(_mm_sub_epi32(even, odd)),
+                    )
+                });
+                _mm_storeu_si128(
+                    output.as_mut_ptr().add(y * 8).cast(),
+                    _mm_packs_epi32(halves[0].0, halves[1].0),
+                );
+                _mm_storeu_si128(
+                    output.as_mut_ptr().add((7 - y) * 8).cast(),
+                    _mm_packs_epi32(halves[0].1, halves[1].1),
+                );
+            }
+            output
         }
     }
 }
@@ -258,6 +253,30 @@ mod tests {
             block[..8].copy_from_slice(&[1231, 221, -192, 4, 0, 0, 0, 0]);
             block[63] = last;
             assert_eq!(inverse(&block), scalar(&block));
+        }
+    }
+
+    #[test]
+    fn vertical_pass_preserves_saturation_and_wrapping() {
+        for signs in 0..256u16 {
+            for basis in BASIS {
+                let block = core::array::from_fn(|i| {
+                    let negative = (signs >> (i / 8) & 1 != 0) ^ (basis[i % 8] < 0);
+                    if negative {
+                        -2048
+                    } else {
+                        2047
+                    }
+                });
+                assert_eq!(inverse(&block), scalar(&block), "signs {signs}, {basis:?}");
+            }
+        }
+        for position in 0..64 {
+            for level in [-2048, -1025, -1, 1, 1023, 2047] {
+                let mut block = [0; 64];
+                block[position] = level;
+                assert_eq!(inverse(&block), scalar(&block), "{position}, {level}");
+            }
         }
     }
 

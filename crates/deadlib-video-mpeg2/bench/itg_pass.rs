@@ -535,6 +535,13 @@ fn kernels(rounds: usize, directory: &str, operation: &str, repeats: usize) {
         .map(|r| (r[0] != 0, coeff(&r[1..129]), r[129..].try_into().unwrap()))
         .collect();
     assert!(!blocks.is_empty() && !coefficients.is_empty());
+    if operation == "inverse" {
+        assert_eq!(
+            baseline::perf_inverse_values(&coefficients),
+            candidate::perf_inverse_values(&coefficients),
+            "inverse transform output mismatch"
+        );
+    }
     let mut a = baseline::PerfPlane::new(&blocks);
     let mut b = candidate::PerfPlane::new(&blocks);
     a.run(&blocks, 1);

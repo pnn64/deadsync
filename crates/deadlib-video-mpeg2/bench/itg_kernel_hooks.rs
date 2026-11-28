@@ -2,6 +2,10 @@
 // It is never compiled into the shipping crate.
 pub type PerfBlock = (bool, [i16; 64], [u8; 64]);
 
+pub fn perf_inverse_values(blocks: &[[i16; 64]]) -> Vec<[i16; 64]> {
+    blocks.iter().map(crate::transform::inverse).collect()
+}
+
 pub fn perf_inverse_batch(blocks: &[[i16; 64]], repeats: usize) {
     for _ in 0..repeats {
         for block in blocks {
