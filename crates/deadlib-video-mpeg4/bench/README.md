@@ -109,3 +109,9 @@ was 0.9199 on `banner.avi`. The five allocation runs on each CPU agreed
 and showed fewer heap calls and requested bytes on all three clips.
 
 [Baseline](results/mp42-windows-x86_64-20261127/baseline/) · [SSE2 pixel stores](results/mp42-windows-x86_64-20261127/packed-store/) · [CPU 4 samples](results/mp42-windows-x86_64-20261127/verify-cpu4/) · [CPU 2 samples](results/mp42-windows-x86_64-20261127/verify-cpu2/)
+
+## ITG3 AVI optimization pass (2026-11-28)
+
+The paired revision benchmark uses original Xvid AVI files, including container
+parsing, and captures real intra-block inputs for isolated measurements.
+See the [results and reproduction instructions](results/windows-x86_64-20261128-itg3-pass/README.md).
