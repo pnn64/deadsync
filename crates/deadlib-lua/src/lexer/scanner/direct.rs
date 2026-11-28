@@ -1,7 +1,8 @@
 //! Compact tokens for the parser of small, closed source chunks.
 
 use super::{
-    Kind, Lexeme, Scanner, Token, ascii_identifier_end, decimal_token, keyword, word_boundary,
+    Kind, Lexeme, Scanner, TOKEN_START, Token, ascii_identifier_end, decimal_token, keyword,
+    word_boundary,
 };
 use crate::Error;
 
@@ -100,8 +101,8 @@ impl DirectScanner {
         self.scanner.pos = start;
         let mut end = start + 1;
         let mut payload = 0;
-        let kind = match c {
-            b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
+        let kind = match TOKEN_START[usize::from(c)] {
+            Kind::Name => {
                 end += short_identifier_end(&input[end..]);
                 if input.get(end).is_some_and(|&b| b >= 128) {
                     return false;
@@ -113,7 +114,7 @@ impl DirectScanner {
                     keyword(&input[start..end])
                 }
             }
-            b'0'..=b'9' => {
+            Kind::Number => {
                 let Some((value, finish)) = decimal_token(input, start, c) else {
                     return false;
                 };
@@ -121,25 +122,25 @@ impl DirectScanner {
                 end = finish;
                 Kind::Number
             }
-            b'=' | b'<' | b'>' | b'~' => {
-                let equal = input.get(end) == Some(&b'=');
-                end += usize::from(equal);
-                match (c, equal) {
-                    (b'=', false) => Kind::Assign,
-                    (b'=', true) => Kind::Eq,
-                    (b'<', false) => Kind::Lt,
-                    (b'<', true) => Kind::Le,
-                    (b'>', false) => Kind::Gt,
-                    (b'>', true) => Kind::Ge,
-                    (b'~', true) => Kind::Ne,
-                    _ => return false,
+            Kind::Byte(_) => match c {
+                b'=' | b'<' | b'>' | b'~' => {
+                    let equal = input.get(end) == Some(&b'=');
+                    end += usize::from(equal);
+                    match (c, equal) {
+                        (b'=', false) => Kind::Assign,
+                        (b'=', true) => Kind::Eq,
+                        (b'<', false) => Kind::Lt,
+                        (b'<', true) => Kind::Le,
+                        (b'>', false) => Kind::Gt,
+                        (b'>', true) => Kind::Ge,
+                        (b'~', true) => Kind::Ne,
+                        _ => return false,
+                    }
                 }
-            }
-            b'(' => Kind::LParen,
-            b')' => Kind::RParen,
-            b',' => Kind::Comma,
-            b';' => Kind::Semi,
-            _ => return false,
+                b'-' if input.get(end) != Some(&b'-') => Kind::Minus,
+                _ => return false,
+            },
+            kind => kind,
         };
         self.scanner.pos = end;
         let line = self.scanner.line;
@@ -161,6 +162,7 @@ fn closed_tokens_keep_spelling_and_line_information() {
         b"long_name_12345 = [[long\n string]]\n f('a\\n\\000z')",
         b"--[=[long\r\ncomment]=]\r-- line\nvalue = 0x10",
         b"identifier\0..\0x; 1e-",
+        b"+ - * / % ^ # ( ) { } [ ] ; : , = == < <= > >= ~= ~ . .. ...",
         b"f('unterminated",
         b"local a_very_long_identifier_92 = [[",
         b"  \t\x0b\x0c",

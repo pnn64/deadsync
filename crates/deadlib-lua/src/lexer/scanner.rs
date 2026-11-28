@@ -118,6 +118,37 @@ fn number_boundary(byte: u8) -> bool {
     !(byte.is_ascii_digit() | (byte == b'.'))
 }
 
+// Punctuation that needs neither lookahead nor locale handling is complete
+// after one byte. Name, Number, and Byte select the multi-byte scanners.
+const TOKEN_START: [Kind; 256] = {
+    let mut kinds = [Kind::Eof; 256];
+    let mut index = 0;
+    while index < kinds.len() {
+        let byte = index as u8;
+        kinds[index] = match byte {
+            b'a'..=b'z' | b'A'..=b'Z' | b'_' => Kind::Name,
+            b'0'..=b'9' => Kind::Number,
+            b'+' => Kind::Plus,
+            b'*' => Kind::Star,
+            b'/' => Kind::Slash,
+            b'%' => Kind::Percent,
+            b'^' => Kind::Caret,
+            b'#' => Kind::Hash,
+            b'(' => Kind::LParen,
+            b')' => Kind::RParen,
+            b'{' => Kind::LBrace,
+            b'}' => Kind::RBrace,
+            b']' => Kind::RBracket,
+            b';' => Kind::Semi,
+            b':' => Kind::Colon,
+            b',' => Kind::Comma,
+            _ => Kind::Byte(byte),
+        };
+        index += 1;
+    }
+    kinds
+};
+
 #[inline]
 fn decimal_token(input: &[u8], start: usize, first: u8) -> Option<(f64, usize)> {
     let tail = &input[start + 1..];
@@ -516,9 +547,8 @@ impl Scanner {
         let start = self.pos;
         let mut text = Lexeme::default();
         let mut number = 0.0;
-        let next = input.get(start + 1).copied();
-        let (kind, end) = match c {
-            b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
+        let (kind, end) = match TOKEN_START[usize::from(c)] {
+            Kind::Name => {
                 let tail = &input[start + 1..];
                 let end = start + 1 + ascii_identifier_end(tail);
                 if input.get(end).is_some_and(|&b| b >= 128) {
@@ -531,7 +561,7 @@ impl Scanner {
                 }
                 (kind, end)
             }
-            b'0'..=b'9' => {
+            Kind::Number => {
                 if let Some((value, end)) = decimal_token(input, start, c) {
                     number = value;
                     (Kind::Number, end)
@@ -555,55 +585,43 @@ impl Scanner {
                     (Kind::Number, end)
                 }
             }
-            b'\'' | b'"' => {
-                let rest = &input[start + 1..];
-                let len = quoted_boundary(rest, c);
-                if rest.get(len) != Some(&c) {
-                    return Ok(false);
+            Kind::Byte(_) => match c {
+                b'\'' | b'"' => {
+                    let rest = &input[start + 1..];
+                    let len = quoted_boundary(rest, c);
+                    if rest.get(len) != Some(&c) {
+                        return Ok(false);
+                    }
+                    text = Lexeme::source(input, start + 1, start + 1 + len)?;
+                    (Kind::String, start + len + 2)
                 }
-                text = Lexeme::source(input, start + 1, start + 1 + len)?;
-                (Kind::String, start + len + 2)
-            }
-            b'[' if CLOSED && !DIAGNOSTICS => return self.closed_bracket(input, out),
-            b'-' if next != Some(b'-') => (Kind::Minus, start + 1),
-            b'.' if next.is_some_and(crate::locale::is_digit) => return Ok(false),
-            b'.' if matches!(next, Some(b'.' | 0)) => {
-                if matches!(input.get(start + 2), Some(b'.' | 0)) {
-                    (Kind::Dots, start + 3)
-                } else {
-                    (Kind::Concat, start + 2)
+                b'[' if CLOSED && !DIAGNOSTICS => return self.closed_bracket(input, out),
+                b'-' if input.get(start + 1) != Some(&b'-') => (Kind::Minus, start + 1),
+                b'.' => match input.get(start + 1).copied() {
+                    Some(byte) if crate::locale::is_digit(byte) => return Ok(false),
+                    Some(b'.' | 0) if matches!(input.get(start + 2), Some(b'.' | 0)) => {
+                        (Kind::Dots, start + 3)
+                    }
+                    Some(b'.' | 0) => (Kind::Concat, start + 2),
+                    _ => (Kind::Dot, start + 1),
+                },
+                b'=' | b'<' | b'>' | b'~' => {
+                    let equal = input.get(start + 1) == Some(&b'=');
+                    let kind = match (c, equal) {
+                        (b'=', true) => Kind::Eq,
+                        (b'=', false) => Kind::Assign,
+                        (b'<', true) => Kind::Le,
+                        (b'<', false) => Kind::Lt,
+                        (b'>', true) => Kind::Ge,
+                        (b'>', false) => Kind::Gt,
+                        (b'~', true) => Kind::Ne,
+                        _ => Kind::Byte(c),
+                    };
+                    (kind, start + 1 + usize::from(equal))
                 }
-            }
-            b'.' => (Kind::Dot, start + 1),
-            b'=' | b'<' | b'>' | b'~' => {
-                let equal = next == Some(b'=');
-                let kind = match (c, equal) {
-                    (b'=', true) => Kind::Eq,
-                    (b'=', false) => Kind::Assign,
-                    (b'<', true) => Kind::Le,
-                    (b'<', false) => Kind::Lt,
-                    (b'>', true) => Kind::Ge,
-                    (b'>', false) => Kind::Gt,
-                    (b'~', true) => Kind::Ne,
-                    _ => Kind::Byte(c),
-                };
-                (kind, start + 1 + usize::from(equal))
-            }
-            b'+' => (Kind::Plus, start + 1),
-            b'*' => (Kind::Star, start + 1),
-            b'/' => (Kind::Slash, start + 1),
-            b'%' => (Kind::Percent, start + 1),
-            b'^' => (Kind::Caret, start + 1),
-            b'#' => (Kind::Hash, start + 1),
-            b'(' => (Kind::LParen, start + 1),
-            b')' => (Kind::RParen, start + 1),
-            b'{' => (Kind::LBrace, start + 1),
-            b'}' => (Kind::RBrace, start + 1),
-            b']' => (Kind::RBracket, start + 1),
-            b';' => (Kind::Semi, start + 1),
-            b':' => (Kind::Colon, start + 1),
-            b',' => (Kind::Comma, start + 1),
-            _ => return Ok(false),
+                _ => return Ok(false),
+            },
+            kind => (kind, start + 1),
         };
         // Lua fetches the following byte before publishing a token.
         if !CLOSED && end == input.len() {
