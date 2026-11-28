@@ -1292,6 +1292,44 @@ impl Table {
         self.append_hash_entry(key, value, slot, index, hash);
         true
     }
+
+    /// Apply scalar writes in order, stopping before the first one that needs
+    /// storage, a rehash, or array migration.
+    pub(crate) fn write_reserved_number_span(
+        &mut self,
+        mut index: i64,
+        step: i64,
+        count: u64,
+        repeated: Option<Value>,
+    ) -> Option<u64> {
+        if self.native51
+            || self.metatable != 0
+            || repeated.is_some_and(|value| !array_scalar(value))
+        {
+            return None;
+        }
+        for written in 0..count {
+            let number = index as f64;
+            let value = repeated.unwrap_or(Value::Number(number));
+            let offset = (index as u64).wrapping_sub(1);
+            let array_key = offset < u64::from(u32::MAX);
+            index += step;
+            if array_key {
+                let slot = offset as usize;
+                if self.set_array_scalar_at(slot, value) {
+                    continue;
+                }
+                if slot <= self.array.len() {
+                    return Some(written);
+                }
+            }
+            if !self.set_reserved_scalar_hash(Key::Number(number.to_bits()), value, array_key) {
+                return Some(written);
+            }
+        }
+        Some(count)
+    }
+
     pub(crate) fn can_replace_array_value(&self, index: usize) -> bool {
         !matches!(self.array, ArrayStorage::SharedScalars { .. }) && index < self.array.len()
     }

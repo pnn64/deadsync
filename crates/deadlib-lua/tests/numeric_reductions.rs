@@ -119,6 +119,58 @@ fn dense_writes_match_dispatch_across_growth_and_gc_checkpoints() {
 }
 
 #[test]
+fn strided_scalar_stores_match_dispatch_across_hash_growth() {
+    let program = compile(
+        br#"
+        local function write(t, first, last, step)
+            for i = first, last, step do t[i] = i end
+        end
+        local function fill(t, first, last, step, value)
+            for i = first, last, step do t[i] = value end
+        end
+        local digest = 0
+        for round = 1, 12 do
+            local t = {}
+            write(t, 1101, -1301, -2)
+            fill(t, -4031, -1881, 10, false)
+            assert(t[1101] == 1101 and t[-1301] == -1301 and t[-4031] == false)
+            assert(t[1100] == nil and t[-4030] == nil)
+            t[2] = 7
+            assert(t[1] == 1 and t[2] == 7 and t[3] == 3)
+            for k, v in pairs(t) do
+                assert(v == k or v == false or (k == 2 and v == 7))
+                digest = (digest * 17 + k) % 100003
+            end
+        end
+        local wide = {}
+        write(wide, 9007199254740984, 9007199254740990, 2)
+        assert(wide[9007199254740988] == 9007199254740988)
+        local observed = 0
+        local proxy = setmetatable({}, {__newindex = function(_, k, v)
+            assert(k == v)
+            observed = observed + 1
+        end})
+        write(proxy, -100, -250, -5)
+        assert(observed == 31 and next(proxy) == nil)
+        return digest
+        "#,
+    )
+    .unwrap();
+    let mut fast = Vm::new();
+    let mut ordinary = Vm::new();
+    ordinary.set_instruction_limit(Some(2_000_000));
+    assert_eq!(
+        fast.execute(&program).unwrap(),
+        ordinary.execute(&program).unwrap()
+    );
+    let fast_heap = fast.heap_stats();
+    let ordinary_heap = ordinary.heap_stats();
+    assert!(fast_heap.collections > 0);
+    assert_eq!(fast_heap.collections, ordinary_heap.collections);
+    assert_eq!(fast_heap.reclaimed_objects, ordinary_heap.reclaimed_objects);
+}
+
+#[test]
 fn dense_sequences_keep_independent_tables_when_mutated() {
     assert_eq!(
         numbers(

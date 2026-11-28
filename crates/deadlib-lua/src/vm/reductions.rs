@@ -25,12 +25,18 @@ const BODY_LIMIT: usize = 32;
 pub(super) enum Reduction {
     Applied(u64),
     Retry,
+    /// Made progress before leaving the next iteration to ordinary dispatch.
+    Partial,
 }
 
 pub(super) struct Retry {
     pub frame: usize,
     pub pc: usize,
     pub attempts: u8,
+}
+
+impl Retry {
+    pub(super) const ATTEMPTS: u8 = 8;
 }
 
 fn integer(value: Value) -> Option<i128> {
@@ -631,6 +637,32 @@ fn add_exact_sum(total: i128, terms: Series, count: i128) -> Option<i128> {
 }
 
 impl Vm {
+    #[inline(never)]
+    pub(super) fn retry_numeric_loop(
+        &mut self,
+        base: usize,
+        control: usize,
+        prototype: &Prototype,
+        program: usize,
+        prototype_index: usize,
+        retry: &mut Retry,
+    ) -> bool {
+        retry.attempts -= 1;
+        if retry.attempts == 0 || self.budget.is_some() {
+            return false;
+        }
+        match self.reduce_numeric_loop(base, control, retry.pc, prototype, program, prototype_index)
+        {
+            Some(Reduction::Retry) => true,
+            Some(Reduction::Partial) => {
+                // Only consecutive attempts without progress use the limit.
+                retry.attempts = Retry::ATTEMPTS;
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Advance complete iterations with proven effects. Reductions with
     /// observable scratch registers leave the last body to ordinary dispatch.
     pub(super) fn reduce_numeric_loop(
@@ -652,7 +684,7 @@ impl Vm {
         }
         let start_pc = loop_instruction.c as usize;
         let body = code.get(start_pc..loop_pc)?;
-        if let Some(reduction) = self.reduce_dense_array_write(base, control, body, prototype) {
+        if let Some(reduction) = self.reduce_scalar_index_writes(base, control, body, prototype) {
             return Some(reduction);
         }
         if let Some(reduction) =

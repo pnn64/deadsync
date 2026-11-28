@@ -2836,13 +2836,13 @@ impl Vm {
                             {
                                 self.remaining -= skipped;
                             }
-                            Some(reductions::Reduction::Retry) => {
+                            Some(reductions::Reduction::Retry | reductions::Reduction::Partial) => {
                                 // The first call can still need a stack growth or GC checkpoint.
                                 // Retry at the backedge after ordinary dispatch has run it.
                                 reduction_retry = Some(reductions::Retry {
                                     frame: frame_index,
                                     pc: c,
-                                    attempts: 8,
+                                    attempts: reductions::Retry::ATTEMPTS,
                                 });
                             }
                             _ => {}
@@ -2853,24 +2853,16 @@ impl Vm {
                         if let Some(retry) = &mut reduction_retry
                             && retry.frame == frame_index
                             && retry.pc + 1 == pc
+                            && !self.retry_numeric_loop(
+                                base,
+                                usize::from(i.a),
+                                prototype,
+                                program_index,
+                                proto_index,
+                                retry,
+                            )
                         {
-                            retry.attempts -= 1;
-                            if retry.attempts == 0
-                                || self.budget.is_some()
-                                || !matches!(
-                                    self.reduce_numeric_loop(
-                                        base,
-                                        usize::from(i.a),
-                                        pc - 1,
-                                        prototype,
-                                        program_index,
-                                        proto_index,
-                                    ),
-                                    Some(reductions::Reduction::Retry)
-                                )
-                            {
-                                reduction_retry = None;
-                            }
+                            reduction_retry = None;
                         }
                         let (Value::Number(index), Value::Number(limit), Value::Number(step)) = (
                             self.registers[a],
