@@ -267,10 +267,51 @@ fn decode_varint_vec_into<T, D: Decoder>(
     }
 
     macro_rules! decode_as {
-        ($ty:ty, $decode:path) => {
+        ($ty:ty, $decode:path, $batch:literal, $single:expr) => {
             if crate::unty::type_equal::<T, $ty>() {
                 values.reserve(len);
-                for _ in 0..len {
+                // Only the measured u32/i32 paths batch small varints.
+                // Stop at the first marker so mixed-width inputs pay for
+                // at most one unsuccessful probe.
+                while $batch && len - values.len() >= 8 {
+                    let Some(bytes) = decoder.reader().peek_read(8) else {
+                        break;
+                    };
+                    let Some(bytes) = bytes.get(..8) else {
+                        break;
+                    };
+                    let word = u64::from_ne_bytes(bytes.try_into().unwrap());
+                    // Masking each lane to seven bits prevents carries
+                    // between bytes. Only original bytes 251..=255 retain
+                    // a high bit after adding five to those low seven bits.
+                    if ((word & 0x7f7f_7f7f_7f7f_7f7f) + 0x0505_0505_0505_0505)
+                        & word
+                        & 0x8080_8080_8080_8080
+                        != 0
+                    {
+                        break;
+                    }
+                    let start = values.len();
+                    for (offset, &byte) in bytes.iter().enumerate() {
+                        // SAFETY: type_equal established the concrete type,
+                        // reserve covers len values, and the batch fits in
+                        // the remaining slots. Every byte is a complete
+                        // one-byte varint and produces a valid integer.
+                        unsafe {
+                            values
+                                .as_mut_ptr()
+                                .add(start + offset)
+                                .cast::<$ty>()
+                                .write(($single)(byte));
+                        }
+                    }
+                    // SAFETY: all eight new integer values were initialized.
+                    unsafe { values.set_len(start + 8) };
+                    decoder.reader().consume(8);
+                }
+                // Disabled widths retain the original independent countdown.
+                let remaining = if $batch { len - values.len() } else { len };
+                for _ in 0..remaining {
                     let value = match $decode(decoder.reader(), D::C::ENDIAN) {
                         Ok(value) => value,
                         Err(error) => return Some(Err(error)),
@@ -291,16 +332,41 @@ fn decode_varint_vec_into<T, D: Decoder>(
         };
     }
 
-    decode_as!(u16, crate::varint::varint_decode_u16);
-    decode_as!(u32, crate::varint::varint_decode_u32);
-    decode_as!(u64, crate::varint::varint_decode_u64);
-    decode_as!(u128, crate::varint::varint_decode_u128);
-    decode_as!(usize, crate::varint::varint_decode_usize);
-    decode_as!(i16, crate::varint::varint_decode_i16);
-    decode_as!(i32, crate::varint::varint_decode_i32);
-    decode_as!(i64, crate::varint::varint_decode_i64);
-    decode_as!(i128, crate::varint::varint_decode_i128);
-    decode_as!(isize, crate::varint::varint_decode_isize);
+    decode_as!(u16, crate::varint::varint_decode_u16, false, |byte| byte
+        as u16);
+    decode_as!(u32, crate::varint::varint_decode_u32, true, |byte| byte
+        as u32);
+    decode_as!(u64, crate::varint::varint_decode_u64, false, |byte| byte
+        as u64);
+    decode_as!(u128, crate::varint::varint_decode_u128, false, |byte| byte
+        as u128);
+    decode_as!(
+        usize,
+        crate::varint::varint_decode_usize,
+        false,
+        |byte| byte as usize
+    );
+    decode_as!(i16, crate::varint::varint_decode_i16, false, |byte: u8| {
+        ((byte >> 1) as i16) ^ -((byte & 1) as i16)
+    });
+    decode_as!(i32, crate::varint::varint_decode_i32, true, |byte: u8| {
+        ((byte >> 1) as i32) ^ -((byte & 1) as i32)
+    });
+    decode_as!(i64, crate::varint::varint_decode_i64, false, |byte: u8| {
+        ((byte >> 1) as i64) ^ -((byte & 1) as i64)
+    });
+    decode_as!(
+        i128,
+        crate::varint::varint_decode_i128,
+        false,
+        |byte: u8| { ((byte >> 1) as i128) ^ -((byte & 1) as i128) }
+    );
+    decode_as!(
+        isize,
+        crate::varint::varint_decode_isize,
+        false,
+        |byte: u8| { ((byte >> 1) as isize) ^ -((byte & 1) as isize) }
+    );
     None
 }
 
