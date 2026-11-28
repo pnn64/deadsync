@@ -3,7 +3,7 @@ use super::{
     tasks::{CallState, TableState},
     *,
 };
-use crate::parser::ConstantOperand;
+use crate::parser::{ConstantOperand, TableField};
 
 impl<'a> Compiler<'a> {
     fn leaf(expr: &Expr) -> bool {
@@ -553,11 +553,34 @@ impl<'a> Compiler<'a> {
         self.emit(Op::GetTable, dst, u16::from(table), u32::from(self.result))?;
         Ok(())
     }
-    pub(super) fn table_next(&mut self, mut state: TableState) -> Result<(), Error> {
+    pub(super) fn table_next(&mut self, state: TableState) -> Result<(), Error> {
         let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
             unreachable!()
         };
         let fields = self.ast.fields(*fields);
+        if fields.len() >= 4096 && !crate::memory::compilation::active() {
+            self.emit_wide_constructor(state, fields)
+        } else {
+            self.emit_constructor_fields::<false>(state, fields)
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn emit_wide_constructor(
+        &mut self,
+        state: TableState,
+        fields: &[TableField],
+    ) -> Result<(), Error> {
+        self.emit_constructor_fields::<true>(state, fields)
+    }
+
+    #[inline(always)]
+    fn emit_constructor_fields<const WIDE: bool>(
+        &mut self,
+        mut state: TableState,
+        fields: &[TableField],
+    ) -> Result<(), Error> {
         while let Some(&field) = fields.get(state.index) {
             let value = field.value;
             if let Some(key) = field.key() {
@@ -603,6 +626,9 @@ impl<'a> Compiler<'a> {
                     let value_reg = self.right_register(value, key, regs, false)?;
                     self.operand(value, value_reg)?;
                     self.finish_record_field(&mut state, regs, key)?;
+                    if WIDE && state.index == 512 && state.pending == 0 {
+                        self.emit_constant_record_run(fields, &mut state)?;
+                    }
                     continue;
                 }
                 self.tasks.try_push(Task::TableKey(state, regs))?;
@@ -613,6 +639,9 @@ impl<'a> Compiler<'a> {
                 // This field has one result and leaves no continuation.
                 self.expr(value, reg)?;
                 self.finish_list_field(&mut state, false)?;
+                if WIDE && state.index == 50 && state.flushed == 50 {
+                    self.emit_constant_list_batches(fields, &mut state)?;
+                }
                 continue;
             }
             let open = state.index + 1 == fields.len() && self.multiple(value);
@@ -628,6 +657,163 @@ impl<'a> Compiler<'a> {
         }
         Ok(())
     }
+    // A complete constant list batch leaves the register state at the same
+    // boundary as its predecessor. Reuse the first batch's emission metadata.
+    #[cold]
+    fn emit_constant_list_batches(
+        &mut self,
+        fields: &[TableField],
+        state: &mut TableState,
+    ) -> Result<(), Error> {
+        const BATCH: usize = 50;
+        let f = &self.function;
+        if f.code.len() < BATCH + 1 || f.hook_visible == 0 || !f.pending_jumps.is_empty() {
+            return Ok(());
+        }
+        let template: [Emission; BATCH + 1] = f.code[f.code.len() - BATCH - 1..]
+            .try_into()
+            .expect("one completed list batch");
+        if !template[..BATCH].iter().enumerate().all(|(offset, i)| {
+            i.op == Op::Load
+                && i.b == 0
+                && usize::from(i.a) == usize::from(state.table) + 1 + offset
+        }) || template[BATCH].op != Op::SetList
+            || self.live_map()? != template[0].live as u16
+        {
+            return Ok(());
+        }
+
+        for group in fields[state.index..].chunks_exact(BATCH) {
+            if self.function.code.len() > u32::MAX as usize - BATCH - 1
+                || !group.iter().all(|field| {
+                    field.key().is_none()
+                        && (self.folded[field.value].is_some()
+                            || matches!(
+                                self.ast.exprs[field.value].0,
+                                Expr::Nil | Expr::Boolean(_) | Expr::Number(_) | Expr::String(_)
+                            ))
+                })
+            {
+                break;
+            }
+            let mut batch = template;
+            let mut visible = 0;
+            for (entry, field) in batch[..BATCH].iter_mut().zip(group) {
+                let (expr, span) = &self.ast.exprs[field.value];
+                self.line = span.discharge;
+                let slot = if let Some(n) = self.folded[field.value] {
+                    self.constant(Constant::Number(n))?
+                } else {
+                    match expr {
+                        Expr::Nil => self.constant(Constant::Nil)?,
+                        Expr::Boolean(b) => self.constant(Constant::Boolean(*b))?,
+                        Expr::Number(n) => self.constant(Constant::Number(*n))?,
+                        Expr::String(text) => self.string_constant(text)?,
+                        _ => unreachable!("constant list batch"),
+                    }
+                };
+                entry.instruction.c = slot;
+                entry.line = self.line;
+                entry.hook = self.line;
+                visible += usize::from(self.line != 0);
+            }
+            let store = &mut batch[BATCH];
+            store.instruction.c = state.flushed + 1;
+            store.line = self.line;
+            store.hook = self.line;
+            visible += usize::from(self.line != 0);
+            self.function.code.try_extend_from_slice(&batch)?;
+            self.function.hook_visible += visible;
+            self.result = template[BATCH - 1].a;
+            state.index += BATCH;
+            state.flushed += BATCH as u32;
+        }
+        Ok(())
+    }
+
+    /// Reuse the metadata from one pair of constant loads and a store.
+    /// Each successive record uses the same two scratch registers.
+    #[cold]
+    fn emit_constant_record_run(
+        &mut self,
+        fields: &[TableField],
+        state: &mut TableState,
+    ) -> Result<(), Error> {
+        let f = &self.function;
+        if f.code.len() < 3 || f.hook_visible == 0 || !f.pending_jumps.is_empty() {
+            return Ok(());
+        }
+        let [first, second, store]: [Emission; 3] = f.code[f.code.len() - 3..]
+            .try_into()
+            .expect("record emission");
+        if first.op != Op::Load
+            || first.b != 0
+            || second.op != Op::Load
+            || second.b != 0
+            || store.op != Op::SetTable
+            || store.a != state.table
+            || store.b != u16::from(first.a)
+            || store.c != u32::from(second.a)
+            || first.a == second.a
+            || self.live_map()? != first.live as u16
+        {
+            return Ok(());
+        }
+
+        for field in &fields[state.index..] {
+            let Some(key) = field.key() else {
+                break;
+            };
+            let (Expr::String(text), key_span) = &self.ast.exprs[key] else {
+                break;
+            };
+            let (value, value_span) = &self.ast.exprs[field.value];
+            if self.ast.constant_operand(key).is_some()
+                || self.rk_operand(field.value)
+                || self.function.code.len() > u32::MAX as usize - 3
+            {
+                break;
+            }
+            let literal = match value {
+                Expr::Nil => Constant::Nil,
+                Expr::Boolean(value) => Constant::Boolean(*value),
+                Expr::Number(value) => Constant::Number(*value),
+                _ => {
+                    let Some(number) = self.folded[field.value] else {
+                        break;
+                    };
+                    Constant::Number(number)
+                }
+            };
+
+            self.line = key_span.discharge;
+            let key_id = self.string_constant(text)?;
+            let mut key_code = first;
+            key_code.line = self.line;
+            key_code.hook = self.line;
+            key_code.instruction.c = key_id;
+
+            self.line = value_span.discharge;
+            let value_id = self.constant(literal)?;
+            let mut value_code = second;
+            value_code.line = self.line;
+            value_code.hook = self.line;
+            value_code.instruction.c = value_id;
+            let mut set_code = store;
+            set_code.line = self.line;
+            set_code.hook = self.line;
+
+            self.function
+                .code
+                .try_extend_from_slice(&[key_code, value_code, set_code])?;
+            self.function.hook_visible +=
+                usize::from(key_span.discharge != 0) + 2 * usize::from(self.line != 0);
+            self.result = second.a;
+            state.index += 1;
+        }
+        Ok(())
+    }
+
     pub(super) fn finish_record_field(
         &mut self,
         state: &mut TableState,
