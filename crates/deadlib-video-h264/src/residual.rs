@@ -634,21 +634,39 @@ pub(crate) const RASTER_TO_ZIGZAG_4X4: [u8; 16] = {
 
 pub fn dequant_4x4_full(block: &mut [i32; 16], qp: i32, scale: &[u8; 16]) {
     let qp_per = qp / 6;
-    let ls = LEVEL_SCALE[(qp % 6) as usize];
-    // Branch-free over all 16 positions (a zero coefficient stays zero), so
-    // the loop vectorizes
-    let v = |idx: usize| {
-        ls[((idx >> 2) & 1) + (idx & 1)] * scale[RASTER_TO_ZIGZAG_4X4[idx] as usize] as i32
+    let qp_rem = (qp % 6) as usize;
+    const FLAT: [[i32; 16]; 6] = {
+        let mut table = [[0; 16]; 6];
+        let mut q = 0;
+        while q < 6 {
+            let mut idx = 0;
+            while idx < 16 {
+                table[q][idx] = LEVEL_SCALE[q][((idx >> 2) & 1) + (idx & 1)] * 16;
+                idx += 1;
+            }
+            q += 1;
+        }
+        table
+    };
+    let custom;
+    let factors = if scale == &[16; 16] {
+        &FLAT[qp_rem]
+    } else {
+        custom = core::array::from_fn(|idx| {
+            LEVEL_SCALE[qp_rem][((idx >> 2) & 1) + (idx & 1)]
+                * scale[RASTER_TO_ZIGZAG_4X4[idx] as usize] as i32
+        });
+        &custom
     };
     if qp_per >= 4 {
         let sh = (qp_per - 4) as u32;
-        for (idx, b) in block.iter_mut().enumerate() {
-            *b = b.wrapping_mul(v(idx)).wrapping_shl(sh);
+        for (b, &v) in block.iter_mut().zip(factors) {
+            *b = b.wrapping_mul(v).wrapping_shl(sh);
         }
     } else {
         let (round, sh) = (1 << (3 - qp_per), (4 - qp_per) as u32);
-        for (idx, b) in block.iter_mut().enumerate() {
-            *b = b.wrapping_mul(v(idx)).wrapping_add(round) >> sh;
+        for (b, &v) in block.iter_mut().zip(factors) {
+            *b = b.wrapping_mul(v).wrapping_add(round) >> sh;
         }
     }
 }
@@ -656,6 +674,35 @@ pub fn dequant_4x4_full(block: &mut [i32; 16], qp: i32, scale: &[u8; 16]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dequant_4x4_matches_scalar_for_flat_and_custom_matrices() {
+        let coefficients = core::array::from_fn(|i| match i % 5 {
+            0 => i32::MIN,
+            1 => i32::MAX,
+            2 => 0,
+            3 => i as i32 * 73,
+            _ => -(i as i32) * 91,
+        });
+        for qp in 0..=63 {
+            for scale in [[16; 16], core::array::from_fn(|i| (i * 37 + 1) as u8)] {
+                let mut actual = coefficients;
+                let expected = core::array::from_fn(|idx| {
+                    let v = LEVEL_SCALE[(qp % 6) as usize][((idx >> 2) & 1) + (idx & 1)]
+                        * i32::from(scale[RASTER_TO_ZIGZAG_4X4[idx] as usize]);
+                    let product = coefficients[idx].wrapping_mul(v);
+                    let qp_per = qp / 6;
+                    if qp_per >= 4 {
+                        product.wrapping_shl((qp_per - 4) as u32)
+                    } else {
+                        product.wrapping_add(1 << (3 - qp_per)) >> (4 - qp_per)
+                    }
+                });
+                dequant_4x4_full(&mut actual, qp, &scale);
+                assert_eq!(actual, expected);
+            }
+        }
+    }
 
     #[test]
     fn dequant_8x8_matches_scalar_for_flat_and_custom_matrices() {
