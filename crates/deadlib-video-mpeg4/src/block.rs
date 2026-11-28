@@ -106,8 +106,13 @@ pub(crate) fn intra<const MP42: bool>(
             } else {
                 (8 * i, neighbor.vertical[i - 1])
             };
-            let scaled = value.abs() * neighbor.quantizer;
-            let predicted = coeff[index] + value.signum() * ((scaled + quantizer / 2) / quantizer);
+            let prediction = if neighbor.quantizer == quantizer {
+                value
+            } else {
+                let scaled = value.abs() * neighbor.quantizer;
+                value.signum() * ((scaled + quantizer / 2) / quantizer)
+            };
+            let predicted = coeff[index] + prediction;
             coeff[index] = if MP42 {
                 i32::from(predicted as i16)
             } else {
@@ -399,6 +404,36 @@ fn read_escape<const MP42: bool>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ac_prediction_preserves_equal_quantizer_and_rescales_others() {
+        let left = Predictor {
+            vertical: [-2048, -3, -1, 0, 1, 3, 2047],
+            quantizer: 3,
+            ..Predictor::default()
+        };
+        let boundary = Predictor {
+            dc: 0,
+            ..Predictor::default()
+        };
+        for (q, expected) in [
+            (3, [-2048, -3, -1, 0, 1, 3, 2047]),
+            (2, [-2048, -5, -2, 0, 2, 5, 2047]),
+        ] {
+            let (_, state) = intra::<false>(
+                &mut Bits::new(&[]),
+                false,
+                false,
+                true,
+                q,
+                0,
+                [left, boundary, boundary],
+            )
+            .unwrap();
+            assert_eq!(state.vertical, expected);
+            assert_eq!(state.horizontal, [0; 7]);
+        }
+    }
 
     #[test]
     fn signed_inverse_quantization_matches_magnitude_formula() {
