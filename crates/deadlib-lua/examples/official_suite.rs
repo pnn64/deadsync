@@ -1,7 +1,14 @@
 //! Single-file official suite probe; run by scripts/check_rust_lua_suite.py.
 use deadlib_lua::{ProgramCache, Value, Vm, compile, compile_named};
-use std::{env, fs, path::Path, process::ExitCode, time::Instant};
+use std::{env, fs, path::Path, process::ExitCode};
 
+#[cfg(feature = "bench-allocations")]
+#[path = "official_suite/allocations.rs"]
+mod allocations;
+#[cfg(not(feature = "bench-allocations"))]
+use std::time::Instant;
+
+#[cfg(not(feature = "bench-allocations"))]
 fn cycles() -> Option<u64> {
     #[cfg(windows)]
     {
@@ -26,19 +33,36 @@ fn benchmark(path: &str) -> Result<(), deadlib_lua::Error> {
     let driver = format!("return dofile('{file}')");
     let program = compile_named(driver.as_bytes(), b"=official benchmark")?;
     let function = vm.try_load_program(&program)?;
+    #[cfg(feature = "bench-allocations")]
+    let allocations_before = allocations::Counts::read();
+    #[cfg(not(feature = "bench-allocations"))]
     let before = cycles();
+    #[cfg(not(feature = "bench-allocations"))]
     let started = Instant::now();
     let values = vm.call(Value::Function(function), &[])?;
+    #[cfg(feature = "bench-allocations")]
+    let counts = allocations::Counts::read().since(allocations_before);
+    #[cfg(not(feature = "bench-allocations"))]
     let elapsed = started.elapsed().as_nanos();
+    #[cfg(not(feature = "bench-allocations"))]
     let used = before.zip(cycles()).map(|(a, b)| b.saturating_sub(a));
     let returned = match values.first() {
         Some(Value::Number(n)) => format!("{:016x}", n.to_bits()),
         _ => "none".to_owned(),
     };
+    #[cfg(not(feature = "bench-allocations"))]
     eprintln!(
         "BENCH\t{file}\t{elapsed}\t{}\t{returned}",
         used.map_or_else(|| "unavailable".to_owned(), |n| n.to_string())
     );
+    #[cfg(feature = "bench-allocations")]
+    {
+        eprintln!("BENCH\t{file}\tunavailable\tunavailable\t{returned}");
+        eprintln!(
+            "ALLOC\t{}\t{}\t{}",
+            counts.fresh, counts.resized, counts.growth
+        );
+    }
     Ok(())
 }
 

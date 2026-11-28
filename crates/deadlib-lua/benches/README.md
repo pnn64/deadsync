@@ -24,6 +24,18 @@ process CPU cycles, original output, return values, source checksums, and binary
 identity. `--cpu N` pins child processes where supported; `--output PATH` selects
 the JSON result path. Workload order is shuffled with a fixed seed.
 
+Measure allocator requests using a separate release build:
+
+```sh
+python crates/deadlib-lua/benches/run_lua51.py --allocations --samples 3
+```
+
+This mode counts successful Rust global allocator requests during the same
+`dofile` call. It records fresh allocations, resizes, and growth bytes. Growth
+bytes sum new block sizes and the positive size difference of each resize.
+The instrumented example retains the VM's default allocation behavior and
+omits time and cycle measurements.
+
 Install the Rust toolchain's `llvm-tools-preview` component before running
 the profile-guided benchmark.
 

@@ -9,6 +9,9 @@ repository = "https://github.com/pnn64/deadsync"
 
 [dependencies]
 
+[features]
+bench-allocations = []
+
 [[test]]
 name = "stdio_allocation_failures"
 # libtest prints before test entry, warming precisely the global streams whose

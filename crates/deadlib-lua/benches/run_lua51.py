@@ -34,6 +34,7 @@ def sha256(path: Path) -> str:
 def run_sample(
     binary: Path, source: Path, directory: Path, name: str, sample: int,
     environment: dict[str, str], timeout: float, cpu: int | None = None,
+    allocations: bool = False,
 ) -> dict:
     cwd = directory / name / str(sample)
     shutil.copytree(source, cwd)
@@ -72,6 +73,12 @@ def run_sample(
     if passed:
         expected = struct.pack(">d", float(RETURNS[name])).hex() if name in RETURNS else "none"
         passed = record[4] == expected
+    counts = None
+    if allocations and passed:
+        counts = next((line.split("\t")[1:] for line in error.splitlines()
+                       if line.startswith("ALLOC\t")), None)
+        passed = (record[2:4] == ["unavailable", "unavailable"] and counts is not None
+                  and len(counts) == 3 and all(value.isdecimal() for value in counts))
     platform_failure = (sys.platform == "win32" and name == "files.lua"
                         and child.returncode == 1 and not expired
                         and any(line.startswith("FAIL\tRuntime\t59\t")
@@ -81,15 +88,18 @@ def run_sample(
                "platform-expected-failure" if platform_failure else "fail",
                stdout=stdout.decode("utf-8", "replace"), stderr=error)
     if passed:
-        row.update(nanoseconds=int(record[2]),
-                   cycles=int(record[3]) if record[3] != "unavailable" else None,
-                   returned=record[4])
+        row["returned"] = record[4]
+        if allocations:
+            row["allocations"] = dict(zip(("fresh", "resized", "growth_bytes"), map(int, counts)))
+        else:
+            row.update(nanoseconds=int(record[2]),
+                       cycles=int(record[3]) if record[3] != "unavailable" else None)
     return row
 
 
 def profiled_build(
     root: Path, source: Path, directory: Path, suffix: str, command: list[str],
-    environment: dict[str, str], timeout: float,
+    environment: dict[str, str], timeout: float, allocations: bool = False,
 ) -> tuple[Path, list[str], dict]:
     rustc = environment.get("RUSTC", "rustc")
     version = subprocess.check_output([rustc, "-vV"], cwd=root, text=True)
@@ -124,7 +134,7 @@ def profiled_build(
     for name, trial in jobs:
         training_source = source.parent / "pgo" if name == PGO_DYNAMIC else source
         row = run_sample(instrumented, training_source, directory / "training", name, trial,
-                         training_env, timeout)
+                         training_env, timeout, allocations=allocations)
         if row["status"] != "pass":
             raise SystemExit(f"PGO training failed on {name} (sample {trial})\n{row['stderr']}")
         if name == PGO_DYNAMIC and row["stdout"].splitlines() != ["compiled 8192 independent chunks"]:
@@ -151,6 +161,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--pgo", action="store_true",
                         help="Train on the portable suite and short generated chunks with constructs.lua held out")
+    parser.add_argument("--allocations", action="store_true",
+                        help="Count allocator requests in a separate build without cycle timings")
     args = parser.parse_args()
     if args.samples < 1 or args.timeout <= 0 or (args.cpu is not None and args.cpu < 0):
         parser.error("samples and timeout must be positive; CPU must be nonnegative")
@@ -171,9 +183,13 @@ def main() -> None:
               Path(__file__).resolve()]
     if args.pgo:
         paths.append(bench / "pgo" / PGO_DYNAMIC)
+    if args.allocations:
+        paths.append(crate / "examples/official_suite/allocations.rs")
     hashes = {p.relative_to(root).as_posix(): sha256(p) for p in paths}
     command = ["cargo", "build", "--release", "--locked", "-p", "deadlib-lua",
                "--example", "official_suite", "-j2"]
+    if args.allocations:
+        command += ["--features", "bench-allocations"]
     target = (root / Path(os.environ.get("CARGO_TARGET_DIR", "target"))).resolve()
     suffix = ".exe" if sys.platform == "win32" else ""
     directory = target / "lua51-benchmark" / f"{time.time_ns()}-{os.getpid()}"
@@ -183,7 +199,7 @@ def main() -> None:
     pgo = None
     if args.pgo:
         built, command, pgo = profiled_build(root, source, directory, suffix, command,
-                                              environment, args.timeout)
+                                            environment, args.timeout, args.allocations)
     else:
         subprocess.run(command, cwd=root, check=True)
         built = target / f"release/examples/official_suite{suffix}"
@@ -204,11 +220,13 @@ def main() -> None:
     )
     if pgo is not None:
         metadata["profile_guided"] = pgo
+    if args.allocations:
+        metadata["measurement"] = "successful Rust global allocator requests during dofile"
     for name, sample in jobs:
         if name in failed:
             continue
         row = run_sample(binary, source, directory / "runs", name, sample,
-                         environment, args.timeout, args.cpu)
+                         environment, args.timeout, args.cpu, args.allocations)
         if row["status"] != "pass":
             failed.add(name)
         rows.append(row)
@@ -220,6 +238,12 @@ def main() -> None:
     for name in args.files:
         passed = [row for row in rows if row["file"] == name and row["status"] == "pass"]
         if not passed:
+            continue
+        if args.allocations:
+            summary[name] = dict(samples=len(passed), **{
+                f"median_{key}": statistics.median(row["allocations"][key] for row in passed)
+                for key in ("fresh", "resized", "growth_bytes")
+            })
             continue
         cycles = [row["cycles"] for row in passed if row["cycles"] is not None]
         summary[name] = dict(
