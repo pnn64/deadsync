@@ -86,6 +86,14 @@ impl<'a> BitReader<'a> {
         }
         let count = (self.position & 7) as u32 + width;
         let start = self.position >> 3;
+        // Most granule fields have another eight physical bytes available.
+        // Read one full word and extract directly, even across byte boundaries.
+        // The logical bit limit has already been checked above.
+        if self.data.len() - start >= 8 {
+            let word = u64::from_be_bytes(self.data[start..start + 8].try_into().unwrap());
+            self.position += width as usize;
+            return Ok(((word >> (64 - count)) as u32) & (u32::MAX >> (32 - width)));
+        }
         let source = &self.data[start..start + count.div_ceil(8) as usize];
         // A field spans at most five bytes. Fixed-size loads replace the
         // byte-at-a-time extraction loop, including unaligned 32-bit fields.
@@ -163,6 +171,43 @@ impl BitWriter {
 #[cfg(test)]
 mod tests {
     use super::BitReader;
+
+    #[test]
+    fn reads_preserve_unaligned_fields_and_bounded_truncation() {
+        for len in 1..=24 {
+            let data: Vec<u8> = (0..len)
+                .map(|n| (n as u8).wrapping_mul(71) ^ (n as u8).rotate_left(3) ^ 0xa5)
+                .collect();
+            for start in 0..=len * 8 {
+                for remaining in [len * 8 - start, (len * 8 - start) / 2] {
+                    for width in 0..=33u32 {
+                        let mut reader = BitReader::bounded(&data, start, remaining).unwrap();
+                        let expected = if width > 32 {
+                            Err(crate::Error::Invalid("bit field width"))
+                        } else if width as usize > remaining {
+                            Err(crate::Error::Truncated)
+                        } else {
+                            let mut value = 0u32;
+                            for bit in start..start + width as usize {
+                                value =
+                                    (value << 1) | u32::from((data[bit / 8] >> (7 - bit % 8)) & 1);
+                            }
+                            Ok(value)
+                        };
+                        let result = reader.read(width);
+                        assert_eq!(
+                            result, expected,
+                            "len={len} start={start} remaining={remaining} width={width}"
+                        );
+                        assert_eq!(
+                            reader.position(),
+                            start + width as usize * usize::from(result.is_ok()),
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn eight_bit_prefixes_preserve_every_two_byte_pattern_and_bound() {
