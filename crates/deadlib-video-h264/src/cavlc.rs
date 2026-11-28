@@ -1,7 +1,4 @@
-use alloc::vec::Vec;
-
 use crate::bitstream::BitstreamReader;
-use crate::once::OnceLock;
 
 /// Parse a CAVLC residual block.
 /// Returns total_coeff (needed for nC tracking of neighboring blocks).
@@ -111,21 +108,15 @@ pub fn parse_residual_block_cavlc(
 
 fn parse_coeff_token(reader: &mut BitstreamReader, nc: i32) -> Result<(u8, u8), &'static str> {
     let result = if nc == -2 {
-        let lut =
-            LUT_COEFF_CHROMA_DC_422.get_or_init(|| build_coeff_lut(&COEFF_TOKEN_CHROMA_DC_422, 13));
-        coeff_lut_lookup(reader, lut, 13)
+        coeff_lut_lookup(reader, &LUT_COEFF_CHROMA_DC_422, 13)
     } else if nc < 0 {
-        let lut = LUT_COEFF_CHROMA_DC.get_or_init(|| build_coeff_lut(&COEFF_TOKEN_CHROMA_DC, 8));
-        coeff_lut_lookup(reader, lut, 8)
+        coeff_lut_lookup(reader, &LUT_COEFF_CHROMA_DC, 8)
     } else if nc < 2 {
-        let lut = LUT_COEFF_NC0.get_or_init(|| build_coeff_lut(&COEFF_TOKEN_NC0, 16));
-        coeff_lut_lookup(reader, lut, 16)
+        coeff_lut_lookup(reader, &LUT_COEFF_NC0, 16)
     } else if nc < 4 {
-        let lut = LUT_COEFF_NC2.get_or_init(|| build_coeff_lut(&COEFF_TOKEN_NC2, 14));
-        coeff_lut_lookup(reader, lut, 14)
+        coeff_lut_lookup(reader, &LUT_COEFF_NC2, 14)
     } else if nc < 8 {
-        let lut = LUT_COEFF_NC4.get_or_init(|| build_coeff_lut(&COEFF_TOKEN_NC4, 10));
-        coeff_lut_lookup(reader, lut, 10)
+        coeff_lut_lookup(reader, &LUT_COEFF_NC4, 10)
     } else {
         // nC >= 8: fixed 6-bit code per H.264 Table 9-5(e)
         // For code >= 8: TC = code/4 + 1, TO = code & 3
@@ -230,59 +221,63 @@ fn parse_level(
 // O(1) VLC lookup table infrastructure
 // ============================================================
 
-/// Coeff-token VLC entry. len == 0 means the slot is invalid (no codeword maps here).
-#[derive(Clone, Copy, Default)]
-struct CoeffEntry {
-    len: u8,
-    tc: u8,
-    to: u8,
-}
-
 /// Single-value VLC entry. len == 0 means invalid.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 struct U8Entry {
     len: u8,
     val: u8,
 }
 
-/// Build a flat peek-indexed LUT from a (codeword, len, tc, to) source table.
-/// `bits` must be >= the maximum code length in `src`.
-fn build_coeff_lut(src: &[(u32, u8, u8, u8)], bits: u8) -> Vec<CoeffEntry> {
-    let mut table = vec![CoeffEntry::default(); 1usize << bits];
-    for &(code, len, tc, to) in src {
-        let fill = 1usize << (bits - len);
-        let base = (code as usize) << (bits - len);
-        for e in table[base..base + fill].iter_mut() {
-            *e = CoeffEntry { len, tc, to };
+/// Build packed coefficient entries at compile time. Bits 0..4 hold the
+/// code length (zero is invalid), 5..6 the trailing ones, and 7..11 total coefficients.
+const fn build_coeff_lut<const N: usize>(src: &[(u32, u8, u8, u8)]) -> [u16; N] {
+    let mut table = [0; N];
+    let mut i = 0;
+    while i < src.len() {
+        let (code, len, tc, to) = src[i];
+        let fill = N >> len;
+        let base = code as usize * fill;
+        let entry = (tc as u16) << 7 | (to as u16) << 5 | len as u16;
+        let mut j = base;
+        while j < base + fill {
+            table[j] = entry;
+            j += 1;
         }
+        i += 1;
     }
     table
 }
 
 /// Build a flat peek-indexed LUT from a (codeword, len, value) source table.
-fn build_u8_lut(src: &[(u32, u8, u8)], bits: u8) -> Vec<U8Entry> {
-    let mut table = vec![U8Entry::default(); 1usize << bits];
-    for &(code, len, val) in src {
-        let fill = 1usize << (bits - len);
-        let base = (code as usize) << (bits - len);
-        for e in table[base..base + fill].iter_mut() {
-            *e = U8Entry { len, val };
+const fn build_u8_lut<const N: usize>(src: &[(u32, u8, u8)]) -> [U8Entry; N] {
+    let mut table = [U8Entry { len: 0, val: 0 }; N];
+    let mut i = 0;
+    while i < src.len() {
+        let (code, len, val) = src[i];
+        let fill = N >> len;
+        let base = code as usize * fill;
+        let mut j = base;
+        while j < base + fill {
+            table[j] = U8Entry { len, val };
+            j += 1;
         }
+        i += 1;
     }
     table
 }
 
 fn coeff_lut_lookup(
     r: &mut BitstreamReader,
-    lut: &[CoeffEntry],
+    lut: &[u16],
     bits: u8,
 ) -> Result<(u8, u8), &'static str> {
     let e = lut[r.peek_bits(bits) as usize];
-    if e.len == 0 {
+    let len = (e & 31) as u8;
+    if len == 0 {
         return Err("invalid VLC code");
     }
-    r.skip_bits(e.len);
-    Ok((e.tc, e.to))
+    r.skip_bits(len);
+    Ok(((e >> 7) as u8, ((e >> 5) & 3) as u8))
 }
 
 fn u8_lut_lookup(r: &mut BitstreamReader, lut: &[U8Entry], bits: u8) -> Result<u8, &'static str> {
@@ -294,17 +289,12 @@ fn u8_lut_lookup(r: &mut BitstreamReader, lut: &[U8Entry], bits: u8) -> Result<u
     Ok(e.val)
 }
 
-// Lazily-initialized lookup tables for each VLC table variant.
-static LUT_COEFF_NC0: OnceLock<Vec<CoeffEntry>> = OnceLock::new(); // 16 bits → 64 KiB
-static LUT_COEFF_NC2: OnceLock<Vec<CoeffEntry>> = OnceLock::new(); // 14 bits → 16 KiB
-static LUT_COEFF_NC4: OnceLock<Vec<CoeffEntry>> = OnceLock::new(); // 10 bits →  1 KiB
-static LUT_COEFF_CHROMA_DC: OnceLock<Vec<CoeffEntry>> = OnceLock::new(); //  8 bits → 256 B
-static LUT_COEFF_CHROMA_DC_422: OnceLock<Vec<CoeffEntry>> = OnceLock::new(); // 13 bits → 8 KiB
-
-static LUT_TOTAL_ZEROS: [OnceLock<Vec<U8Entry>>; 15] = [const { OnceLock::new() }; 15];
-static LUT_TOTAL_ZEROS_CHROMA: [OnceLock<Vec<U8Entry>>; 3] = [const { OnceLock::new() }; 3];
-static LUT_TOTAL_ZEROS_CHROMA_422: [OnceLock<Vec<U8Entry>>; 7] = [const { OnceLock::new() }; 7];
-static LUT_RUN_BEFORE: [OnceLock<Vec<U8Entry>>; 7] = [const { OnceLock::new() }; 7];
+// Read-only tables need no heap storage, atomics or first-use initialization.
+static LUT_COEFF_NC0: [u16; 65536] = build_coeff_lut(&COEFF_TOKEN_NC0);
+static LUT_COEFF_NC2: [u16; 16384] = build_coeff_lut(&COEFF_TOKEN_NC2);
+static LUT_COEFF_NC4: [u16; 1024] = build_coeff_lut(&COEFF_TOKEN_NC4);
+static LUT_COEFF_CHROMA_DC: [u16; 256] = build_coeff_lut(&COEFF_TOKEN_CHROMA_DC);
+static LUT_COEFF_CHROMA_DC_422: [u16; 8192] = build_coeff_lut(&COEFF_TOKEN_CHROMA_DC_422);
 
 // ============================================================
 // coeff_token VLC tables from H.264 Table 9-5
@@ -621,33 +611,32 @@ static COEFF_TOKEN_CHROMA_DC_422: [(u32, u8, u8, u8); 30] = [
 // total_zeros VLC tables (H.264 Tables 9-7, 9-8)
 // ============================================================
 
-// Max peek-bits per total_coeff value (1-indexed, so [0] = tc=1).
-const TOTAL_ZEROS_BITS: [u8; 15] = [9, 6, 6, 5, 5, 6, 6, 6, 6, 5, 4, 4, 3, 2, 1];
+// Peek width and table per total_coeff (1-indexed).
+static LUT_TOTAL_ZEROS: [(u8, &[U8Entry]); 15] = [
+    (9, &build_u8_lut::<512>(&TOTAL_ZEROS_1)),
+    (6, &build_u8_lut::<64>(&TOTAL_ZEROS_2)),
+    (6, &build_u8_lut::<64>(&TOTAL_ZEROS_3)),
+    (5, &build_u8_lut::<32>(&TOTAL_ZEROS_4)),
+    (5, &build_u8_lut::<32>(&TOTAL_ZEROS_5)),
+    (6, &build_u8_lut::<64>(&TOTAL_ZEROS_6)),
+    (6, &build_u8_lut::<64>(&TOTAL_ZEROS_7)),
+    (6, &build_u8_lut::<64>(&TOTAL_ZEROS_8)),
+    (6, &build_u8_lut::<64>(&TOTAL_ZEROS_9)),
+    (5, &build_u8_lut::<32>(&TOTAL_ZEROS_10)),
+    (4, &build_u8_lut::<16>(&TOTAL_ZEROS_11)),
+    (4, &build_u8_lut::<16>(&TOTAL_ZEROS_12)),
+    (3, &build_u8_lut::<8>(&TOTAL_ZEROS_13)),
+    (2, &build_u8_lut::<4>(&TOTAL_ZEROS_14)),
+    (1, &build_u8_lut::<2>(&TOTAL_ZEROS_15)),
+];
+static LUT_TOTAL_ZEROS_CHROMA: [(u8, &[U8Entry]); 3] = [
+    (3, &build_u8_lut::<8>(&TOTAL_ZEROS_CHROMA_DC_1)),
+    (2, &build_u8_lut::<4>(&TOTAL_ZEROS_CHROMA_DC_2)),
+    (1, &build_u8_lut::<2>(&TOTAL_ZEROS_CHROMA_DC_3)),
+];
 
 fn parse_total_zeros(r: &mut BitstreamReader, total_coeff: u8) -> Result<u8, &'static str> {
-    let idx = (total_coeff - 1) as usize;
-    let bits = TOTAL_ZEROS_BITS[idx];
-    let lut = LUT_TOTAL_ZEROS[idx].get_or_init(|| {
-        let src: &[(u32, u8, u8)] = match total_coeff {
-            1 => &TOTAL_ZEROS_1,
-            2 => &TOTAL_ZEROS_2,
-            3 => &TOTAL_ZEROS_3,
-            4 => &TOTAL_ZEROS_4,
-            5 => &TOTAL_ZEROS_5,
-            6 => &TOTAL_ZEROS_6,
-            7 => &TOTAL_ZEROS_7,
-            8 => &TOTAL_ZEROS_8,
-            9 => &TOTAL_ZEROS_9,
-            10 => &TOTAL_ZEROS_10,
-            11 => &TOTAL_ZEROS_11,
-            12 => &TOTAL_ZEROS_12,
-            13 => &TOTAL_ZEROS_13,
-            14 => &TOTAL_ZEROS_14,
-            15 => &TOTAL_ZEROS_15,
-            _ => unreachable!(),
-        };
-        build_u8_lut(src, bits)
-    });
+    let (bits, lut) = LUT_TOTAL_ZEROS[(total_coeff - 1) as usize];
     u8_lut_lookup(r, lut, bits)
 }
 
@@ -655,18 +644,7 @@ fn parse_total_zeros_chroma_dc(
     r: &mut BitstreamReader,
     total_coeff: u8,
 ) -> Result<u8, &'static str> {
-    const CHROMA_BITS: [u8; 3] = [3, 2, 1];
-    let idx = (total_coeff - 1) as usize;
-    let bits = CHROMA_BITS[idx];
-    let lut = LUT_TOTAL_ZEROS_CHROMA[idx].get_or_init(|| {
-        let src: &[(u32, u8, u8)] = match total_coeff {
-            1 => &TOTAL_ZEROS_CHROMA_DC_1,
-            2 => &TOTAL_ZEROS_CHROMA_DC_2,
-            3 => &TOTAL_ZEROS_CHROMA_DC_3,
-            _ => unreachable!(),
-        };
-        build_u8_lut(src, bits)
-    });
+    let (bits, lut) = LUT_TOTAL_ZEROS_CHROMA[(total_coeff - 1) as usize];
     u8_lut_lookup(r, lut, bits)
 }
 
@@ -675,57 +653,44 @@ fn parse_total_zeros_chroma_dc_422(
     r: &mut BitstreamReader,
     total_coeff: u8,
 ) -> Result<u8, &'static str> {
-    // (codeword, length) for total_zeros 0, 1, ...
+    // (codeword, length, total_zeros), per Table 9-9(b).
     #[rustfmt::skip]
-    const CODES: [&[(u32, u8)]; 7] = [
-        &[(1, 1), (2, 3), (3, 3), (2, 4), (3, 4), (1, 4), (1, 5), (0, 5)],
-        &[(0, 3), (1, 2), (1, 3), (4, 3), (5, 3), (6, 3), (7, 3)],
-        &[(0, 3), (1, 3), (1, 2), (2, 2), (6, 3), (7, 3)],
-        &[(6, 3), (0, 2), (1, 2), (2, 2), (7, 3)],
-        &[(0, 2), (1, 2), (2, 2), (3, 2)],
-        &[(0, 2), (1, 2), (1, 1)],
-        &[(0, 1), (1, 1)],
+    static LUT: [[U8Entry; 32]; 7] = [
+        build_u8_lut(&[(1,1,0), (2,3,1), (3,3,2), (2,4,3), (3,4,4), (1,4,5), (1,5,6), (0,5,7)]),
+        build_u8_lut(&[(0,3,0), (1,2,1), (1,3,2), (4,3,3), (5,3,4), (6,3,5), (7,3,6)]),
+        build_u8_lut(&[(0,3,0), (1,3,1), (1,2,2), (2,2,3), (6,3,4), (7,3,5)]),
+        build_u8_lut(&[(6,3,0), (0,2,1), (1,2,2), (2,2,3), (7,3,4)]),
+        build_u8_lut(&[(0,2,0), (1,2,1), (2,2,2), (3,2,3)]),
+        build_u8_lut(&[(0,2,0), (1,2,1), (1,1,2)]),
+        build_u8_lut(&[(0,1,0), (1,1,1)]),
     ];
     let idx = (total_coeff as usize)
         .checked_sub(1)
         .filter(|&i| i < 7)
         .ok_or("invalid total_coeff for 4:2:2 chroma DC")?;
-    let lut = LUT_TOTAL_ZEROS_CHROMA_422[idx].get_or_init(|| {
-        let src: Vec<(u32, u8, u8)> = CODES[idx]
-            .iter()
-            .enumerate()
-            .map(|(tz, &(code, len))| (code, len, tz as u8))
-            .collect();
-        build_u8_lut(&src, 5)
-    });
-    u8_lut_lookup(r, lut, 5)
+    u8_lut_lookup(r, &LUT[idx], 5)
 }
 
 // ============================================================
 // run_before VLC table (H.264 Table 9-10)
 // ============================================================
 
-// Max peek-bits per zeros_left value (1-indexed; index 6 covers zeros_left >= 7).
-const RUN_BEFORE_BITS: [u8; 7] = [1, 2, 2, 3, 3, 3, 11];
+// Peek width and table per zeros_left (index 6 covers zeros_left >= 7).
+static LUT_RUN_BEFORE: [(u8, &[U8Entry]); 7] = [
+    (1, &build_u8_lut::<2>(&RUN_BEFORE_1)),
+    (2, &build_u8_lut::<4>(&RUN_BEFORE_2)),
+    (2, &build_u8_lut::<4>(&RUN_BEFORE_3)),
+    (3, &build_u8_lut::<8>(&RUN_BEFORE_4)),
+    (3, &build_u8_lut::<8>(&RUN_BEFORE_5)),
+    (3, &build_u8_lut::<8>(&RUN_BEFORE_6)),
+    (11, &build_u8_lut::<2048>(&RUN_BEFORE_7PLUS)),
+];
 
 fn parse_run_before(r: &mut BitstreamReader, zeros_left: u8) -> Result<u8, &'static str> {
     if zeros_left == 0 {
         return Ok(0);
     }
-    let idx = (zeros_left.min(7) - 1) as usize;
-    let bits = RUN_BEFORE_BITS[idx];
-    let lut = LUT_RUN_BEFORE[idx].get_or_init(|| {
-        let src: &[(u32, u8, u8)] = match zeros_left.min(7) {
-            1 => &RUN_BEFORE_1,
-            2 => &RUN_BEFORE_2,
-            3 => &RUN_BEFORE_3,
-            4 => &RUN_BEFORE_4,
-            5 => &RUN_BEFORE_5,
-            6 => &RUN_BEFORE_6,
-            _ => &RUN_BEFORE_7PLUS,
-        };
-        build_u8_lut(src, bits)
-    });
+    let (bits, lut) = LUT_RUN_BEFORE[(zeros_left.min(7) - 1) as usize];
     u8_lut_lookup(r, lut, bits)
 }
 
@@ -894,3 +859,37 @@ static RUN_BEFORE_7PLUS: [(u32, u8, u8); 15] = [
     (0b0000001, 7, 10), (0b00000001, 8, 11), (0b000000001, 9, 12),
     (0b0000000001, 10, 13), (0b00000000001, 11, 14),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn packed_coefficient_tables_match_every_prefix() {
+        let cases: [(&[(u32, u8, u8, u8)], &[u16], u8); 5] = [
+            (&COEFF_TOKEN_NC0, &LUT_COEFF_NC0, 16),
+            (&COEFF_TOKEN_NC2, &LUT_COEFF_NC2, 14),
+            (&COEFF_TOKEN_NC4, &LUT_COEFF_NC4, 10),
+            (&COEFF_TOKEN_CHROMA_DC, &LUT_COEFF_CHROMA_DC, 8),
+            (&COEFF_TOKEN_CHROMA_DC_422, &LUT_COEFF_CHROMA_DC_422, 13),
+        ];
+        for (src, lut, bits) in cases {
+            for index in 0..lut.len() {
+                let expected = src
+                    .iter()
+                    .rev()
+                    .find(|&&(code, len, _, _)| index >> (bits - len) == code as usize);
+                let data = ((index as u32) << (32 - bits)).to_be_bytes();
+                let mut reader = BitstreamReader::new(&data);
+                let result = coeff_lut_lookup(&mut reader, lut, bits);
+                if let Some(&(_, len, tc, to)) = expected {
+                    assert_eq!(result, Ok((tc, to)));
+                    assert_eq!(reader.position(), (usize::from(len / 8), len % 8));
+                } else {
+                    assert_eq!(result, Err("invalid VLC code"));
+                    assert_eq!(reader.position(), (0, 0));
+                }
+            }
+        }
+    }
+}
