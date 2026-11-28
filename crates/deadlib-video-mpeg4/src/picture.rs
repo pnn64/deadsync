@@ -415,7 +415,8 @@ fn motion_component(bits: &mut Bits<'_>, predictor: i32, code: u8) -> Result<i32
     }
     let limit = 32 << shift;
     let vector = predictor + delta;
-    Ok((vector + limit).rem_euclid(2 * limit) - limit)
+    // The wrap interval is a power of two for every legal f_code.
+    Ok(((vector + limit) & (2 * limit - 1)) - limit)
 }
 
 pub(crate) fn predict(
@@ -441,5 +442,24 @@ pub(crate) fn predict(
     };
     for (plane, previous) in frame.planes[1..].iter_mut().zip(&reference.planes[1..]) {
         plane.predict::<8>(previous, [8 * x, 8 * y], chroma, truncate);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn motion_components_wrap_both_boundaries_for_every_code() {
+        for code in 1..=7 {
+            let limit = 32 << (code - 1);
+            // Magnitude one with positive/negative sign and zero residual.
+            let mut positive = Bits::new(&[0b0100_0000, 0]);
+            let mut negative = Bits::new(&[0b0110_0000, 0]);
+            assert_eq!(motion_component(&mut positive, limit - 1, code), Ok(-limit));
+            assert_eq!(motion_component(&mut negative, -limit, code), Ok(limit - 1));
+            let mut zero = Bits::new(&[0x80]);
+            assert_eq!(motion_component(&mut zero, -limit, code), Ok(-limit));
+        }
     }
 }
