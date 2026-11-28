@@ -3167,7 +3167,12 @@ impl Vm {
         frame.vararg_start = base;
         frame.vararg_count = 0;
         frame.tail_calls = frame.tail_calls.saturating_add(1);
-        self.frames[frame_index] = *frame;
+        // The target, stack base and return destination are unchanged.
+        let active = &mut self.frames[frame_index];
+        active.pc = 0;
+        active.vararg_start = base;
+        active.vararg_count = 0;
+        active.tail_calls = frame.tail_calls;
         true
     }
 
