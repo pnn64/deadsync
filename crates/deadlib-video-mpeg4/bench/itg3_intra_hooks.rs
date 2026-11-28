@@ -105,6 +105,114 @@ pub fn perf_dc_exact(records: &[PerfIntra<'_>]) -> alloc::vec::Vec<(i32, usize)>
     records.iter().map(PerfIntra::dc).collect()
 }
 
+pub struct PerfTexture<'a> {
+    intra: bool,
+    scan: u8,
+    next: u8,
+    offset: u8,
+    bytes: &'a [u8],
+}
+
+impl<'a> PerfTexture<'a> {
+    pub fn parse(mut data: &'a [u8]) -> alloc::vec::Vec<Self> {
+        let mut records = alloc::vec::Vec::new();
+        while !data.is_empty() {
+            let (flags, rest) = data.split_first_chunk::<6>().unwrap();
+            let (bytes, rest) = rest.split_at(u16::from_le_bytes([flags[4], flags[5]]) as usize);
+            records.push(Self {
+                intra: flags[0] != 0,
+                scan: flags[1],
+                next: flags[2],
+                offset: flags[3],
+                bytes,
+            });
+            data = rest;
+        }
+        records
+    }
+
+    fn run(&self) -> ([i32; 64], usize) {
+        let mut bits = Bits::new(self.bytes);
+        bits.skip(self.offset).unwrap();
+        let mut coefficients = [0; 64];
+        let scan = match self.scan {
+            0 => &ZIGZAG,
+            1 => &HORIZONTAL,
+            2 => &VERTICAL,
+            _ => unreachable!(),
+        };
+        texture::<false, _>(
+            &mut bits,
+            self.intra,
+            scan,
+            self.next as usize,
+            |position, level| {
+                coefficients[position] = level;
+            },
+        )
+        .unwrap();
+        (coefficients, bits.perf_position())
+    }
+}
+
+pub fn perf_texture_batch(records: &[PerfTexture<'_>], repeats: usize) {
+    for _ in 0..repeats {
+        for record in records {
+            core::hint::black_box(core::hint::black_box(record).run());
+        }
+    }
+}
+
+pub fn perf_texture_exact(records: &[PerfTexture<'_>]) -> alloc::vec::Vec<([i32; 64], usize)> {
+    records.iter().map(PerfTexture::run).collect()
+}
+
+#[cfg(itg_capture_texture)]
+mod texture_trace {
+    extern crate std;
+    use super::*;
+    use alloc::vec::Vec;
+    use std::{
+        fs::File,
+        io::{BufWriter, Write},
+        sync::{
+            atomic::{AtomicUsize, Ordering::Relaxed},
+            Mutex,
+        },
+    };
+    static INDEX: AtomicUsize = AtomicUsize::new(0);
+    static RECORDS: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+
+    pub(super) fn capture(bits: &Bits<'_>, intra: bool, scan: &[usize; 64], next: usize) {
+        if INDEX.fetch_add(1, Relaxed) % 512 != 0 {
+            return;
+        }
+        let (offset, bytes) = bits.perf_tail();
+        let bytes = &bytes[..bytes.len().min(512)];
+        let scan = if scan == &ZIGZAG {
+            0
+        } else if scan == &HORIZONTAL {
+            1
+        } else {
+            assert_eq!(scan, &VERTICAL);
+            2
+        };
+        let mut out = RECORDS.lock().unwrap();
+        out.extend([intra as u8, scan, next as u8, offset]);
+        out.extend((bytes.len() as u16).to_le_bytes());
+        out.extend_from_slice(bytes);
+    }
+
+    pub fn write_texture(path: &str) {
+        BufWriter::new(File::create(path).unwrap())
+            .write_all(&RECORDS.lock().unwrap())
+            .unwrap();
+    }
+}
+
+#[cfg(itg_capture_texture)]
+pub use texture_trace::write_texture;
+
 pub struct PerfDcPredict {
     dc: i32,
     scale: i32,

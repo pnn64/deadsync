@@ -4,12 +4,15 @@ param(
     [Parameter(Mandatory = $true)] [string] $Inputs,
     [Parameter(Mandatory = $true)] [string] $Work,
     [string] $Trace,
-    [ValidateSet('scan', 'intra', 'dc', 'quant', 'motion', 'edge', 'transform', 'dcpredict', 'pipeline')] [string] $Operation = 'scan',
+    [ValidateSet('scan', 'intra', 'dc', 'quant', 'motion', 'edge', 'transform', 'dcpredict', 'flag', 'peek', 'skip', 'texture', 'vectors', 'pipeline')] [string] $Operation = 'scan',
     [int] $Rounds = 5,
     [int] $Cpu = 12,
     [switch] $Capture,
     [switch] $CaptureExtra,
     [switch] $CapturePixels,
+    [switch] $CaptureBits,
+    [switch] $CaptureTexture,
+    [switch] $CaptureVectors,
     [switch] $Full,
     [switch] $KernelsOnly,
     [switch] $SkipVerify
@@ -24,6 +27,7 @@ $bench = Join-Path $PSScriptRoot 'itg3.rs'
 $hooks = Join-Path $PSScriptRoot 'itg3_intra_hooks.rs'
 $motionHooks = Join-Path $PSScriptRoot 'itg3_motion_hooks.rs'
 $pixelHooks = Join-Path $PSScriptRoot 'itg3_pixel_hooks.rs'
+$bitsHooks = Join-Path $PSScriptRoot 'itg3_bits_hooks.rs'
 
 function Check([string] $what) {
     if ($LASTEXITCODE -ne 0) { throw "$what failed: $LASTEXITCODE" }
@@ -47,10 +51,14 @@ function Build-Library([string] $source, [string] $name, [string] $variant) {
         Add-Content -Encoding UTF8 $block ("`n" + (Get-Content -Raw -LiteralPath $hooks))
         Add-Content -Encoding UTF8 $picture ("`n" + (Get-Content -Raw -LiteralPath $motionHooks))
         Add-Content -Encoding UTF8 $frame ("`n" + (Get-Content -Raw -LiteralPath $pixelHooks))
+        Add-Content -Encoding UTF8 $bits ("`n" + (Get-Content -Raw -LiteralPath $bitsHooks))
         Add-Content -Encoding UTF8 $lib "`npub use block::{PerfIntra, perf_intra_batch, perf_intra_exact, perf_dc_batch, perf_dc_exact, PerfQuant, perf_quant_batch, perf_quant_exact};"
         Add-Content -Encoding UTF8 $lib "`npub use block::{PerfDcPredict, perf_dcpredict_batch, perf_dcpredict_exact};"
+        Add-Content -Encoding UTF8 $lib "`npub use block::{PerfTexture, perf_texture_batch, perf_texture_exact};"
         Add-Content -Encoding UTF8 $lib "`npub use picture::{PerfMotion, perf_motion_batch, perf_motion_exact};"
+        Add-Content -Encoding UTF8 $lib "`npub use picture::{PerfVectors, perf_vectors_batch, perf_vectors_exact};"
         Add-Content -Encoding UTF8 $lib "`npub use frame::{PerfEdge, perf_edge_batch, perf_edge_exact, PerfTransform, perf_transform_batch, perf_transform_exact};"
+        Add-Content -Encoding UTF8 $lib "`npub use bitstream::{PerfBits, perf_flag_batch, perf_flag_exact, perf_peek_batch, perf_peek_exact, perf_skip_batch, perf_skip_exact};"
         Add-Content -Encoding UTF8 $bits @'
 
 impl<'a> Bits<'a> {
@@ -102,6 +110,40 @@ impl<'a> Bits<'a> {
                 $text = $text.Replace($needle, $needle + "`n    crate::frame::capture_transform(coefficients);")
                 Set-Content -Encoding UTF8 -LiteralPath $transform $text
             }
+            if ($CaptureVectors) {
+                $extra += @('--cfg', 'itg_capture_vectors')
+                Add-Content -Encoding UTF8 $lib "`npub use picture::write_vectors;"
+                $text = Get-Content -Raw -LiteralPath $picture
+                $needle = 'fn motion_vectors('
+                $start = $text.IndexOf($needle)
+                if ($start -lt 0) { throw 'motion vectors signature changed' }
+                $body = $text.IndexOf('{', $start)
+                $text = $text.Insert($body + 1, "`n    vectors_trace::capture(bits, grid, x, y, mb, code);")
+                Set-Content -Encoding UTF8 -LiteralPath $picture $text
+            }
+            if ($CaptureTexture) {
+                $extra += @('--cfg', 'itg_capture_texture')
+                Add-Content -Encoding UTF8 $lib "`npub use block::write_texture;"
+                $text = Get-Content -Raw -LiteralPath $block
+                $needle = '    let (short, codes, values, limits) = if intra {'
+                if (!$text.Contains($needle)) { throw 'texture signature changed' }
+                $text = $text.Replace($needle, "    if !MP42 { texture_trace::capture(bits, intra, scan, next); }`n" + $needle)
+                Set-Content -Encoding UTF8 -LiteralPath $block $text
+            }
+            if ($CaptureBits) {
+                $extra += @('--cfg', 'itg_capture_bits')
+                Add-Content -Encoding UTF8 $lib "`npub use bitstream::write_bits;"
+                $text = Get-Content -Raw -LiteralPath $bits
+                foreach ($entry in @(
+                    @('pub(crate) fn flag(&mut self) -> Result<bool> {', 'bits_trace::flag(self);'),
+                    @('pub(crate) fn peek(&self, count: u8) -> u32 {', 'bits_trace::peek(self, count);'),
+                    @('pub(crate) fn skip(&mut self, count: u8) -> Result<()> {', 'bits_trace::skip(self, count);')
+                )) {
+                    if (!$text.Contains($entry[0])) { throw 'bit reader signature changed' }
+                    $text = $text.Replace($entry[0], $entry[0] + "`n        " + $entry[1])
+                }
+                Set-Content -Encoding UTF8 -LiteralPath $bits $text
+            }
         }
     }
     $rlib = Join-Path $Work "lib$name-$variant.rlib"
@@ -135,6 +177,9 @@ if (!$KernelsOnly) {
         $captureFlags = @('--cfg', 'itg_capture')
         if ($CaptureExtra) { $captureFlags += @('--cfg', 'itg_capture_extra') }
         if ($CapturePixels) { $captureFlags += @('--cfg', 'itg_capture_pixels') }
+        if ($CaptureBits) { $captureFlags += @('--cfg', 'itg_capture_bits') }
+        if ($CaptureTexture) { $captureFlags += @('--cfg', 'itg_capture_texture') }
+        if ($CaptureVectors) { $captureFlags += @('--cfg', 'itg_capture_vectors') }
         $exe = Build-Bench $left $right 'capture' $captureFlags
         & $exe capture 1 $Cpu $Inputs $Trace
         Check 'Capturing actual decoder inputs'
@@ -151,12 +196,12 @@ if (!$KernelsOnly) {
         Check 'Exact output comparison'
     }
 }
-if ($Operation -in 'intra', 'dc', 'quant', 'motion', 'edge', 'transform', 'dcpredict') {
+if ($Operation -in 'intra', 'dc', 'quant', 'motion', 'edge', 'transform', 'dcpredict', 'flag', 'peek', 'skip', 'texture', 'vectors') {
     $left = Build-Library $Before 'baseline' 'kernels'
     $right = Build-Library $After 'candidate' 'kernels'
     $kernel = Build-Bench $left $right 'kernel-cycles' @('--cfg', 'itg_kernels')
     $kernelAlloc = Build-Bench $left $right 'kernel-allocations' @('--cfg', 'itg_kernels', '--cfg', 'allocations')
-    $kernelMode = if ($Operation -in 'quant','motion','edge','transform','dcpredict') { $Operation } else { 'intra' }
+    $kernelMode = if ($Operation -in 'quant','motion','edge','transform','dcpredict','flag','peek','skip','texture','vectors') { $Operation } else { 'intra' }
     & $kernel $kernelMode ($Rounds * 2) $Cpu $Trace > (Join-Path $Work 'kernel-cycles.csv')
     Check 'Kernel cycles'
     & $kernelAlloc $kernelMode 1 $Cpu $Trace > (Join-Path $Work 'kernel-allocations.csv')

@@ -185,7 +185,16 @@ fn main() {
     #[cfg(itg_kernels)]
     if matches!(
         mode.as_str(),
-        "quant" | "motion" | "edge" | "transform" | "dcpredict"
+        "quant"
+            | "motion"
+            | "edge"
+            | "transform"
+            | "dcpredict"
+            | "flag"
+            | "peek"
+            | "skip"
+            | "texture"
+            | "vectors"
     ) {
         let data = std::fs::read(&args[4]).unwrap();
         macro_rules! replay {
@@ -230,6 +239,11 @@ fn main() {
                 perf_dcpredict_exact,
                 1024
             ),
+            "flag" => replay!(PerfBits, perf_flag_batch, perf_flag_exact, 256),
+            "peek" => replay!(PerfBits, perf_peek_batch, perf_peek_exact, 128),
+            "skip" => replay!(PerfBits, perf_skip_batch, perf_skip_exact, 128),
+            "texture" => replay!(PerfTexture, perf_texture_batch, perf_texture_exact, 64),
+            "vectors" => replay!(PerfVectors, perf_vectors_batch, perf_vectors_exact, 256),
             _ => unreachable!(),
         }
         return;
@@ -294,6 +308,12 @@ fn main() {
             baseline::write_edges(&format!("{}.edge", args[5]));
             baseline::write_transforms(&format!("{}.transform", args[5]));
         }
+        #[cfg(itg_capture_bits)]
+        baseline::write_bits(&args[5]);
+        #[cfg(itg_capture_texture)]
+        baseline::write_texture(&format!("{}.texture", args[5]));
+        #[cfg(itg_capture_vectors)]
+        baseline::write_vectors(&format!("{}.vectors", args[5]));
         return;
     }
     let mut verify = (mode == "full").then(|| {
