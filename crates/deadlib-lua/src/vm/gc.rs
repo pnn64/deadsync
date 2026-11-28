@@ -1187,14 +1187,17 @@ impl Vm {
     #[inline]
     pub(super) fn maybe_gc(&mut self) -> Result<(), Error> {
         self.gc.pending = false;
-        if !self.gc.stopped
-            && self.gc.running == 0
-            && !self.gc.closing
-            && self.gc.last_live.saturating_add(self.gc_debt()) >= self.gc.threshold
-        {
+        if self.frame_gc_due() {
             return self.step_gc();
         }
         Ok(())
+    }
+    #[inline]
+    pub(super) fn frame_gc_due(&self) -> bool {
+        !self.gc.stopped
+            && self.gc.running == 0
+            && !self.gc.closing
+            && self.gc.last_live.saturating_add(self.gc_debt()) >= self.gc.threshold
     }
     #[cold]
     #[inline(never)]

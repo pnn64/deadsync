@@ -2182,7 +2182,7 @@ impl Vm {
                 self.merge_hook_tail(frame_index)?;
             }
             let frame_index = self.frames.len() - 1;
-            let frame = self.frames[frame_index];
+            let mut frame = self.frames[frame_index];
             let function = match frame.function {
                 FrameKind::Native(id) => {
                     self.charge()?;
@@ -3026,6 +3026,28 @@ impl Vm {
                         } else {
                             usize::from(i.b)
                         };
+                        if i.op == Op::TailCall
+                            && i.b != OPEN_ARGS
+                            && self.registers[a] == Value::Function(function)
+                            && count <= usize::from(prototype.params)
+                            && !prototype.vararg
+                            && !prototype.compat_arg
+                            // The regular entry path can specialize these functions.
+                            && (prototype.params != 1 || !matches!(prototype.code.len(), 19 | 20))
+                            && self.restart_fixed_tail(
+                                frame_index,
+                                &mut frame,
+                                a + 1,
+                                count,
+                                base + usize::from(prototype.registers),
+                            )
+                        {
+                            pc = 0;
+                            numeric_checkpoint_ready = false;
+                            resume_hints.clear();
+                            ignored_numeric_while = None;
+                            continue;
+                        }
                         if i.op == Op::CallIter
                             && (usize::from(frame.barriers)
                                 + usize::from(self.threads[slot_index(self.thread.0)].depth)
@@ -3084,6 +3106,59 @@ impl Vm {
                 }
             }
         }
+    }
+
+    #[inline]
+    fn restart_fixed_tail(
+        &mut self,
+        frame_index: usize,
+        frame: &mut Frame,
+        arguments: usize,
+        count: usize,
+        end: usize,
+    ) -> bool {
+        let base = frame.base;
+        let len = self.registers.len();
+        if base != frame.stack_start
+            || len < end
+            || len + count > self.registers.capacity()
+            || self.frames.len() == self.frames.capacity()
+            || self.frames.len() + 1 >= usize::from(self.call_slots)
+            || !self.open_upvalues.is_empty()
+            || self.hooks.mask != 0
+            || !self.hooks.popped.is_empty()
+            || self.hooks.enter.is_some()
+            || self.hooks.tail.is_some()
+            || self.frame_gc_due()
+        {
+            return false;
+        }
+
+        // The fixed self-call can reuse its prototype, environment and register
+        // window. Publish a new logical activation before dispatching its code.
+        match count {
+            0 => {}
+            1 => self.registers[base] = self.registers[arguments],
+            2 => {
+                let first = self.registers[arguments];
+                let second = self.registers[arguments + 1];
+                self.registers[base] = first;
+                self.registers[base + 1] = second;
+            }
+            _ => self
+                .registers
+                .copy_within(arguments..arguments + count, base),
+        }
+        self.registers[base + count..end].fill(Value::Nil);
+        self.registers.truncate(end);
+        self.top = base;
+        self.gc.pending = false;
+        frame.pc = 0;
+        frame.vararg_start = base;
+        frame.vararg_count = 0;
+        frame.tail_calls = frame.tail_calls.saturating_add(1);
+        self.frames[frame_index] = *frame;
+        true
     }
 
     #[inline]
