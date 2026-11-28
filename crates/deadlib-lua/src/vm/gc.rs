@@ -147,16 +147,24 @@ pub struct HeapStats {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Trace {
-    Value(Value),
-    MarkedValue(Value),
+    String(StringId),
+    Table(TableId, bool),
+    Function(FunctionId, bool),
+    Thread(ThreadId, bool),
+    Userdata(UserdataId, bool),
+    ParserPrototype(ParserPrototypeId, bool),
+    Native(u64, bool),
     ThreadAgain(ThreadId),
     TableAgain(TableId),
-    TableSlice(TableId, usize),
+    // Pending work is drained or discarded before any table slot can be freed.
+    TableSlice(u32, usize),
     CellAgain(usize),
     Program(usize),
     Cell(usize),
     File(u64),
 }
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(size_of::<Trace>() == 16);
 const TABLE_TRACE_SLOTS: usize = 64;
 
 // A full collection usually has only the active stack to refresh. Keep a
@@ -191,10 +199,16 @@ impl ThreadRefresh {
 }
 
 fn edge(value: Value) -> Option<Trace> {
-    match value {
-        Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_) => None,
-        _ => Some(Trace::Value(value)),
-    }
+    Some(match value {
+        Value::String(id) => Trace::String(id),
+        Value::Table(id) => Trace::Table(id, false),
+        Value::Function(id) => Trace::Function(id, false),
+        Value::Thread(id) => Trace::Thread(id, false),
+        Value::Userdata(id) => Trace::Userdata(id, false),
+        Value::ParserPrototype(id) => Trace::ParserPrototype(id, false),
+        Value::Native(id) => Trace::Native(id, false),
+        Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_) => return None,
+    })
 }
 fn table_edge(value: Value, weak: bool) -> Option<Trace> {
     if weak && !matches!(value, Value::String(_)) {
@@ -468,7 +482,7 @@ fn frames_roots(
     for (i, frame) in frames.iter().enumerate() {
         match frame.function {
             FrameKind::Lua(function) => {
-                work.push(Trace::Value(Value::Function(function)));
+                work.push(Trace::Function(function, false));
                 let closure = &functions[slot_index(function.0)];
                 let proto = &programs[closure.program].data.prototypes[closure.prototype];
                 let return_top = frames
@@ -562,7 +576,7 @@ fn frames_roots(
                     );
                 }
                 if !(CONT_RAW..strings::ITERATOR_FIRST).contains(&id) {
-                    work.push(Trace::Value(Value::Native(id)));
+                    work.push(Trace::Native(id, false));
                 }
                 let end = frames
                     .get(i + 1)
@@ -909,32 +923,44 @@ impl Vm {
             .threshold
             .saturating_sub(total.saturating_sub(self.string_store_debt()))
     }
-    fn mark_barrier_value(&mut self, value: Value) -> bool {
+    fn mark_barrier_value(&mut self, value: Value) -> Option<Trace> {
         match value {
             Value::String(id) => {
                 self.strings.bytes.mark(id.0);
-                false
+                None
             }
             Value::Table(id) => {
                 let fresh = self.tables.mark(id.0);
                 if fresh {
                     self.tables[slot_index(id.0)].trace = TableTrace::Restart;
                 }
-                fresh
+                fresh.then_some(Trace::Table(id, true))
             }
-            Value::Function(id) => self.functions.mark(id.0),
-            Value::Thread(id) => self.threads.mark(id.0),
-            Value::Userdata(id) => self.userdata.mark(id.0),
-            Value::ParserPrototype(id) => self.parser_prototypes.mark(id.0),
-            Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.mark(id),
+            Value::Function(id) => self
+                .functions
+                .mark(id.0)
+                .then_some(Trace::Function(id, true)),
+            Value::Thread(id) => self.threads.mark(id.0).then_some(Trace::Thread(id, true)),
+            Value::Userdata(id) => self
+                .userdata
+                .mark(id.0)
+                .then_some(Trace::Userdata(id, true)),
+            Value::ParserPrototype(id) => self
+                .parser_prototypes
+                .mark(id.0)
+                .then_some(Trace::ParserPrototype(id, true)),
+            Value::Native(id) if id >= strings::ITERATOR_FIRST => self
+                .native_closures
+                .mark(id)
+                .then_some(Trace::Native(id, true)),
             Value::Native(id) if id < 256 => {
                 let word = id as usize / 64;
                 let bit = 1u64 << (id % 64);
                 let fresh = self.gc.natives[word] & bit == 0;
                 self.gc.natives[word] |= bit;
-                fresh
+                fresh.then_some(Trace::Native(id, true))
             }
-            _ => false,
+            _ => None,
         }
     }
     pub(super) fn reserve_gc_new_value(&mut self) -> Result<(), Error> {
@@ -967,8 +993,10 @@ impl Vm {
         }
     }
     pub(super) fn gc_new_value(&mut self, value: Value) {
-        if self.gc.phase == Phase::Propagate && self.mark_barrier_value(value) {
-            self.gc.work.push(Trace::MarkedValue(value));
+        if self.gc.phase == Phase::Propagate
+            && let Some(item) = self.mark_barrier_value(value)
+        {
+            self.gc.work.push(item);
         }
     }
     pub(super) fn gc_barrier(&mut self, owner: Value, value: Value) {
@@ -1003,12 +1031,12 @@ impl Vm {
                 .upvalues
                 .key(cell)
                 .is_some_and(|key| self.upvalues.marked(key))
-            && self.mark_barrier_value(value)
+            && let Some(item) = self.mark_barrier_value(value)
         {
             // Closing also runs during error unwinding. Each open cell reserved
             // its slot when captured, before publication. Mark immediately and
             // retain the forced scan without requiring another allocation.
-            self.gc.closed.push(Trace::MarkedValue(value));
+            self.gc.closed.push(item);
         }
     }
     pub(super) fn gc_new_cell(&mut self, cell: usize) {
@@ -1043,12 +1071,15 @@ impl Vm {
     pub(super) fn gc_table_write(&mut self, id: TableId, key: Value, value: Value) {
         if self.gc.phase == Phase::Propagate && self.tables.marked(id.0) {
             let (weak_keys, weak_values) = self.table_mode(&self.tables[slot_index(id.0)]);
-            if (!weak_keys || matches!(key, Value::String(_))) && self.mark_barrier_value(key) {
-                self.gc.work.push(Trace::MarkedValue(key));
-            }
-            if (!weak_values || matches!(value, Value::String(_))) && self.mark_barrier_value(value)
+            if (!weak_keys || matches!(key, Value::String(_)))
+                && let Some(item) = self.mark_barrier_value(key)
             {
-                self.gc.work.push(Trace::MarkedValue(value));
+                self.gc.work.push(item);
+            }
+            if (!weak_values || matches!(value, Value::String(_)))
+                && let Some(item) = self.mark_barrier_value(value)
+            {
+                self.gc.work.push(item);
             }
         }
     }
@@ -1060,7 +1091,7 @@ impl Vm {
             if self.tables.marked(id.0) {
                 let table = &mut self.tables[slot_index(id.0)];
                 if table.trace == TableTrace::Idle {
-                    self.gc.work.push(Trace::TableSlice(id, 0));
+                    self.gc.work.push(Trace::TableSlice(id.slot(), 0));
                 }
                 table.trace = TableTrace::Restart;
             }
@@ -1205,11 +1236,15 @@ impl Vm {
             Value::Thread(id) => self.threads.marked(id.0),
             Value::Userdata(id) => self.userdata.marked(id.0),
             Value::ParserPrototype(id) => self.parser_prototypes.marked(id.0),
-            Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.marked(id),
-            Value::Native(id) => {
-                id < 256 && self.gc.natives[id as usize / 64] & (1u64 << (id % 64)) != 0
-            }
+            Value::Native(id) => self.marked_native(id),
             _ => true,
+        }
+    }
+    fn marked_native(&self, id: u64) -> bool {
+        if id >= strings::ITERATOR_FIRST {
+            self.native_closures.marked(id)
+        } else {
+            id < 256 && self.gc.natives[id as usize / 64] & (1u64 << (id % 64)) != 0
         }
     }
     fn trace_thread(&mut self, id: ThreadId, work: &mut Work) {
@@ -1220,10 +1255,10 @@ impl Vm {
             &t.hooks
         };
         if let hooks::Callback::Host(function) = hooks.callback {
-            work.push(Trace::Value(Value::Native(function)));
+            work.push(Trace::Native(function, false));
         }
         if let Some(function) = hooks.host_running {
-            work.push(Trace::Value(Value::Native(function)));
+            work.push(Trace::Native(function, false));
         }
         work.extend(
             hooks
@@ -1237,7 +1272,7 @@ impl Vm {
             work.extend(state.roots().iter().copied().filter_map(edge));
         }
         if let Some(parent) = t.resumer {
-            work.push(Trace::Value(Value::Thread(parent)));
+            work.push(Trace::Thread(parent, false));
         }
         let (registers, frames, open, env, top, subs, sorts) = if id == self.thread {
             (
@@ -1260,7 +1295,7 @@ impl Vm {
                 &t.sorts,
             )
         };
-        work.push(Trace::Value(Value::Table(env)));
+        work.push(Trace::Table(env, false));
         work.extend(open.iter().map(|&i| Trace::Cell(i as usize)));
         let cutoff = if id != self.thread
             && matches!(t.status, threads::Status::Suspended | threads::Status::Dead)
@@ -1425,11 +1460,16 @@ impl Vm {
                 break;
             };
             let handled = match item {
-                Trace::Value(Value::String(id)) => {
+                Trace::String(id) => {
                     self.strings.bytes.mark(id.0);
                     true
                 }
-                Trace::Value(value) => self.marked_value(value),
+                Trace::Table(id, false) => self.tables.marked(id.0),
+                Trace::Function(id, false) => self.functions.marked(id.0),
+                Trace::Thread(id, false) => self.threads.marked(id.0),
+                Trace::Userdata(id, false) => self.userdata.marked(id.0),
+                Trace::ParserPrototype(id, false) => self.parser_prototypes.marked(id.0),
+                Trace::Native(id, false) => self.marked_native(id),
                 Trace::Program(slot) => self.programs.slot_marked(slot),
                 Trace::Cell(slot) => self.upvalues.slot_marked(slot),
                 _ => false,
@@ -1439,9 +1479,7 @@ impl Vm {
                 visited += 1;
                 continue;
             }
-            if let Trace::Value(Value::Thread(id))
-            | Trace::MarkedValue(Value::Thread(id))
-            | Trace::ThreadAgain(id) = item
+            if let Trace::Thread(id, _) | Trace::ThreadAgain(id) = item
                 && id != self.thread
                 && let Some(thread) = self.threads.get(id.0)
                 && Self::quiet_parked_thread(thread)
@@ -1453,7 +1491,7 @@ impl Vm {
                     work.pop();
                     self.threads.mark(id.0);
                     if budget != usize::MAX || !self.tables.marked(env.0) {
-                        work.push(Trace::Value(Value::Table(env)));
+                        work.push(Trace::Table(env, false));
                     }
                     visited += 1;
                     continue;
@@ -1470,10 +1508,10 @@ impl Vm {
                     work.pop();
                     self.threads.mark(id.0);
                     if env_needed {
-                        work.push(Trace::Value(Value::Table(env)));
+                        work.push(Trace::Table(env, false));
                     }
                     if entry_needed {
-                        work.push(Trace::Value(Value::Function(entry)));
+                        work.push(Trace::Function(entry, false));
                     }
                     visited += 1;
                     continue;
@@ -1486,7 +1524,7 @@ impl Vm {
                     continue;
                 }
             }
-            if let Trace::Value(Value::Table(id)) | Trace::MarkedValue(Value::Table(id)) = item
+            if let Trace::Table(id, _) = item
                 && let Some(table) = self.tables.get(id.0)
                 && table.host_state().is_none()
                 && table.is_scalar_array_only()
@@ -1500,7 +1538,7 @@ impl Vm {
                 if let Some(mt) = metatable
                     && (budget != usize::MAX || !self.tables.marked(mt.0))
                 {
-                    work.push(Trace::Value(Value::Table(mt)));
+                    work.push(Trace::Table(mt, false));
                 }
                 visited += 1;
                 continue;
@@ -1508,51 +1546,45 @@ impl Vm {
             self.reserve_trace_item(item, work)?;
             work.pop();
             visited += 1;
-            let (item, forced) = match item {
-                Trace::MarkedValue(value) => (Trace::Value(value), true),
-                item => (item, false),
-            };
             match item {
-                Trace::Value(Value::String(id)) => {
-                    self.strings.bytes.mark(id.0);
-                }
-                Trace::Value(Value::Table(id)) => {
+                Trace::String(_) => unreachable!("string was marked before reservation"),
+                Trace::Table(id, forced) => {
                     if self.tables.mark(id.0) || forced {
                         self.trace_table(id, work, &mut modes);
                     }
                 }
-                Trace::Value(Value::Function(id)) => {
+                Trace::Function(id, forced) => {
                     if self.functions.mark(id.0) || forced {
                         let f = &self.functions[slot_index(id.0)];
                         if let Some(&prototype) =
                             self.programs[f.program].parser_prototypes.get(f.prototype)
                         {
-                            work.push(Trace::Value(Value::ParserPrototype(prototype)));
+                            work.push(Trace::ParserPrototype(prototype, false));
                         }
-                        work.push(Trace::Value(Value::Table(f.env)));
+                        work.push(Trace::Table(f.env, false));
                         work.push(Trace::Program(f.program));
                         work.extend(f.upvalues.iter().map(|&i| Trace::Cell(i as usize)));
                     }
                 }
-                Trace::Value(Value::Userdata(id)) => {
+                Trace::Userdata(id, forced) => {
                     if self.userdata.mark(id.0) || forced {
                         let u = &self.userdata[slot_index(id.0)];
                         if let Some(file) = u.file {
                             self.io.files.mark(file.get());
                         }
-                        work.push(Trace::Value(Value::Table(u.env)));
+                        work.push(Trace::Table(u.env, false));
                         if let Some(mt) = u.metatable {
-                            work.push(Trace::Value(Value::Table(mt)));
+                            work.push(Trace::Table(mt, false));
                         }
                     }
                 }
-                Trace::Value(Value::ParserPrototype(id)) => {
+                Trace::ParserPrototype(id, forced) => {
                     if self.parser_prototypes.mark(id.0) || forced {
                         let p = &self.parser_prototypes[slot_index(id.0)];
                         work.extend(p.roots().filter_map(edge));
                     }
                 }
-                Trace::Value(Value::Thread(id)) => {
+                Trace::Thread(id, forced) => {
                     if self.threads.mark(id.0) || forced {
                         self.trace_thread(id, work);
                         if let Some(refresh) = refresh.as_deref_mut()
@@ -1563,11 +1595,11 @@ impl Vm {
                         }
                     }
                 }
-                Trace::Value(Value::Native(id)) => {
+                Trace::Native(id, forced) => {
                     if id >= strings::ITERATOR_FIRST {
                         if self.native_closures.mark(id) || forced {
                             let f = &self.native_closures[slot_index(id)];
-                            work.push(Trace::Value(Value::Table(f.env)));
+                            work.push(Trace::Table(f.env, false));
                             work.extend(f.captures.iter().copied().filter_map(edge));
                         }
                     } else if id < 256 {
@@ -1575,7 +1607,7 @@ impl Vm {
                         let bit = 1u64 << (id % 64);
                         if self.gc.natives[word] & bit == 0 || forced {
                             self.gc.natives[word] |= bit;
-                            work.push(Trace::Value(Value::Table(self.native_environment(id))));
+                            work.push(Trace::Table(self.native_environment(id), false));
                         }
                     }
                 }
@@ -1591,15 +1623,13 @@ impl Vm {
                             work.extend(k.iter().copied().filter_map(edge));
                         }
                         for names in &self.programs[i].upvalue_names {
-                            work.extend(
-                                names.iter().map(|&name| Trace::Value(Value::String(name))),
-                            );
+                            work.extend(names.iter().map(|&name| Trace::String(name)));
                         }
                         work.extend(
                             self.programs[i]
                                 .debug_strings
                                 .iter()
-                                .map(|&id| Trace::Value(Value::String(id))),
+                                .map(|&id| Trace::String(id)),
                         );
                     }
                 }
@@ -1611,7 +1641,6 @@ impl Vm {
                 Trace::File(key) => {
                     self.io.files.mark(key);
                 }
-                _ => {}
             }
         }
         Ok(visited)
@@ -1622,16 +1651,17 @@ impl Vm {
     fn trace_table(&mut self, id: TableId, work: &mut Work, modes: &mut TableModeCache) {
         // Fresh marks also discard scan state left by an interrupted cycle.
         self.tables[slot_index(id.0)].trace = TableTrace::Restart;
-        self.trace_table_slice(id, 0, work, modes);
+        self.trace_table_slice(id.slot(), 0, work, modes);
     }
     fn trace_table_slice(
         &mut self,
-        id: TableId,
+        slot: u32,
         cursor: usize,
         work: &mut Work,
         modes: &mut TableModeCache,
     ) {
-        let table = &self.tables[slot_index(id.0)];
+        let index = slot as usize;
+        let table = &self.tables[index];
         // Read __mode once per scan. The atomic metatable refresh observes mode
         // mutations before weak cleanup, just as for an unsliced table scan.
         let (cursor, weak_keys, weak_values) = match table.trace {
@@ -1643,31 +1673,30 @@ impl Vm {
                 (0, wk, wv)
             }
         };
-        self.tables[slot_index(id.0)].trace = TableTrace::Pending(weak_keys, weak_values);
+        self.tables[index].trace = TableTrace::Pending(weak_keys, weak_values);
         if !weak_keys || !weak_values {
-            self.tables[slot_index(id.0)]
-                .retire_native_keys_in_trace_slice(cursor, TABLE_TRACE_SLOTS);
+            self.tables[index].retire_native_keys_in_trace_slice(cursor, TABLE_TRACE_SLOTS);
         }
-        let table = &self.tables[slot_index(id.0)];
+        let table = &self.tables[index];
         let (next, array, pairs) = table.trace_slice(cursor, TABLE_TRACE_SLOTS);
         // Resume after children: a wide table needs only one pending slice and
         // the current slice's edges rather than a frontier for its entire width.
         if let Some(next) = next {
-            work.push(Trace::TableSlice(id, next));
+            work.push(Trace::TableSlice(slot, next));
         }
         if cursor == 0
             && let Some(mt) = table.metatable()
         {
-            work.push(Trace::Value(Value::Table(mt)));
+            work.push(Trace::Table(mt, false));
         }
         if cursor == 0
             && let Some(state) = table.host_state()
         {
-            work.push(Trace::Value(Value::Table(state)));
+            work.push(Trace::Table(state, false));
         }
         if weak_values {
             work.extend(array.iter().copied().filter_map(|value| match value {
-                Value::String(_) => Some(Trace::Value(value)),
+                Value::String(id) => Some(Trace::String(id)),
                 _ => None,
             }));
         } else {
@@ -1678,7 +1707,7 @@ impl Vm {
             work.extend(table_edge(value, weak_values));
         }
         if next.is_none() {
-            self.tables[slot_index(id.0)].trace = TableTrace::Idle;
+            self.tables[index].trace = TableTrace::Idle;
         }
     }
     fn begin_gc_cycle(&mut self) -> Result<(), Error> {
@@ -1746,29 +1775,24 @@ impl Vm {
         Ok(thread_payload)
     }
     fn seed_gc_roots(&self, work: &mut Work) {
-        work.push(Trace::Value(Value::Thread(self.main)));
-        work.push(Trace::Value(Value::Table(self.registry)));
-        work.push(Trace::Value(Value::String(self.memory_error)));
+        work.push(Trace::Thread(self.main, false));
+        work.push(Trace::Table(self.registry, false));
+        work.push(Trace::String(self.memory_error));
         if let Some(tag) = self.io.file_tag {
-            work.push(Trace::Value(Value::String(tag)));
+            work.push(Trace::String(tag));
         }
-        work.push(Trace::Value(Value::Thread(self.thread)));
-        work.extend(
-            self.meta_names
-                .iter()
-                .copied()
-                .map(|s| Trace::Value(Value::String(s))),
-        );
+        work.push(Trace::Thread(self.thread, false));
+        work.extend(self.meta_names.iter().copied().map(|s| Trace::String(s)));
         work.extend(
             self.type_metatables
                 .iter()
                 .flatten()
                 .copied()
-                .map(|t| Trace::Value(Value::Table(t))),
+                .map(|t| Trace::Table(t, false)),
         );
         work.extend(self.roots.iter().copied().filter_map(edge));
         if self.standalone != 0 {
-            work.push(Trace::Value(Value::Native(self.standalone)));
+            work.push(Trace::Native(self.standalone, false));
         }
         // A live host Program retains its mutable per-VM entry binding. Internal
         // code ownership by escaped Lua closures does not pin unused entries.
@@ -1776,7 +1800,7 @@ impl Vm {
             self.programs
                 .iter()
                 .filter(|p| p.data.has_host_owner())
-                .map(|p| Trace::Value(Value::Function(p.entry))),
+                .map(|p| Trace::Function(p.entry, false)),
         );
     }
     fn finish_gc_marking(&mut self, fresh_cycle: bool) -> Result<(), Error> {
@@ -1874,7 +1898,7 @@ impl Vm {
                 .finalizers
                 .iter()
                 .copied()
-                .map(|id| Trace::Value(Value::Userdata(id))),
+                .map(|id| Trace::Userdata(id, false)),
         );
         self.trace_graph(work)?;
         let metatable_end = self.clear_weak_tables();
@@ -2692,7 +2716,7 @@ mod tests {
             let root = vm.pin(function).unwrap();
             let replacement = Value::Table(vm.new_table());
             vm.begin_gc_cycle().unwrap();
-            let mut work = Work::from([Trace::Value(function)]);
+            let mut work = Work::from([edge(function).unwrap()]);
             assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
             assert!(vm.marked_value(function) && !vm.marked_value(replacement));
             vm.gc.work.try_reserve(work.len()).unwrap();
@@ -2728,7 +2752,7 @@ mod tests {
             .collect();
         assert_eq!(names.len(), 1);
         vm.begin_gc_cycle().unwrap();
-        let mut work = Work::from([Trace::Value(function)]);
+        let mut work = Work::from([edge(function).unwrap()]);
         while !work.is_empty() {
             vm.trace_some(&mut work, 1).unwrap();
         }
@@ -2815,7 +2839,7 @@ mod tests {
                 children.push(value);
             }
             vm.begin_gc_cycle().unwrap();
-            let mut work = Work::from([Trace::Value(Value::Table(table))]);
+            let mut work = Work::from([Trace::Table(table, false)]);
             let mut peak = 0;
             while !work.is_empty() {
                 assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
@@ -2849,7 +2873,7 @@ mod tests {
                 vm.raw_set(table, key, Value::Nil).unwrap();
             }
             vm.begin_gc_cycle().unwrap();
-            let mut work = Work::from([Trace::Value(Value::Table(table))]);
+            let mut work = Work::from([Trace::Table(table, false)]);
             for _ in 0..200 {
                 assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
                 assert_eq!(work.len(), 1);
@@ -2880,7 +2904,7 @@ mod tests {
                 .unwrap();
         }
         vm.begin_gc_cycle().unwrap();
-        let mut work = Work::from([Trace::Value(Value::Table(table))]);
+        let mut work = Work::from([Trace::Table(table, false)]);
         assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
         assert!(matches!(&work[..], [Trace::TableSlice(_, 129)]));
         vm.gc.work.try_reserve(work.len()).unwrap();
@@ -2915,7 +2939,7 @@ mod tests {
             children.push(child);
         }
         vm.begin_gc_cycle().unwrap();
-        let mut work = Work::from([Trace::Value(Value::Table(table))]);
+        let mut work = Work::from([Trace::Table(table, false)]);
         assert_eq!(vm.trace_some(&mut work, 2).unwrap(), 2);
         assert!(children[64..].iter().all(|&v| !vm.marked_value(v)));
         vm.gc.work.try_reserve(work.len()).unwrap();
@@ -2974,7 +2998,7 @@ mod tests {
                 children.push(child);
             }
             vm.begin_gc_cycle().unwrap();
-            let mut work = Work::from([Trace::Value(Value::Table(table))]);
+            let mut work = Work::from([Trace::Table(table, false)]);
             assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
             assert!(children.iter().all(|&v| !vm.marked_value(v)));
             vm.gc.work.try_reserve(work.len()).unwrap();

@@ -126,10 +126,10 @@ impl Vm {
         self.threads.mark(id.0);
         let thread = &self.threads[slot_index(id.0)];
         if !self.tables.marked(thread.globals.0) {
-            work.push(Trace::Value(Value::Table(thread.globals)));
+            work.push(Trace::Table(thread.globals, false));
         }
         if !self.functions.marked(stack.function.0) {
-            work.push(Trace::Value(Value::Function(stack.function)));
+            work.push(Trace::Function(stack.function, false));
         }
         while live != 0 {
             let slot = live.trailing_zeros() as usize;
@@ -137,7 +137,7 @@ impl Vm {
             self.queue_unmarked_stack_value(thread.registers[slot], work);
         }
         if !self.marked_value(Value::Native(threads::CO_YIELD)) {
-            work.push(Trace::Value(Value::Native(threads::CO_YIELD)));
+            work.push(Trace::Native(threads::CO_YIELD, false));
         }
         let registers = &mut self.threads[slot_index(id.0)].registers;
         while dead != 0 {

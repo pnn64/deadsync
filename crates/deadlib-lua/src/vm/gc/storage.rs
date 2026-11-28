@@ -61,8 +61,8 @@ impl Vm {
                     .count(),
             )
     }
-    pub(super) fn table_trace_count(&self, id: TableId, cursor: usize, restart: bool) -> usize {
-        let table = &self.tables[slot_index(id.0)];
+    fn table_trace_count(&self, slot: u32, cursor: usize, restart: bool) -> usize {
+        let table = &self.tables[slot as usize];
         let (cursor, weak_keys, weak_values) = match table.trace {
             TableTrace::Pending(wk, wv) if !restart => (cursor, wk, wv),
             _ => {
@@ -142,29 +142,25 @@ impl Vm {
         (count, registers.len().div_ceil(64))
     }
     pub(super) fn reserve_trace_item(&mut self, item: Trace, work: &mut Work) -> Result<(), Error> {
-        let item = match item {
-            Trace::MarkedValue(value) => Trace::Value(value),
-            item => item,
-        };
         let mut words = 0;
         let count = match item {
             // A slice queues at most two edges per slot, a continuation, a
             // metatable, and host state. The current item frees one slot.
-            Trace::Value(Value::Table(_)) | Trace::TableAgain(_) | Trace::TableSlice(_, _)
+            Trace::Table(_, _) | Trace::TableAgain(_) | Trace::TableSlice(_, _)
                 if work.capacity() - work.len() >= 2 * TABLE_TRACE_SLOTS + 2 =>
             {
                 return Ok(());
             }
-            Trace::Value(Value::Table(id)) | Trace::TableAgain(id) => {
-                self.table_trace_count(id, 0, true)
+            Trace::Table(id, _) | Trace::TableAgain(id) => {
+                self.table_trace_count(id.slot(), 0, true)
             }
             Trace::TableSlice(id, cursor) => self.table_trace_count(id, cursor, false),
-            Trace::Value(Value::Thread(id)) | Trace::ThreadAgain(id) => {
+            Trace::Thread(id, _) | Trace::ThreadAgain(id) => {
                 let (count, needed) = self.thread_trace_count(id);
                 words = needed;
                 count
             }
-            Trace::Value(Value::Function(id)) => {
+            Trace::Function(id, _) => {
                 let f = &self.functions[slot_index(id.0)];
                 f.upvalues
                     .len()
@@ -176,10 +172,10 @@ impl Vm {
                             .is_some(),
                     ))
             }
-            Trace::Value(Value::Userdata(id)) => {
+            Trace::Userdata(id, _) => {
                 1 + usize::from(self.userdata[slot_index(id.0)].metatable.is_some())
             }
-            Trace::Value(Value::ParserPrototype(id)) => {
+            Trace::ParserPrototype(id, _) => {
                 let prototype = &self.parser_prototypes[slot_index(id.0)];
                 // The current work item supplies space for the source edge.
                 let additional = prototype.constant_strings.len()
@@ -190,7 +186,7 @@ impl Vm {
                 }
                 prototype.roots().filter_map(edge).count()
             }
-            Trace::Value(Value::Native(id)) if id >= strings::ITERATOR_FIRST => {
+            Trace::Native(id, _) if id >= strings::ITERATOR_FIRST => {
                 let captures = &self.native_closures[slot_index(id)].captures;
                 // The current work item supplies space for the environment edge.
                 if captures.len() <= work.capacity() - work.len() {

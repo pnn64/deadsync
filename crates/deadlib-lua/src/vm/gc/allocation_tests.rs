@@ -78,9 +78,9 @@ fn rejected_table_traces_preserve_the_work_item_marks_and_slice_cursor() {
             let item = if slice {
                 vm.tables.mark(table.0);
                 vm.tables[slot_index(table.0)].trace = TableTrace::Pending(false, false);
-                Trace::TableSlice(table, 128)
+                Trace::TableSlice(table.slot(), 128)
             } else {
-                Trace::Value(Value::Table(table))
+                Trace::Table(table, false)
             };
             let mut work = one(vm, item);
             let trace = vm.tables[slot_index(table.0)].trace;
@@ -115,7 +115,7 @@ fn rejected_thread_scratch_and_frontier_growth_leave_registers_and_marks_unchang
             vm.registers.fill(Value::Number(17.));
             vm.top = 193;
             vm.gc.phase = Phase::Propagate;
-            let item = Trace::Value(Value::Thread(vm.thread));
+            let item = Trace::Thread(vm.thread, false);
             let mut work = one(vm, item);
             let start = attempts.get();
             reject.set(start + nth);
