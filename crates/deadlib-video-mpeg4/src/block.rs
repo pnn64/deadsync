@@ -53,7 +53,7 @@ pub(crate) fn intra<const MP42: bool>(
     let predictor = if MP42 {
         neighbor.dc / 8
     } else {
-        (neighbor.dc + scale / 2) / scale
+        visual_dc_prediction(neighbor.dc, scale)
     };
     let difference = if separate_dc {
         dc_difference::<MP42>(bits, plane)?
@@ -145,6 +145,24 @@ pub(crate) fn inter<const MP42: bool>(bits: &mut Bits<'_>, quantizer: i32) -> Re
         coeff[position] = inverse_quantize::<MP42>(level, quantizer);
     })?;
     Ok(transform::inverse(&coeff))
+}
+
+// Visual DC predictors are in 0..=2047 and scales are in 8..=46.
+// With a rounded-up 20-bit reciprocal, numerator * scale < 2^20,
+// so the multiplication cannot cross the next integer quotient.
+static DC_RECIPROCAL: [i32; 47] = {
+    let mut table = [0; 47];
+    let mut scale = 8;
+    while scale < table.len() {
+        table[scale] = ((1 << 20) + scale as i32 - 1) / scale as i32;
+        scale += 1;
+    }
+    table
+};
+
+#[inline]
+fn visual_dc_prediction(dc: i32, scale: i32) -> i32 {
+    ((dc + scale / 2) * DC_RECIPROCAL[scale as usize]) >> 20
 }
 
 fn dc_scale(q: i32, plane: usize) -> i32 {
@@ -404,6 +422,15 @@ fn read_escape<const MP42: bool>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn visual_dc_reciprocal_matches_all_legal_divisions() {
+        for scale in 8..=46 {
+            for dc in 0..=2047 {
+                assert_eq!(visual_dc_prediction(dc, scale), (dc + scale / 2) / scale);
+            }
+        }
+    }
 
     #[test]
     fn ac_prediction_preserves_equal_quantizer_and_rescales_others() {
