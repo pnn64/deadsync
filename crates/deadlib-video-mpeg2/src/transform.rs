@@ -136,6 +136,25 @@ mod x86 {
     #[inline]
     unsafe fn outer_rows(first: __m128i, last: __m128i) -> [i16; 64] {
         unsafe {
+            // A DC coefficient and the optional mismatch-control bit often
+            // round to one uniform sample. Bound the latter's contribution
+            // before doing either dimension of the transform.
+            if empty(_mm_srli_si128::<2>(first)) && empty(_mm_slli_si128::<2>(last)) {
+                let mismatch = _mm_extract_epi16::<7>(last);
+                if mismatch <= 1 {
+                    let dc = _mm_extract_epi16::<0>(first) as i16;
+                    let dc = dc.wrapping_mul(8).wrapping_add(COLUMN_BIAS);
+                    let base = i32::from(dc) * BASIS[0][0];
+                    // The largest absolute horizontal response to coefficient 1
+                    // is 11; the largest vertical weight is 22725.
+                    const MAX_DELTA: i32 = 11 * 22725;
+                    let delta = mismatch * MAX_DELTA;
+                    let low = (base - delta) >> COLUMN_SHIFT;
+                    if low == (base + delta) >> COLUMN_SHIFT {
+                        return [low as i16; 64];
+                    }
+                }
+            }
             let first = _mm_add_epi16(horizontal(first), _mm_set1_epi16(COLUMN_BIAS));
             let last = horizontal(last);
             let low = _mm_unpacklo_epi16(first, last);
@@ -239,6 +258,22 @@ mod tests {
             block[..8].copy_from_slice(&[1231, 221, -192, 4, 0, 0, 0, 0]);
             block[63] = last;
             assert_eq!(inverse(&block), scalar(&block));
+        }
+    }
+
+    #[test]
+    fn dc_and_mismatch_match_scalar_at_every_coefficient() {
+        for dc in -2048..=2047 {
+            let mut block = [0; 64];
+            block[0] = dc;
+            for mismatch in [0, 1] {
+                block[63] = mismatch;
+                assert_eq!(
+                    inverse(&block),
+                    scalar(&block),
+                    "DC {dc}, mismatch {mismatch}"
+                );
+            }
         }
     }
 }
