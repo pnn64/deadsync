@@ -235,7 +235,8 @@ impl Slice<'_> {
                 let delta = ((magnitude - 1) << (code - 1)) + residual + 1;
                 let limit = 16 << (code - 1);
                 let vector = *predictor + if negative { -delta } else { delta };
-                *predictor = (vector + limit).rem_euclid(2 * limit) - limit;
+                // The validated f_code makes the wrap interval a power of two.
+                *predictor = ((vector + limit) & (2 * limit - 1)) - limit;
             }
         }
         Ok(())
@@ -288,6 +289,89 @@ fn address_increment(bits: &mut Bits<'_>, limit: usize) -> Result<usize> {
                 }
             }
             _ => {} // Macroblock stuffing.
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn coding(code: u8) -> Coding {
+        Coding {
+            f_code: [[code; 2]; 2],
+            full_pel: [false; 2],
+            dc_precision: 0,
+            concealment_vectors: false,
+            nonlinear_scale: false,
+            intra_vlc: false,
+            alternate_scan: false,
+        }
+    }
+
+    #[test]
+    fn motion_codes_wrap_at_each_supported_range() {
+        let sequence = Sequence::parse(&[0x01, 0x00, 0x10, 0x13, 0, 0, 0x20, 0]).unwrap();
+        for code in 1..=9 {
+            let coding = coding(code);
+            let slice = Slice {
+                sequence: &sequence,
+                coding: &coding,
+                references: [None; 2],
+            };
+            let limit: i32 = 16 << (code - 1);
+            for predictor in [-limit, -limit + 1, -1, 0, 1, limit - 2, limit - 1] {
+                for (magnitude, prefix, width) in [(1, 1u32, 2), (16, 12, 10)] {
+                    for negative in [false, true] {
+                        for residual in [0, (1 << (code - 1)) - 1] {
+                            // Encode one nonzero component, followed by the one-bit zero code.
+                            let encoded = (prefix << (code + 1))
+                                | (u32::from(negative) << code)
+                                | ((residual as u32) << 1)
+                                | 1;
+                            let bytes = (encoded << (32 - width - code - 1)).to_be_bytes();
+                            let delta = ((magnitude - 1) << (code - 1)) + residual + 1;
+                            let vector = predictor + if negative { -delta } else { delta };
+                            let expected = (vector + limit).rem_euclid(2 * limit) - limit;
+                            for direction in 0..2 {
+                                let mut motion = [predictor; 2];
+                                slice
+                                    .read_motion(&mut Bits::new(&bytes), &mut motion, direction)
+                                    .unwrap();
+                                assert_eq!(motion, [expected, predictor]);
+                            }
+                        }
+                    }
+                }
+                let mut motion = [predictor; 2];
+                slice
+                    .read_motion(&mut Bits::new(&[0xc0]), &mut motion, 0)
+                    .unwrap();
+                assert_eq!(motion, [predictor; 2]);
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_and_truncated_motion_leave_the_predictor_unchanged() {
+        let sequence = Sequence::parse(&[0x01, 0x00, 0x10, 0x13, 0, 0, 0x20, 0]).unwrap();
+        for (code, bytes, expected) in [
+            (0, [0xc0], Error::Invalid("motion vector f_code")),
+            (10, [0xc0], Error::Invalid("motion vector f_code")),
+            (9, [0x40], Error::Truncated),
+        ] {
+            let coding = coding(code);
+            let slice = Slice {
+                sequence: &sequence,
+                coding: &coding,
+                references: [None; 2],
+            };
+            let mut motion = [-1, 1];
+            assert_eq!(
+                slice.read_motion(&mut Bits::new(&bytes), &mut motion, 0),
+                Err(expected)
+            );
+            assert_eq!(motion, [-1, 1]);
         }
     }
 }
