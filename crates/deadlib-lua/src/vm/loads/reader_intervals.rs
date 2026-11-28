@@ -71,7 +71,7 @@ pub(in crate::vm) struct Plan {
     depth: usize,
     locale: u64,
     intervals: Vec<Interval>,
-    program: Shared<ProgramData>,
+    program: ProgramOwner,
     target: (usize, usize),
     preamble_event: (usize, usize),
     bytes: usize,
@@ -424,7 +424,7 @@ impl Cache {
             plan.first_end == source.len()
                 && plan.depth == depth
                 && plan.locale == locale
-                && plan.program.name.as_ref() == name
+                && plan.program.name() == name
                 && plan.digits == preamble.digits
                 && plan.source[..plan.digits.start] == source[..preamble.digits.start]
                 && plan.source[plan.digits.end..plan.first_end] == source[preamble.digits.end..]

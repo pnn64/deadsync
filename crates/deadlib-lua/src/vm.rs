@@ -3,7 +3,7 @@
 use crate::{
     Error, ErrorKind, FunctionId, ParserPrototypeId, Program, StringId, TableId, ThreadId,
     UserdataId, Value,
-    bytecode::{COMPARE_BRANCH, Constant, OPEN, OPEN_ARGS, Op, ProgramData, Upvalue},
+    bytecode::{COMPARE_BRANCH, Constant, OPEN, OPEN_ARGS, Op, ProgramData, ProgramOwner, Upvalue},
     locale::parse_number,
     table::Table,
 };
@@ -496,7 +496,7 @@ impl StaticStrings {
 
 #[derive(Debug)]
 struct LoadedProgram {
-    data: crate::memory::Shared<ProgramData>,
+    data: ProgramOwner,
     _budget: crate::memory::Reservation,
     constants: Buffer<Value>,
     upvalue_names: Buffer<Buffer<StringId>>,
@@ -2160,7 +2160,7 @@ impl Vm {
         // The executing program's code, retained across frame transitions:
         // calls and returns within one program keep it without touching its
         // atomic reference count.
-        let mut held: Option<crate::memory::Shared<ProgramData>> = None;
+        let mut held: Option<ProgramOwner> = None;
         let mut numeric_call_cache = numeric_leaf::Cache::default();
         let mut return_argument_cache = return_argument::Cache::default();
         let mut radix_cache = radix_selector::Cache::default();

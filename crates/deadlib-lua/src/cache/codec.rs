@@ -460,10 +460,10 @@ impl<'a> Reader<'a> {
     }
 }
 
-fn decoded_bytes(data: &ProgramData) -> usize {
+fn decoded_bytes(data: &ProgramOwner) -> usize {
     let mut bytes = size_of::<ProgramData>()
         + 4 * size_of::<usize>()
-        + data.name.len()
+        + data.name().len()
         + size_of_val(data.sources.as_ref())
         + data.sources.iter().map(|s| s.len()).sum::<usize>()
         + size_of_val(data.prototypes.as_ref());
@@ -518,7 +518,7 @@ pub(super) fn encode(
     w.bytes(source)?;
     w.bytes(name)?;
     w.u32(program.data.entry)?;
-    w.bytes(&program.data.name)?;
+    w.bytes(program.data.name())?;
     w.list(&program.data.sources, |w, s| w.bytes(s))?;
     w.list(&program.data.prototypes, Writer::prototype)?;
     w.u32(checksum(&w.bytes))?;
@@ -598,8 +598,7 @@ pub(super) fn decode(
             return None;
         }
     }
-    let program =
-        Program::try_from_data(ProgramData::new(prototypes, entry, program_name, sources)).ok()?;
+    let program = Program::try_from_parts(prototypes, entry, program_name, sources).ok()?;
     program.verify().ok()?;
     Some(program)
 }

@@ -5,7 +5,6 @@ use super::*;
 use crate::{
     bytecode::{Constant, Prototype},
     lexer::{Kind, Lexeme, Scanner, Token, keyword, short_decimal_integer},
-    memory::Shared,
     parser::{Ast, Expr, ExprId, Stmt},
 };
 
@@ -179,7 +178,7 @@ impl Replacement {
 }
 
 struct Template {
-    program: Shared<ProgramData>,
+    program: ProgramOwner,
     source: Box<[u8]>,
     literals: Box<[Literal]>,
     offsets: Box<[usize]>,
@@ -561,9 +560,7 @@ impl Templates {
         locale: u64,
     ) -> Option<Result<Program, Error>> {
         let eligible = |template: &Template| {
-            template.depth == depth
-                && template.locale == locale
-                && template.program.name.as_ref() == name
+            template.depth == depth && template.locale == locale && template.program.name() == name
         };
         // Related layouts often have different numbers of table fields. Try
         // the closest length first to avoid comparing every shared prefix.
@@ -612,7 +609,7 @@ impl Templates {
         let Some(root) = return_value(ast) else {
             return;
         };
-        let hint = syntax_hint(ast, source, &program.data.name, depth, locale);
+        let hint = syntax_hint(ast, source, program.data.name(), depth, locale);
         if !self.recent.contains(&Some(hint)) {
             self.recent[self.next_recent] = Some(hint);
             self.next_recent = (self.next_recent + 1) % RECENT_SHAPES;

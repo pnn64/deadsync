@@ -3,7 +3,7 @@ use super::Wire;
 use crate::memory::fallible::{self, SliceExt, VecExt};
 use crate::{
     Error, ErrorKind,
-    bytecode::{Constant, ProgramData, Prototype},
+    bytecode::{Constant, ProgramOwner, Prototype},
 };
 
 mod jumps;
@@ -92,17 +92,17 @@ enum Task<'a> {
     Debug(&'a Prototype, Body<'a>),
 }
 
-pub(crate) fn dump(data: &ProgramData, entry: usize) -> Result<Vec<u8>, Error> {
+pub(crate) fn dump(data: &ProgramOwner, entry: usize) -> Result<Vec<u8>, Error> {
     Ok(serialize(data, entry, false)?.bytes)
 }
 pub(crate) fn dump_blocks(
-    data: &ProgramData,
+    data: &ProgramOwner,
     entry: usize,
 ) -> Result<(Vec<u8>, Vec<usize>), Error> {
     let output = serialize(data, entry, true)?;
     Ok((output.bytes, output.ends.unwrap()))
 }
-fn serialize(data: &ProgramData, entry: usize, blocks: bool) -> Result<Output, Error> {
+fn serialize(data: &ProgramOwner, entry: usize, blocks: bool) -> Result<Output, Error> {
     let mut output = Output {
         bytes: fallible::with_capacity(256)?,
         ends: blocks.then(Vec::new),

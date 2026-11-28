@@ -22,14 +22,14 @@ struct Header {
 
 // Requiring owned, thread-safe originals prevents projection from hiding a
 // shorter lifetime or non-Send/Sync owner behind a Send/Sync field or trait.
-pub(crate) struct Shared<T: ?Sized + Send + Sync + 'static> {
+pub(crate) struct Shared<T: ?Sized + Send + Sync + 'static, const SUFFIX: bool = false> {
     header: NonNull<Header>,
     value: NonNull<T>,
 }
 // SAFETY: every original allocation and every projected view is Send + Sync.
 // Atomic references retain the original value and Memory serializes callbacks.
-unsafe impl<T: ?Sized + Send + Sync + 'static> Send for Shared<T> {}
-unsafe impl<T: ?Sized + Send + Sync + 'static> Sync for Shared<T> {}
+unsafe impl<T: ?Sized + Send + Sync + 'static, const SUFFIX: bool> Send for Shared<T, SUFFIX> {}
+unsafe impl<T: ?Sized + Send + Sync + 'static, const SUFFIX: bool> Sync for Shared<T, SUFFIX> {}
 
 impl<T: Send + Sync + 'static> Shared<T> {
     // Mutation is needed only by malformed-bytecode tests. Always copy into a
@@ -40,16 +40,58 @@ impl<T: Send + Sync + 'static> Shared<T> {
     where
         T: Clone,
     {
-        *this = Self::try_new_in((**this).clone(), Memory::default()).unwrap();
-        // SAFETY: try_new_in just created this unprojected, uniquely owned T.
-        unsafe { this.value.as_mut() }
+        Self::replace_mut(this, (**this).clone())
     }
 
     pub(crate) fn try_new_in(value: T, memory: Memory) -> Result<Self, Error> {
+        Self::try_new_inner(value, &[], memory)
+    }
+}
+
+impl<T: Send + Sync + 'static> Shared<T, true> {
+    pub(crate) fn try_new_with_suffix_in(
+        value: T,
+        suffix: &[u8],
+        memory: Memory,
+    ) -> Result<Self, Error> {
+        Self::try_new_inner(value, suffix, memory)
+    }
+
+    pub(crate) fn suffix(&self) -> &[u8] {
+        // SAFETY: projection returns a plain Shared, so this handle always
+        // owns the original T. Its unpadded allocation ends at the end of
+        // the initialized suffix.
+        unsafe {
+            let header = self.header.as_ref();
+            let start = header.offset + size_of::<T>();
+            let data = self.header.as_ptr().cast::<u8>().add(start);
+            std::slice::from_raw_parts(data, header.layout.size() - start)
+        }
+    }
+}
+
+impl<T: Send + Sync + 'static, const SUFFIX: bool> Shared<T, SUFFIX> {
+    #[cfg(test)]
+    pub(crate) fn replace_mut(this: &mut Self, value: T) -> &mut T {
+        *this = Self::try_new_inner(value, &[], Memory::default()).unwrap();
+        // SAFETY: the new block is unprojected and uniquely owned.
+        unsafe { this.value.as_mut() }
+    }
+
+    #[inline]
+    fn try_new_inner(value: T, suffix: &[u8], memory: Memory) -> Result<Self, Error> {
         let (layout, offset) = Layout::new::<Header>()
             .extend(Layout::new::<T>())
             .map_err(|_| Error::memory())?;
-        let layout = layout.pad_to_align();
+        let suffix_offset = layout.size();
+        let layout = if SUFFIX {
+            layout
+                .extend(Layout::array::<u8>(suffix.len()).map_err(|_| Error::memory())?)
+                .map_err(|_| Error::memory())?
+                .0
+        } else {
+            layout.pad_to_align()
+        };
         let empty = Layout::from_size_align(0, layout.align()).expect("shared alignment");
         // SAFETY: this is a new block with no prior allocation or initialized data.
         let pointer = unsafe { memory.resize(std::ptr::null_mut(), empty, layout) }?;
@@ -72,6 +114,13 @@ impl<T: Send + Sync + 'static> Shared<T> {
                 drop_value: drop_value::<T>,
             });
             value_pointer.as_ptr().write(value);
+            if SUFFIX && !suffix.is_empty() {
+                std::ptr::copy_nonoverlapping(
+                    suffix.as_ptr(),
+                    pointer.add(suffix_offset),
+                    suffix.len(),
+                );
+            }
         }
         Ok(Self {
             header,
@@ -80,7 +129,7 @@ impl<T: Send + Sync + 'static> Shared<T> {
     }
 }
 
-impl<T: ?Sized + Send + Sync + 'static> Shared<T> {
+impl<T: ?Sized + Send + Sync + 'static, const SUFFIX: bool> Shared<T, SUFFIX> {
     pub(crate) fn ptr_eq(this: &Self, other: &Self) -> bool {
         std::ptr::eq(this.value.as_ptr(), other.value.as_ptr())
     }
@@ -111,7 +160,7 @@ impl<T: ?Sized + Send + Sync + 'static> Shared<T> {
     }
 }
 
-impl<T: ?Sized + Send + Sync + 'static> Clone for Shared<T> {
+impl<T: ?Sized + Send + Sync + 'static, const SUFFIX: bool> Clone for Shared<T, SUFFIX> {
     fn clone(&self) -> Self {
         // SAFETY: self retains a live control block while increasing its count.
         if unsafe { self.header.as_ref() }
@@ -128,7 +177,7 @@ impl<T: ?Sized + Send + Sync + 'static> Clone for Shared<T> {
     }
 }
 
-impl<T: ?Sized + Send + Sync + 'static> Deref for Shared<T> {
+impl<T: ?Sized + Send + Sync + 'static, const SUFFIX: bool> Deref for Shared<T, SUFFIX> {
     type Target = T;
     fn deref(&self) -> &T {
         // SAFETY: a projection is borrowed from the retained original owner;
@@ -137,13 +186,13 @@ impl<T: ?Sized + Send + Sync + 'static> Deref for Shared<T> {
     }
 }
 
-impl<T: ?Sized + Send + Sync + 'static> AsRef<T> for Shared<T> {
+impl<T: ?Sized + Send + Sync + 'static, const SUFFIX: bool> AsRef<T> for Shared<T, SUFFIX> {
     fn as_ref(&self) -> &T {
         self
     }
 }
 
-impl<T: ?Sized + Send + Sync + 'static> std::fmt::Debug for Shared<T> {
+impl<T: ?Sized + Send + Sync + 'static, const SUFFIX: bool> std::fmt::Debug for Shared<T, SUFFIX> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("Shared")
@@ -152,7 +201,7 @@ impl<T: ?Sized + Send + Sync + 'static> std::fmt::Debug for Shared<T> {
     }
 }
 
-impl<T: ?Sized + Send + Sync + 'static> Drop for Shared<T> {
+impl<T: ?Sized + Send + Sync + 'static, const SUFFIX: bool> Drop for Shared<T, SUFFIX> {
     fn drop(&mut self) {
         // SAFETY: this owner retains the header through the atomic decrement.
         let header = unsafe { self.header.as_ref() };

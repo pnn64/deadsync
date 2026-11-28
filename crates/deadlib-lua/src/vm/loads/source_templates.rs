@@ -269,7 +269,7 @@ struct Template {
     digits: Range<usize>,
     depth: usize,
     locale: u64,
-    base: crate::memory::Shared<ProgramData>,
+    base: ProgramOwner,
     target: (usize, usize),
     excluded: Box<[u64]>,
     bytes: usize,
@@ -277,7 +277,7 @@ struct Template {
 
 #[derive(Debug)]
 pub(super) struct Variant {
-    base: crate::memory::Shared<ProgramData>,
+    base: ProgramOwner,
     target: (usize, usize),
     value: f64,
 }
@@ -306,7 +306,7 @@ impl Templates {
         let index = self.entries.iter().rposition(|entry| {
             entry.depth == depth
                 && entry.locale == locale
-                && entry.base.name.as_ref() == name
+                && entry.base.name() == name
                 && entry.digits.start == preamble.digits.start
                 && entry.source[entry.digits.end..] == source[preamble.digits.end..]
                 && entry.source[..entry.digits.start] == source[..preamble.digits.start]

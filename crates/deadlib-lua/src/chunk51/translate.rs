@@ -59,12 +59,12 @@ pub(super) fn program(mut chunk: Chunk) -> Result<Program, Error> {
             pool[id as usize - 1] = source;
         }
     }
-    let program = Program::try_from_data(crate::bytecode::ProgramData::new(
+    let program = Program::try_from_parts(
         prototypes.try_into_boxed_slice()?,
         0,
         name,
         pool.try_into_boxed_slice()?,
-    ))?;
+    )?;
     program
         .verify()
         .map_err(|_| Error::new_static(ErrorKind::Syntax, 0, "bad code"))?;

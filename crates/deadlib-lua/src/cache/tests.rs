@@ -117,6 +117,7 @@ fn source_cache_round_trips_complete_metadata_and_number_bits() {
         b"local trace={};debug.sethook(function(e,l)trace[#trace+1]=e..':'..l end,'l');local a=1;if a<4 then a=a+3 end;debug.sethook();local function f(...)return arg.n,arg[1]end;return a,f(12,nil),table.concat(trace,'|')",
     ] {
         let mut program=crate::compile_named(source,b"@cache-source.lua").unwrap();
+        let name = program.data.name().into();
         let data=program.data_mut();
         let entry=data.entry as usize;
         for bits in [0x8000_0000_0000_0000,0x7ff8_0000_0000_1234,0xfff0_0000_0000_0000,1] {
@@ -126,7 +127,12 @@ fn source_cache_round_trips_complete_metadata_and_number_bits() {
             p.original_constants=constants.into_boxed_slice();
         }
         // Freeze the edited prototypes and rebuild their derived binding ranges.
-        let program = Program::try_from_data(data.clone()).unwrap();
+        let program = Program::try_from_parts(
+            data.prototypes.clone(),
+            data.entry,
+            name,
+            data.sources.clone(),
+        ).unwrap();
         let bytes=encode(&program,source,b"@cache-source.lua");
         let loaded=decode(&bytes,source,b"@cache-source.lua").unwrap();
         assert_eq!(bytes,encode(&loaded,source,b"@cache-source.lua"));

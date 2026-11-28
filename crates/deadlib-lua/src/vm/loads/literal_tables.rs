@@ -3,7 +3,6 @@ use super::*;
 use crate::{
     bytecode::Constant,
     lexer::{Kind, Scanner, Token, short_decimal_integer},
-    memory::Shared,
     parser::{Ast, Expr, Stmt},
 };
 
@@ -19,7 +18,7 @@ struct Literal {
 }
 
 struct Template {
-    program: Shared<ProgramData>,
+    program: ProgramOwner,
     source: Box<[u8]>,
     depth: usize,
     locale: u64,
@@ -165,7 +164,7 @@ impl Templates {
         let index = self.entries.iter_mut().rposition(|template| {
             depth == template.depth
                 && locale == template.locale
-                && name == template.program.name.as_ref()
+                && name == template.program.name()
                 && template.match_source(source).is_some()
         })?;
         self.entries[index..].rotate_left(1);

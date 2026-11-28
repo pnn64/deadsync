@@ -404,7 +404,8 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
             .iter()
             .map(|names| names.capacity() * size_of::<StringId>())
             .sum::<usize>();
-    bytes += crate::bytecode::ProgramData::heap_bytes(&p.data);
+    // Include the name payload regardless of where the program stores it.
+    bytes += crate::bytecode::ProgramData::heap_bytes(&p.data) + p.data.suffix().len();
     bytes + native_roots
 }
 fn register_roots(

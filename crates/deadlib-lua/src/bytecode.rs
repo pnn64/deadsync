@@ -709,7 +709,8 @@ impl Prototype {
 pub(crate) struct ProgramData {
     pub prototypes: Box<[Prototype]>,
     pub entry: u32,
-    pub name: Box<[u8]>,
+    // Empty when the name resides in the shared allocation's suffix.
+    name: Box<[u8]>,
     pub sources: Box<[Box<[u8]>]>,
     pub bound_constant_count: usize,
     // A VM retains the shared code without holding a host handle.
@@ -737,18 +738,6 @@ impl Drop for ProgramData {
         if self.prototypes.len() == 1 {
             crate::compiler::recycle_retired_code(self);
         }
-    }
-}
-
-#[cfg(test)]
-impl Clone for ProgramData {
-    fn clone(&self) -> Self {
-        Self::new(
-            self.prototypes.clone(),
-            self.entry,
-            self.name.clone(),
-            self.sources.clone(),
-        )
     }
 }
 
@@ -783,7 +772,7 @@ impl ProgramData {
         })
     }
 
-    pub(crate) fn new(
+    fn new(
         mut prototypes: Box<[Prototype]>,
         entry: u32,
         name: Box<[u8]>,
@@ -876,10 +865,22 @@ impl ProgramData {
         }
         bytes
     }
+}
 
-    pub fn source(&self, prototype: &Prototype) -> &[u8] {
+pub(crate) type ProgramOwner = Shared<ProgramData, true>;
+
+impl ProgramOwner {
+    pub(crate) fn name(&self) -> &[u8] {
+        if self.name.is_empty() {
+            self.suffix()
+        } else {
+            &self.name
+        }
+    }
+
+    pub(crate) fn source(&self, prototype: &Prototype) -> &[u8] {
         match prototype.debug.native.as_ref().map_or(0, |n| n.source) {
-            0 => &self.name,
+            0 => self.name(),
             n => &self.sources[n as usize - 1],
         }
     }
@@ -892,7 +893,7 @@ impl ProgramData {
 /// those bindings collectible; escaped Lua closures still retain their code.
 #[derive(Debug)]
 pub struct Program {
-    pub(crate) data: Shared<ProgramData>,
+    pub(crate) data: ProgramOwner,
 }
 
 impl Clone for Program {
@@ -943,22 +944,36 @@ impl Program {
         let prototypes = prototypes.try_into_boxed_slice()?;
         if storage.len() == name.len() {
             storage.copy_from_slice(name);
-        } else {
-            storage = name.try_boxed()?;
+            return Self::try_from_parts(prototypes, entry, storage, Box::default());
         }
-        Self::try_from_data(ProgramData::new(prototypes, entry, storage, Box::default()))
+        let data = ProgramData::new(prototypes, entry, Box::default(), Box::default());
+        Ok(Self {
+            data: Shared::try_new_with_suffix_in(data, name, Memory::default())?,
+        })
     }
 
-    pub(crate) fn try_from_data(data: ProgramData) -> Result<Self, Error> {
+    pub(crate) fn try_from_parts(
+        prototypes: Box<[Prototype]>,
+        entry: u32,
+        name: Box<[u8]>,
+        sources: Box<[Box<[u8]>]>,
+    ) -> Result<Self, Error> {
+        let data = ProgramData::new(prototypes, entry, name, sources);
         Ok(Self {
-            data: Shared::try_new_in(data, Memory::default())?,
+            data: Shared::try_new_with_suffix_in(data, &[], Memory::default())?,
         })
     }
 
     #[cfg(test)]
     pub(crate) fn data_mut(&mut self) -> &mut ProgramData {
         let previous = self.data.clone();
-        let data = Shared::make_mut(&mut self.data);
+        let replacement = ProgramData::new(
+            previous.prototypes.clone(),
+            previous.entry,
+            previous.name().into(),
+            previous.sources.clone(),
+        );
+        let data = Shared::replace_mut(&mut self.data, replacement);
         previous.host_owners.fetch_sub(1, Ordering::Release);
         data
     }
@@ -967,7 +982,7 @@ impl Program {
     /// constant replaced. The source loader checks that the source change
     /// affects only this constant and that no same-program alias uses it.
     pub(crate) fn with_number(
-        base: &Shared<ProgramData>,
+        base: &ProgramOwner,
         prototype: usize,
         constant: usize,
         value: f64,
@@ -976,7 +991,7 @@ impl Program {
     }
 
     pub(crate) fn with_numbers(
-        base: &Shared<ProgramData>,
+        base: &ProgramOwner,
         prototype: usize,
         replacements: &[(usize, f64)],
     ) -> Result<Self, Error> {
@@ -998,7 +1013,7 @@ impl Program {
     /// constant pools. Shared leaf aliases can keep the original verifier
     /// shortcut only if their owner retains the original pool.
     pub(crate) fn with_constant_pools(
-        base: &Shared<ProgramData>,
+        base: &ProgramOwner,
         preserve_shared: bool,
         mut replacement: impl FnMut(usize, &Prototype) -> Result<Option<Box<[Constant]>>, Error>,
     ) -> Result<Self, Error> {
@@ -1048,7 +1063,7 @@ impl Program {
                 bound_constant_range: 0..0,
             });
         }
-        let program = Self::try_new(prototypes, base.entry, &base.name)?;
+        let program = Self::try_new(prototypes, base.entry, base.name())?;
         program.verify()?;
         Ok(program)
     }

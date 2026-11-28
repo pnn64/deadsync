@@ -23,6 +23,21 @@ struct Item {
     values: [usize; 3],
     panic: bool,
 }
+
+#[test]
+fn suffix_bytes_are_owned_by_the_original_shared_allocation() {
+    let bytes = vec![0, 3, 255, 4, 7];
+    let owner = Shared::try_new_with_suffix_in([13u64, 9], &bytes, Memory::default()).unwrap();
+    assert_eq!(owner.suffix(), bytes.as_slice());
+    assert_ne!(owner.suffix().as_ptr(), bytes.as_ptr());
+    let view = owner.clone().project(|value| &value[1]);
+    let retained = owner.clone();
+    drop(bytes);
+    drop(owner);
+    assert_eq!(retained.suffix(), &[0, 3, 255, 4, 7]);
+    drop(retained);
+    assert_eq!(*view, 9);
+}
 impl Drop for Item {
     fn drop(&mut self) {
         self.drops.fetch_add(1, Ordering::Relaxed);
