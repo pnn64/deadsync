@@ -151,16 +151,31 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     crate::backend::evdev::set_keyboard_capture_enabled(enabled);
 }
 
+/// Whether the raw keyboard backend reports `code`. Keys it does not report
+/// must be taken from window key events instead.
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 #[inline(always)]
-pub fn unix_raw_keyboard_backend_active() -> bool {
+pub fn raw_keyboard_reports(code: winit::keyboard::KeyCode) -> bool {
+    let _ = code;
     crate::backend::evdev::keyboard_backend_active()
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+/// Whether the raw keyboard backend reports `code`. Keys it does not report
+/// must be taken from window key events instead.
+#[cfg(target_os = "macos")]
 #[inline(always)]
 #[must_use]
-pub const fn unix_raw_keyboard_backend_active() -> bool {
+pub const fn raw_keyboard_reports(code: winit::keyboard::KeyCode) -> bool {
+    !crate::backend::iohid::window_decides_key(code)
+}
+
+/// Whether the raw keyboard backend reports `code`. Keys it does not report
+/// must be taken from window key events instead.
+#[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "macos")))]
+#[inline(always)]
+#[must_use]
+pub const fn raw_keyboard_reports(code: winit::keyboard::KeyCode) -> bool {
+    let _ = code;
     true
 }
 

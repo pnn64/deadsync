@@ -292,6 +292,30 @@ fn debug_log_keyboard_value(
     );
 }
 
+/// Top-row keys that macOS may turn into media keys (volume, brightness,
+/// playback) depending on the fn key and the user's keyboard setting. The HID
+/// report is the same either way, so only the window system knows whether a
+/// press reached the app as a function key. These keys are left to window key
+/// events.
+#[inline(always)]
+pub const fn window_decides_key(code: KeyCode) -> bool {
+    matches!(
+        code,
+        KeyCode::F1
+            | KeyCode::F2
+            | KeyCode::F3
+            | KeyCode::F4
+            | KeyCode::F5
+            | KeyCode::F6
+            | KeyCode::F7
+            | KeyCode::F8
+            | KeyCode::F9
+            | KeyCode::F10
+            | KeyCode::F11
+            | KeyCode::F12
+    )
+}
+
 fn hid_key_code(usage: u16) -> Option<KeyCode> {
     Some(match usage {
         0x04 => KeyCode::KeyA,
@@ -673,7 +697,7 @@ extern "C" fn on_input(
 
         let capture_active = keyboard_capture_active();
         let key_code = if usage_page == 0x07 && capture_active {
-            hid_key_code(usage)
+            hid_key_code(usage).filter(|&code| !window_decides_key(code))
         } else {
             None
         };
@@ -773,4 +797,30 @@ pub fn run(
 fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {
     ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))
         as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{hid_key_code, window_decides_key};
+    use winit::keyboard::KeyCode;
+
+    #[test]
+    fn top_row_function_keys_are_left_to_window_events() {
+        // HID usages 0x3A..=0x45 are F1..=F12, the keys macOS can turn into
+        // media keys.
+        for usage in 0x3A..=0x45 {
+            let code = hid_key_code(usage).expect("F1..=F12 map to key codes");
+            assert!(window_decides_key(code), "{code:?}");
+        }
+        for code in [
+            KeyCode::KeyA,
+            KeyCode::Enter,
+            KeyCode::Escape,
+            KeyCode::ArrowLeft,
+            KeyCode::ShiftLeft,
+            KeyCode::F13,
+        ] {
+            assert!(!window_decides_key(code), "{code:?}");
+        }
+    }
 }

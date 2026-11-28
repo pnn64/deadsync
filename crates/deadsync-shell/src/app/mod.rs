@@ -121,7 +121,6 @@ use deadlib_platform::frame_pacing::{
     FrameIntervalState, FrameLoopMode, FrameWaitControl, elapsed_us_between, elapsed_us_since,
     foreground_input_active,
 };
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadlib_platform::host_time;
 use deadlib_present::compose;
 use deadlib_present::space::{self as space, Metrics};
@@ -9287,9 +9286,11 @@ impl App {
         }
     }
 
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    /// Feed a window key event into live input when the raw keyboard backend
+    /// does not report that key: every key on Unix without a raw backend, and
+    /// on macOS the top-row keys that the system may have used as media keys.
     #[inline(always)]
-    fn handle_unix_window_keyboard_fallback(
+    fn handle_window_keyboard_fallback(
         &mut self,
         event_loop: &ActiveEventLoop,
         key_event: &winit::event::KeyEvent,
@@ -9297,12 +9298,12 @@ impl App {
         use winit::event::ElementState;
         use winit::keyboard::PhysicalKey;
 
-        if deadlib_input_native::unix_raw_keyboard_backend_active() || !self.accepts_live_input() {
-            return;
-        }
         let PhysicalKey::Code(code) = key_event.physical_key else {
             return;
         };
+        if deadlib_input_native::raw_keyboard_reports(code) || !self.accepts_live_input() {
+            return;
+        }
         self.handle_live_key_event(
             event_loop,
             RawKeyboardEvent {
@@ -11306,8 +11307,7 @@ impl ApplicationHandler<UserEvent> for App {
                     };
                     self.handle_key_text(event_loop, text, typed_by, key_event.repeat);
                 }
-                #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-                self.handle_unix_window_keyboard_fallback(event_loop, &key_event);
+                self.handle_window_keyboard_fallback(event_loop, &key_event);
             }
             WindowEvent::RedrawRequested => {
                 let redraw_started = Instant::now();
