@@ -1,5 +1,7 @@
 # H.264 decoder benchmark
 
+The [2026-11-28 revision comparison](results/windows-x86_64-20261128/README.md) records the Annex B, emulation-prevention and CAVLC bit-peek optimization pass, with a [reproduction harness](revision-pass/README.md).
+
 This Windows x64 benchmark compares the crate with ITGmania's software FFmpeg H.264 decoder. The harness and FFmpeg imports live here, outside the decoder library.
 
 Run from a Visual Studio x64 developer shell with Cargo, FFmpeg and Python on the path. Point the script to a checkout with ITGmania's bundled x64 FFmpeg 62 headers, DLLs and import libraries.
