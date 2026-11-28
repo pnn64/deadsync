@@ -115,3 +115,7 @@ and showed fewer heap calls and requested bytes on all three clips.
 The paired revision benchmark uses original Xvid AVI files, including container
 parsing, and captures real intra-block inputs for isolated measurements.
 See the [results and reproduction instructions](results/windows-x86_64-20261128-itg3-pass/README.md).
+
+The [second ITG3 pass](results/windows-x86_64-20261128-itg3-pass2/README.md)
+starts from the first pass's optimized decoder and measures signed inverse
+quantization, equal-quantizer AC prediction and power-of-two motion wrapping.

@@ -105,6 +105,42 @@ pub fn perf_dc_exact(records: &[PerfIntra<'_>]) -> alloc::vec::Vec<(i32, usize)>
     records.iter().map(PerfIntra::dc).collect()
 }
 
+pub struct PerfQuant {
+    q: i32,
+    levels: [i32; 64],
+}
+
+impl PerfQuant {
+    pub fn parse(data: &[u8]) -> alloc::vec::Vec<Self> {
+        assert_eq!(data.len() % 260, 0);
+        data.chunks_exact(260)
+            .map(|record| Self {
+                q: i32::from_le_bytes(record[..4].try_into().unwrap()),
+                levels: core::array::from_fn(|i| {
+                    i32::from_le_bytes(record[4 + i * 4..8 + i * 4].try_into().unwrap())
+                }),
+            })
+            .collect()
+    }
+
+    fn run(&self) -> [i16; 64] {
+        self.levels
+            .map(|level| inverse_quantize::<false>(level, self.q))
+    }
+}
+
+pub fn perf_quant_batch(records: &[PerfQuant], repeats: usize) {
+    for _ in 0..repeats {
+        for record in records {
+            core::hint::black_box(core::hint::black_box(record).run());
+        }
+    }
+}
+
+pub fn perf_quant_exact(records: &[PerfQuant]) -> alloc::vec::Vec<[i16; 64]> {
+    records.iter().map(PerfQuant::run).collect()
+}
+
 #[cfg(itg_capture)]
 mod trace {
     extern crate std;
@@ -161,7 +197,33 @@ mod trace {
             .write_all(&RECORDS.lock().unwrap())
             .unwrap();
     }
+
+    #[cfg(itg_capture_extra)]
+    static QUANT_INDEX: AtomicUsize = AtomicUsize::new(0);
+    #[cfg(itg_capture_extra)]
+    static QUANT_RECORDS: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+
+    #[cfg(itg_capture_extra)]
+    pub fn capture_quant(q: i32, levels: &[i32; 64]) {
+        if QUANT_INDEX.fetch_add(1, Relaxed) % 512 != 0 {
+            return;
+        }
+        let mut out = QUANT_RECORDS.lock().unwrap();
+        out.extend(q.to_le_bytes());
+        for level in levels {
+            out.extend(level.to_le_bytes());
+        }
+    }
+
+    #[cfg(itg_capture_extra)]
+    pub fn write_quant_trace(path: &str) {
+        BufWriter::new(File::create(path).unwrap())
+            .write_all(&QUANT_RECORDS.lock().unwrap())
+            .unwrap();
+    }
 }
 
+#[cfg(itg_capture_extra)]
+pub use trace::write_quant_trace;
 #[cfg(itg_capture)]
 pub use trace::write_trace;

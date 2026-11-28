@@ -4,11 +4,13 @@ param(
     [Parameter(Mandatory = $true)] [string] $Inputs,
     [Parameter(Mandatory = $true)] [string] $Work,
     [string] $Trace,
-    [ValidateSet('scan', 'intra', 'dc', 'pipeline')] [string] $Operation = 'scan',
+    [ValidateSet('scan', 'intra', 'dc', 'quant', 'motion', 'pipeline')] [string] $Operation = 'scan',
     [int] $Rounds = 5,
     [int] $Cpu = 12,
     [switch] $Capture,
+    [switch] $CaptureExtra,
     [switch] $Full,
+    [switch] $KernelsOnly,
     [switch] $SkipVerify
 )
 $ErrorActionPreference = 'Stop'
@@ -19,6 +21,7 @@ $Work = (New-Item -ItemType Directory -Force -Path $Work).FullName
 $flags = @('--edition', '2021', '-C', 'opt-level=3', '-C', 'codegen-units=1')
 $bench = Join-Path $PSScriptRoot 'itg3.rs'
 $hooks = Join-Path $PSScriptRoot 'itg3_intra_hooks.rs'
+$motionHooks = Join-Path $PSScriptRoot 'itg3_motion_hooks.rs'
 
 function Check([string] $what) {
     if ($LASTEXITCODE -ne 0) { throw "$what failed: $LASTEXITCODE" }
@@ -33,8 +36,11 @@ function Build-Library([string] $source, [string] $name, [string] $variant) {
         $block = Join-Path $dir 'block.rs'
         $lib = Join-Path $dir 'lib.rs'
         $bits = Join-Path $dir 'bitstream.rs'
+        $picture = Join-Path $dir 'picture.rs'
         Add-Content -Encoding UTF8 $block ("`n" + (Get-Content -Raw -LiteralPath $hooks))
-        Add-Content -Encoding UTF8 $lib "`npub use block::{PerfIntra, perf_intra_batch, perf_intra_exact, perf_dc_batch, perf_dc_exact};"
+        Add-Content -Encoding UTF8 $picture ("`n" + (Get-Content -Raw -LiteralPath $motionHooks))
+        Add-Content -Encoding UTF8 $lib "`npub use block::{PerfIntra, perf_intra_batch, perf_intra_exact, perf_dc_batch, perf_dc_exact, PerfQuant, perf_quant_batch, perf_quant_exact};"
+        Add-Content -Encoding UTF8 $lib "`npub use picture::{PerfMotion, perf_motion_batch, perf_motion_exact};"
         Add-Content -Encoding UTF8 $bits @'
 
 impl<'a> Bits<'a> {
@@ -57,6 +63,20 @@ impl<'a> Bits<'a> {
     }
 '@ + "`n" + $needle)
             Set-Content -Encoding UTF8 -LiteralPath $block $text
+            if ($CaptureExtra) {
+                $extra += @('--cfg', 'itg_capture_extra')
+                Add-Content -Encoding UTF8 $lib "`npub use block::write_quant_trace; pub use picture::write_motion_trace;"
+                $text = Get-Content -Raw -LiteralPath $block
+                $needle = '    let mut scaled = coeff.map(|level| inverse_quantize::<MP42>(level, quantizer));'
+                if (!$text.Contains($needle)) { throw 'intra quantization signature changed' }
+                $text = $text.Replace($needle, "    if !MP42 { trace::capture_quant(quantizer, &coeff); }`n" + $needle)
+                Set-Content -Encoding UTF8 -LiteralPath $block $text
+                $text = Get-Content -Raw -LiteralPath $picture
+                $needle = 'fn motion_component(bits: &mut Bits<''_>, predictor: i32, code: u8) -> Result<i32> {'
+                if (!$text.Contains($needle)) { throw 'motion component signature changed' }
+                $text = $text.Replace($needle, $needle + "`n    motion_trace::capture(bits, predictor, code);")
+                Set-Content -Encoding UTF8 -LiteralPath $picture $text
+            }
         }
     }
     $rlib = Join-Path $Work "lib$name-$variant.rlib"
@@ -72,43 +92,48 @@ function Build-Bench([string] $left, [string] $right, [string] $name, [string[]]
     return $exe
 }
 
-$left = Build-Library $Before 'baseline' 'plain'
-$right = Build-Library $After 'candidate' 'plain'
-$cycles = Build-Bench $left $right 'cycles' @()
-if ($Full) {
-    & $cycles full $Rounds $Cpu $Inputs (Join-Path $Work 'exact.csv') > (Join-Path $Work 'cycles.csv')
-    Check 'Full corpus'
+if (!$KernelsOnly) {
+    $left = Build-Library $Before 'baseline' 'plain'
+    $right = Build-Library $After 'candidate' 'plain'
+    $cycles = Build-Bench $left $right 'cycles' @()
+    if ($Full) {
+        & $cycles full $Rounds $Cpu $Inputs (Join-Path $Work 'exact.csv') > (Join-Path $Work 'cycles.csv')
+        Check 'Full corpus'
+        $alloc = Build-Bench $left $right 'allocations' @('--cfg', 'allocations')
+        & $alloc allocall 1 $Cpu $Inputs > (Join-Path $Work 'allocations.csv')
+        Check 'Full corpus allocations'
+        exit
+    }
+    if ($Capture) {
+        if (!$Trace) { $Trace = Join-Path $Work 'intra.bin' }
+        $left = Build-Library $Before 'baseline' 'capture'
+        $captureFlags = @('--cfg', 'itg_capture')
+        if ($CaptureExtra) { $captureFlags += @('--cfg', 'itg_capture_extra') }
+        $exe = Build-Bench $left $right 'capture' $captureFlags
+        & $exe capture 1 $Cpu $Inputs $Trace
+        Check 'Capturing actual decoder inputs'
+        exit
+    }
     $alloc = Build-Bench $left $right 'allocations' @('--cfg', 'allocations')
-    & $alloc allocall 1 $Cpu $Inputs > (Join-Path $Work 'allocations.csv')
-    Check 'Full corpus allocations'
-    exit
+    $mode = if ($Operation -eq 'scan') { 'both' } else { 'pipeline' }
+    & $cycles $mode $Rounds $Cpu $Inputs > (Join-Path $Work 'cycles.csv')
+    Check 'Pipeline cycles'
+    & $alloc $mode 1 $Cpu $Inputs > (Join-Path $Work 'allocations.csv')
+    Check 'Pipeline allocations'
+    if (!$SkipVerify) {
+        & $cycles full 0 $Cpu $Inputs (Join-Path $Work 'exact.csv') > $null
+        Check 'Exact output comparison'
+    }
 }
-if ($Capture) {
-    if (!$Trace) { $Trace = Join-Path $Work 'intra.bin' }
-    $left = Build-Library $Before 'baseline' 'capture'
-    $exe = Build-Bench $left $right 'capture' @('--cfg', 'itg_capture')
-    & $exe capture 1 $Cpu $Inputs $Trace
-    Check 'Capturing actual intra blocks'
-    exit
-}
-$alloc = Build-Bench $left $right 'allocations' @('--cfg', 'allocations')
-$mode = if ($Operation -eq 'scan') { 'both' } else { 'pipeline' }
-& $cycles $mode $Rounds $Cpu $Inputs > (Join-Path $Work 'cycles.csv')
-Check 'Pipeline cycles'
-& $alloc $mode 1 $Cpu $Inputs > (Join-Path $Work 'allocations.csv')
-Check 'Pipeline allocations'
-if (!$SkipVerify) {
-    & $cycles full 0 $Cpu $Inputs (Join-Path $Work 'exact.csv') > $null
-    Check 'Exact output comparison'
-}
-if ($Operation -in 'intra', 'dc') {
+if ($Operation -in 'intra', 'dc', 'quant', 'motion') {
     $left = Build-Library $Before 'baseline' 'kernels'
     $right = Build-Library $After 'candidate' 'kernels'
     $kernel = Build-Bench $left $right 'kernel-cycles' @('--cfg', 'itg_kernels')
     $kernelAlloc = Build-Bench $left $right 'kernel-allocations' @('--cfg', 'itg_kernels', '--cfg', 'allocations')
-    & $kernel intra ($Rounds * 2) $Cpu $Trace > (Join-Path $Work 'kernel-cycles.csv')
+    $kernelMode = if ($Operation -in 'quant','motion') { $Operation } else { 'intra' }
+    & $kernel $kernelMode ($Rounds * 2) $Cpu $Trace > (Join-Path $Work 'kernel-cycles.csv')
     Check 'Kernel cycles'
-    & $kernelAlloc intra 1 $Cpu $Trace > (Join-Path $Work 'kernel-allocations.csv')
+    & $kernelAlloc $kernelMode 1 $Cpu $Trace > (Join-Path $Work 'kernel-allocations.csv')
     Check 'Kernel allocations'
     if ($Operation -eq 'dc') {
         & $kernel dc ($Rounds * 3) $Cpu $Trace > (Join-Path $Work 'dc-cycles.csv')

@@ -183,6 +183,42 @@ fn main() {
         0
     );
     #[cfg(itg_kernels)]
+    if mode == "quant" || mode == "motion" {
+        let data = std::fs::read(&args[4]).unwrap();
+        macro_rules! replay {
+            ($record:ident, $batch:ident, $exact:ident, $reps:expr) => {{
+                let a = baseline::$record::parse(&data);
+                let b = candidate::$record::parse(&data);
+                assert!(!a.is_empty());
+                assert_eq!(baseline::$exact(&a), candidate::$exact(&b));
+                let reps = $reps;
+                println!("round,revision,operation,units,cycles,heap_calls,requested_bytes");
+                for round in 0..rounds {
+                    for candidate in [round % 2 == 0, round % 2 != 0] {
+                        let label = if candidate { "after" } else { "before" };
+                        let (_, cycles, calls, bytes) = measure(|| {
+                            if candidate {
+                                candidate::$batch(&b, reps)
+                            } else {
+                                baseline::$batch(&a, reps)
+                            }
+                        });
+                        println!(
+                            "{round},{label},{mode},{},{cycles},{calls},{bytes}",
+                            a.len() * reps
+                        );
+                    }
+                }
+            }};
+        }
+        if mode == "quant" {
+            replay!(PerfQuant, perf_quant_batch, perf_quant_exact, 256);
+        } else {
+            replay!(PerfMotion, perf_motion_batch, perf_motion_exact, 128);
+        }
+        return;
+    }
+    #[cfg(itg_kernels)]
     if mode == "intra" || mode == "dc" {
         let data = std::fs::read(&args[4]).unwrap();
         let a = baseline::PerfIntra::parse(&data);
@@ -232,6 +268,11 @@ fn main() {
             eprintln!("{file}: {result:?}");
         }
         baseline::write_trace(&args[5]);
+        #[cfg(itg_capture_extra)]
+        {
+            baseline::write_quant_trace(&format!("{}.quant", args[5]));
+            baseline::write_motion_trace(&format!("{}.motion", args[5]));
+        }
         return;
     }
     let mut verify = (mode == "full").then(|| {
