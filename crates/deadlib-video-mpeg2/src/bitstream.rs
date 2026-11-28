@@ -20,11 +20,28 @@ pub fn units(bytes: &[u8]) -> impl Iterator<Item = Unit<'_>> {
 }
 
 pub(crate) fn find_prefix(bytes: &[u8], start: usize) -> Option<usize> {
-    bytes
-        .get(start..)?
+    let bytes = bytes.get(start..)?;
+    // Test eight possible final bytes at once. The zero-byte test can also
+    // report a neighbour after a borrow, so confirm every candidate.
+    const ONES: u64 = 0x0101_0101_0101_0101;
+    const HIGH: u64 = 0x8080_8080_8080_8080;
+    let (words, _) = bytes.get(2..)?.as_chunks::<8>();
+    for (index, word) in words.iter().enumerate() {
+        let word = u64::from_le_bytes(*word) ^ ONES;
+        let mut hits = word.wrapping_sub(ONES) & !word & HIGH;
+        while hits != 0 {
+            let offset = index * 8 + (hits.trailing_zeros() as usize / 8);
+            if bytes[offset..].starts_with(&[0, 0, 1]) {
+                return Some(start + offset);
+            }
+            hits &= hits - 1;
+        }
+    }
+    let offset = words.len() * 8;
+    bytes[offset..]
         .windows(3)
         .position(|window| window == [0, 0, 1])
-        .map(|offset| start + offset)
+        .map(|tail| start + offset + tail)
 }
 
 pub(crate) struct Bits<'a> {
@@ -121,4 +138,31 @@ pub(crate) const fn vlc_table<const N: usize>(codes: &[(u16, u8)]) -> [u16; N] {
         symbol += 1;
     }
     table
+}
+
+#[cfg(test)]
+mod tests {
+    use super::find_prefix;
+
+    #[test]
+    fn prefix_matches_bytewise_search_at_every_offset() {
+        let mut seed = 0x1234_5678u32;
+        let mut bytes = [0; 97];
+        for len in 0..=bytes.len() {
+            for _ in 0..32 {
+                for byte in &mut bytes[..len] {
+                    seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    *byte = ((seed >> 28) & 3) as u8;
+                }
+                for start in 0..=len + 1 {
+                    let expected = bytes[..len].get(start..).and_then(|tail| {
+                        tail.windows(3)
+                            .position(|w| w == [0, 0, 1])
+                            .map(|i| start + i)
+                    });
+                    assert_eq!(find_prefix(&bytes[..len], start), expected);
+                }
+            }
+        }
+    }
 }
