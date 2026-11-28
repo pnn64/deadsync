@@ -1527,22 +1527,23 @@ impl Vm {
     fn bind_new_program(&mut self, program: &Program) -> Result<FunctionId, Error> {
         let memory = self.programs.memory().clone();
         let budget = memory.reserve_external(|| program.heap_bytes())?;
-        let (mut constants, mut upvalue_names, mut reused) =
+        let (mut constants, mut reused) =
             if let Some(buffers) = self.compile_spare.bindings.take(&program.data, &memory) {
-                (
-                    buffers.constants,
-                    buffers.upvalue_names,
-                    Some(buffers.values),
-                )
+                (buffers.constants, Some(buffers.values))
             } else {
-                (
-                    Buffer::new_in(memory.clone()),
-                    Buffer::new_in(memory.clone()),
-                    None,
-                )
+                (Buffer::new_in(memory.clone()), None)
             };
         constants.try_reserve_exact(program.data.prototypes.len())?;
-        upvalue_names.try_reserve_exact(program.data.prototypes.len())?;
+        // An empty name table represents a program without any named captures.
+        let mut upvalue_names = Buffer::new_in(memory.clone());
+        let has_names = program
+            .data
+            .prototypes
+            .iter()
+            .any(|prototype| !prototype.debug.upvalue_names().is_empty());
+        if has_names {
+            upvalue_names.try_reserve_exact(program.data.prototypes.len())?;
+        }
         for (index, prototype) in program.data.prototypes.iter().enumerate() {
             let mut values = reused
                 .take()
@@ -1566,16 +1567,18 @@ impl Vm {
                 }
             }
             constants.push(values);
-            let defined_names = prototype.debug.upvalue_names();
-            let mut names = Buffer::new_in(memory.clone());
-            names.try_reserve_exact(defined_names.len())?;
-            for name in defined_names {
-                let Value::String(id) = self.try_intern(prototype.debug.name(name))? else {
-                    unreachable!()
-                };
-                names.push(id);
+            if has_names {
+                let defined_names = prototype.debug.upvalue_names();
+                let mut names = Buffer::new_in(memory.clone());
+                names.try_reserve_exact(defined_names.len())?;
+                for name in defined_names {
+                    let Value::String(id) = self.try_intern(prototype.debug.name(name))? else {
+                        unreachable!()
+                    };
+                    names.push(id);
+                }
+                upvalue_names.push(names);
             }
-            upvalue_names.push(names);
         }
         let loaded = LoadedProgram {
             data: program.data.clone(),

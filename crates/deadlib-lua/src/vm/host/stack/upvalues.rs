@@ -13,8 +13,10 @@ impl Vm {
         match function {
             Value::Function(id) => {
                 let closure = &self.functions[slot_index(id.0)];
-                let name =
-                    *self.programs[closure.program].upvalue_names[closure.prototype].get(index)?;
+                let name = *self.programs[closure.program]
+                    .upvalue_names
+                    .get(closure.prototype)?
+                    .get(index)?;
                 Some(Capture::Lua {
                     cell: *closure.upvalues.get(index)? as usize,
                     name,

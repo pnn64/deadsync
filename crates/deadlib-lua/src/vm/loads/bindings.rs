@@ -1,12 +1,11 @@
-//! Reuse empty constant and capture-name buffers after an unbudgeted sweep.
-use super::{Buffer, LoadedProgram, Memory, ProgramData, StringId, Value, fallible};
+//! Reuse empty constant buffers after an unbudgeted sweep.
+use super::{Buffer, LoadedProgram, Memory, ProgramData, Value, fallible};
 
 const MAX_VALUES: usize = 32;
 const MAX_PER_SIZE: usize = 32;
 
 pub(in crate::vm) struct Bindings {
     pub constants: Buffer<Buffer<Value>>,
-    pub upvalue_names: Buffer<Buffer<StringId>>,
     pub values: Buffer<Value>,
 }
 
@@ -37,14 +36,13 @@ impl BindingPool {
     }
 
     pub(in crate::vm) fn recycle(&mut self, program: &mut LoadedProgram) {
-        let ([values], [names]) = (&*program.constants, &*program.upvalue_names) else {
+        let [values] = &*program.constants else {
             return;
         };
         let size = values.capacity();
         if size > MAX_VALUES
-            || names.capacity() != 0
+            || !program.upvalue_names.is_empty()
             || program.constants.capacity() != 1
-            || program.upvalue_names.capacity() != 1
         {
             return;
         }
@@ -57,19 +55,11 @@ impl BindingPool {
             return;
         }
         let memory = program.constants.memory().clone();
-        let mut constants =
-            std::mem::replace(&mut program.constants, Buffer::new_in(memory.clone()));
-        let mut upvalue_names =
-            std::mem::replace(&mut program.upvalue_names, Buffer::new_in(memory));
+        let mut constants = std::mem::replace(&mut program.constants, Buffer::new_in(memory));
         let mut values = constants.pop().expect("one retired constant buffer");
         // No bound Value may be retained outside the program arena.
         values.clear();
-        upvalue_names.clear();
-        bin.push(Bindings {
-            constants,
-            upvalue_names,
-            values,
-        });
+        bin.push(Bindings { constants, values });
     }
 }
 
