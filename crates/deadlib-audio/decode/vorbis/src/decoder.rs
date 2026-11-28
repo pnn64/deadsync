@@ -220,24 +220,35 @@ impl PacketDecoder {
             let current = &self.current[ch * large..ch * large + n];
             let previous = &mut self.previous[ch * stride..ch * stride + stride];
             let output = &mut self.pcm[ch * stride..ch * stride + frames];
-            for (i, value) in output.iter_mut().enumerate() {
-                let prior = if i < self.previous_size / 2 {
-                    // Delay the previous block's right window until the next
-                    // accepted mode is known. Discarded packets can make the
-                    // encoded neighbor hints disagree with the actual overlap.
-                    right_window(previous[i], i, self.previous_size, right)
-                } else {
-                    0.0
-                };
-                let index = i as isize - current_start;
-                let next = if index >= 0 {
-                    current[index as usize]
-                } else {
-                    0.0
-                };
-                *value = prior + next;
-                if !value.is_finite() && !self.allow_nonfinite {
+            if self.previous_size == n {
+                // Equal blocks overlap their full halves with no flat regions.
+                // Reject nonfinite results before committing overlap state;
+                // completing this private scratch plane allows vectorization.
+                if !overlap_equal_blocks(output, &previous[..frames], &current[..frames], right)
+                    && !self.allow_nonfinite
+                {
                     return Err(Error::Invalid("nonfinite overlap output"));
+                }
+            } else {
+                for (i, value) in output.iter_mut().enumerate() {
+                    let prior = if i < self.previous_size / 2 {
+                        // Delay the previous block's right window until the next
+                        // accepted mode is known. Discarded packets can make the
+                        // encoded neighbor hints disagree with the actual overlap.
+                        right_window(previous[i], i, self.previous_size, right)
+                    } else {
+                        0.0
+                    };
+                    let index = i as isize - current_start;
+                    let next = if index >= 0 {
+                        current[index as usize]
+                    } else {
+                        0.0
+                    };
+                    *value = prior + next;
+                    if !value.is_finite() && !self.allow_nonfinite {
+                        return Err(Error::Invalid("nonfinite overlap output"));
+                    }
                 }
             }
         }
@@ -468,6 +479,24 @@ fn right_window(value: f32, index: usize, size: usize, slope: &[f32]) -> f32 {
         0.0
     }
 }
+fn overlap_equal_blocks(
+    output: &mut [f32],
+    previous: &[f32],
+    current: &[f32],
+    right: &[f32],
+) -> bool {
+    let mut all_finite = true;
+    for (((value, &prior), &gain), &next) in output
+        .iter_mut()
+        .zip(previous)
+        .zip(right.iter().rev())
+        .zip(current)
+    {
+        *value = prior * gain + next;
+        all_finite &= value.is_finite();
+    }
+    all_finite
+}
 fn inverse_coupling(
     spectrum: &mut [f32],
     stride: usize,
@@ -507,6 +536,67 @@ fn inverse_coupling(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn equal_block_overlap_matches_scalar_windows_and_nonfinite_detection() {
+        let special = [
+            0.0,
+            -0.0,
+            1.0,
+            -1.0,
+            f32::MIN_POSITIVE,
+            -f32::MIN_POSITIVE,
+            f32::from_bits(1),
+            -f32::from_bits(1),
+            f32::MAX,
+            -f32::MAX,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::NAN,
+        ];
+        let mut seed = 0x91e1_0da5u32;
+        for n in [64, 128, 256, 512, 1024, 2048, 4096, 8192] {
+            let frames = n / 2;
+            let right = slope(frames).unwrap();
+            for exceptional in [false, true] {
+                let mut samples = || {
+                    (0..frames)
+                        .map(|i| {
+                            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                            if exceptional {
+                                special[(i + seed as usize % special.len()) % special.len()]
+                            } else {
+                                seed as i32 as f32 / i32::MAX as f32
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let previous = samples();
+                let current = samples();
+                let expected: Vec<_> = previous
+                    .iter()
+                    .zip(&current)
+                    .enumerate()
+                    .map(|(i, (&prior, &next))| right_window(prior, i, n, &right) + next)
+                    .collect();
+                let mut actual = vec![0.0; frames];
+                assert_eq!(
+                    overlap_equal_blocks(&mut actual, &previous, &current, &right),
+                    expected.iter().all(|value| value.is_finite())
+                );
+                for (i, (&actual, &expected)) in actual.iter().zip(&expected).enumerate() {
+                    assert_eq!(actual.to_bits(), expected.to_bits(), "n={n}, sample={i}");
+                }
+            }
+        }
+        let mut output = [0.0; 32];
+        assert!(!overlap_equal_blocks(
+            &mut output,
+            &[f32::MAX; 32],
+            &[f32::MAX; 32],
+            &[1.0; 32],
+        ));
+        assert!(output.iter().all(|&value| value == f32::INFINITY));
+    }
     #[test]
     fn inverse_coupling_covers_all_signs_and_channel_orders() {
         for (magnitude, angle, expected) in [
