@@ -158,6 +158,10 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
             output.resize(file_size, 0);
             write_bgra_quads(samples, &mut output[offset..]);
         }
+        #[cfg(target_pointer_width = "64")]
+        Pixels::Rgba(samples) if !options.top_down && width > 4 => {
+            append_bgra_wide_rows(&mut output, samples, row_bytes);
+        }
         Pixels::Rgba(samples) => append_mapped_rows(
             &mut output,
             samples,
@@ -180,6 +184,27 @@ fn write_bgra_quads(samples: &[u8], output: &mut [u8]) {
         let word = u128::from_le_bytes(row);
         *target =
             ((word & !(RED | BLUE)) | ((word & BLUE) >> 16) | ((word & RED) << 16)).to_le_bytes();
+    }
+}
+
+#[cfg(target_pointer_width = "64")]
+#[inline(never)]
+fn append_bgra_wide_rows(output: &mut Vec<u8>, samples: &[u8], source_row_bytes: usize) {
+    const RED: u128 = 0x0000_00ff_0000_00ff_0000_00ff_0000_00ff;
+    const BLUE: u128 = RED << 16;
+    // Reverse complete rows while preserving pixel order within each four-pixel word.
+    for row in samples.chunks_exact(source_row_bytes).rev() {
+        let (groups, tail) = row.as_chunks::<16>();
+        let groups = groups.iter().flat_map(|&bytes| {
+            let word = u128::from_le_bytes(bytes);
+            ((word & !(RED | BLUE)) | ((word & BLUE) >> 16) | ((word & RED) << 16)).to_le_bytes()
+        });
+        let tail = tail
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .flat_map(|&[red, green, blue, alpha]| [blue, green, red, alpha]);
+        output.extend(groups.chain(tail));
     }
 }
 
