@@ -40,6 +40,10 @@ fn integer_formatting_preserves_precision_boundaries_and_signed_zero() {
 fn numeric_text_preserves_rounding_without_temporary_allocations() {
     for (number, expected) in [
         (-0.0, "-0"),
+        (0.0001, "0.0001"),
+        (-0.75, "-0.75"),
+        (17.006, "17.006"),
+        (-23001.00625, "-23001.00625"),
         (0.29f64.next_down(), "0.29"),
         (-0.000125, "-0.000125"),
         (123.45000000000001, "123.45"),

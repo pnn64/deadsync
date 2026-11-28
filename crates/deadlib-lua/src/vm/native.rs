@@ -1230,15 +1230,16 @@ pub(super) fn try_format_number(n: f64) -> Result<Vec<u8>, Error> {
     number_text(n).try_into_localized()
 }
 
-// Binary64 %.14g needs at most 22 ASCII bytes, including sign/exponent.
+// Binary64 %.14g and the intermediate {:.13e} both fit in 24 ASCII bytes,
+// including the sign, decimal point and exponent.
 pub(super) struct NumberText {
-    bytes: [u8; 64],
+    bytes: [u8; 24],
     len: usize,
 }
 impl NumberText {
     fn new() -> Self {
         Self {
-            bytes: [0; 64],
+            bytes: [0; 24],
             len: 0,
         }
     }
@@ -1255,6 +1256,38 @@ impl NumberText {
         }
     }
     fn integer(&mut self, value: f64) {
+        let sign = usize::from(value.is_sign_negative());
+        let magnitude = value.abs() as u64;
+        self.bytes[0] = b'-';
+        if magnitude < 10 {
+            self.bytes[sign] = b'0' + magnitude as u8;
+            self.len = sign + 1;
+            return;
+        }
+        self.len = sign + magnitude.ilog10() as usize + 1;
+        Self::write_digits(magnitude, &mut self.bytes[sign..self.len]);
+    }
+
+    fn fractional(&mut self, scaled: u64, width: usize, negative: bool) {
+        let sign = usize::from(negative);
+        let digits = (scaled.ilog10() as usize + 1).max(width + 1);
+        let end = sign + digits;
+        let point = end - width;
+        self.bytes[0] = b'-';
+        Self::write_digits(scaled, &mut self.bytes[sign..end]);
+        self.bytes.copy_within(point..end, point + 1);
+        self.bytes[point] = b'.';
+        self.len = end + 1;
+        while self.bytes[self.len - 1] == b'0' {
+            self.len -= 1;
+        }
+        if self.len == point + 1 {
+            self.len = point;
+        }
+    }
+
+    /// Write a zero-padded decimal integer into a slice of its final width.
+    fn write_digits(mut magnitude: u64, target: &mut [u8]) {
         const PAIRS: [[u8; 2]; 100] = {
             let mut pairs = [[0; 2]; 100];
             let mut i = 0;
@@ -1264,16 +1297,7 @@ impl NumberText {
             }
             pairs
         };
-        let sign = usize::from(value.is_sign_negative());
-        let mut magnitude = value.abs() as u64;
-        self.bytes[0] = b'-';
-        if magnitude < 10 {
-            self.bytes[sign] = b'0' + magnitude as u8;
-            self.len = sign + 1;
-            return;
-        }
-        self.len = sign + magnitude.ilog10() as usize + 1;
-        let (first, pairs) = self.bytes[sign..self.len].as_rchunks_mut::<2>();
+        let (first, pairs) = target.as_rchunks_mut::<2>();
         for pair in pairs.iter_mut().rev() {
             *pair = PAIRS[(magnitude % 100) as usize];
             magnitude /= 100;
@@ -1305,7 +1329,7 @@ impl std::fmt::Write for NumberText {
     }
 }
 
-fn short_decimal(n: f64) -> Option<(u64, u64, usize)> {
+fn short_decimal(n: f64) -> Option<(u64, usize)> {
     let magnitude = n.abs();
     if magnitude < 0.0001 {
         return None;
@@ -1328,7 +1352,7 @@ fn short_decimal(n: f64) -> Option<(u64, u64, usize)> {
         }
         let integer = value as u64;
         if value == integer as f64 {
-            return Some((integer, factor, width));
+            return Some((integer, width));
         }
     }
     None
@@ -1354,17 +1378,8 @@ pub(super) fn number_text(n: f64) -> NumberText {
     } else if let Some(text) = NumberText::short_integer(n) {
         // Integers with at most fourteen digits need no decimal rounding.
         return text;
-    } else if let Some((scaled, factor, width)) = short_decimal(n) {
-        if n.is_sign_negative() {
-            output.write_str("-").unwrap();
-        }
-        write!(output, "{}.{:0width$}", scaled / factor, scaled % factor).unwrap();
-        while output.bytes[output.len - 1] == b'0' {
-            output.len -= 1;
-        }
-        if output.bytes[output.len - 1] == b'.' {
-            output.len -= 1;
-        }
+    } else if let Some((scaled, width)) = short_decimal(n) {
+        output.fractional(scaled, width, n.is_sign_negative());
     } else {
         let mut scientific = NumberText::new();
         write!(scientific, "{n:.13e}").unwrap();
