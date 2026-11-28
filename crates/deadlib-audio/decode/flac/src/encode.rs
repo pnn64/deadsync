@@ -112,6 +112,7 @@ struct SubframePlan {
 #[derive(Default)]
 struct Analysis {
     residual: Vec<i32>,
+    // Equal halves: Hann weights cached by block length, then the weighted signal.
     window: Vec<f64>,
     rice: RicePlan,
     partitions: Vec<Partition>,
@@ -293,16 +294,26 @@ impl Analysis {
         }
         // Autocorrelation of a Hann-windowed signal; this affects compression
         // quality only. The exact integer residual is tested for every proposal.
-        resize(&mut self.window, samples.len(), 0.0)?;
-        for (i, (value, &sample)) in self.window.iter_mut().zip(samples.iter()).enumerate() {
-            let win =
-                0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / (samples.len() - 1) as f64).cos();
+        let changed = self.window.len() != samples.len() * 2;
+        if changed {
+            resize(&mut self.window, samples.len() * 2, 0.0)?;
+        }
+        let (weights, window) = self.window.split_at_mut(samples.len());
+        if changed {
+            // All channels and later frames with this length share the weights.
+            // Keep the original arithmetic order so LPC proposals stay exact.
+            for (i, weight) in weights.iter_mut().enumerate() {
+                *weight = 0.5
+                    - 0.5 * (std::f64::consts::TAU * i as f64 / (samples.len() - 1) as f64).cos();
+            }
+        }
+        for ((value, &sample), &win) in window.iter_mut().zip(samples.iter()).zip(weights.iter()) {
             *value = sample as f64 * win;
         }
         let mut corr = [0f64; 33];
         for (lag, value) in corr.iter_mut().enumerate().take(max_order + 1) {
             for i in lag..samples.len() {
-                *value += self.window[i] * self.window[i - lag];
+                *value += window[i] * window[i - lag];
             }
         }
         let mut coeff = [0f64; 32];
@@ -665,6 +676,36 @@ pub(crate) fn resize<T: Clone>(data: &mut Vec<T>, len: usize, value: T) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cached_hann_weights_and_signal_preserve_uncached_bits() {
+        let options = EncodeOptions {
+            compression_level: 3,
+            max_lpc_order: Some(1),
+            max_partition_order: Some(0),
+            ..EncodeOptions::default()
+        };
+        let mut analysis = Analysis::default();
+        for (generation, len) in [2usize, 3, 31, 31, 257, 4096, 257, 65_535, 4096]
+            .into_iter()
+            .enumerate()
+        {
+            let mut samples: Vec<_> = (0..len)
+                .map(|i| ((i * 29 + generation * 71) % 997) as i64 - 498)
+                .collect();
+            analysis
+                .analyze(&mut samples, 24, options, &mut SubframePlan::default())
+                .unwrap();
+            let (weights, signal) = analysis.window.split_at(len);
+            assert_eq!(signal.len(), len);
+            for (i, &sample) in samples.iter().enumerate() {
+                let weight =
+                    0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / (len - 1) as f64).cos();
+                assert_eq!(weights[i].to_bits(), weight.to_bits());
+                assert_eq!(signal[i].to_bits(), (sample as f64 * weight).to_bits());
+            }
+        }
+    }
 
     fn reference_width(x: i32) -> u8 {
         if x == 0 {

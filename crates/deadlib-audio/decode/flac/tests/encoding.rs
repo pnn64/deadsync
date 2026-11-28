@@ -226,6 +226,36 @@ fn lpc_compression_and_raw_frame_number_boundaries() {
 }
 
 #[test]
+fn reused_lpc_encoder_matches_fresh_across_block_lengths_and_signals() {
+    for (channels, compression_level) in [(1, 8), (2, 5), (6, 3)] {
+        let options = EncodeOptions {
+            bits_per_sample: 24,
+            channels,
+            compression_level,
+            variable_block_size: true,
+            ..EncodeOptions::default()
+        };
+        let mut reused = FrameEncoder::new(options).unwrap();
+        let mut decoder = FrameDecoder::new(None).unwrap();
+        for (number, length) in [1, 2, 33, 257, 257, 1024, 257, 17, 1024]
+            .into_iter()
+            .enumerate()
+        {
+            let planes = pcm(24, channels, length, (number % 3) as u8 + 2);
+            let refs: Vec<_> = planes.iter().map(Vec::as_slice).collect();
+            let mut fresh = FrameEncoder::new(options).unwrap();
+            let expected = fresh.encode(&refs, number as u64).unwrap();
+            let actual = reused.encode(&refs, number as u64).unwrap();
+            assert_eq!(actual, expected, "channels={channels} length={length}");
+            let decoded = decoder.decode(actual).unwrap();
+            for (actual, expected) in decoded.pcm.planes().zip(&planes) {
+                assert_eq!(actual, expected);
+            }
+        }
+    }
+}
+
+#[test]
 fn all_four_stereo_choices_are_selected_by_cost() {
     let options = EncodeOptions {
         block_size: 1024,
