@@ -455,6 +455,16 @@ pub(super) fn inline_row_max_scroll(state: &State, row_idx: usize, row: &Row) ->
     (inline_row_content_width(row) - view_w).max(0.0)
 }
 
+/// Room kept at each edge of a scrolled inline row for its `<` / `>`
+/// overflow hint; choice text is clipped short of it.
+pub(super) const SCROLL_HINT_SLOT: f32 = INLINE_SPACING;
+
+/// Which edges of an inline row hide choices at `scroll`, as `[left, right]`.
+#[inline(always)]
+pub(super) fn inline_row_hidden_edges(scroll: f32, max_scroll: f32) -> [bool; 2] {
+    [scroll > 0.5, scroll < max_scroll - 0.5]
+}
+
 /// Animated scroll offset for drawing an inline row.
 #[inline(always)]
 pub(super) fn inline_row_scroll(state: &State, row_idx: usize) -> f32 {
@@ -527,7 +537,9 @@ pub(super) fn retarget_inline_scroll(state: &mut State, active: [bool; PLAYER_SL
                 let choice_idx = choice_idx.min(row.choices.len() - 1);
                 let left = row.choice_offsets[choice_idx];
                 let span = [left, left + row.choice_widths[choice_idx]];
-                target = scroll_to_reveal(target, span, view_w, INLINE_SPACING, max_scroll);
+                // Keep the choice clear of the overflow hints as well.
+                let margin = INLINE_SPACING + SCROLL_HINT_SLOT;
+                target = scroll_to_reveal(target, span, view_w, margin, max_scroll);
             }
         }
         let tween = &mut state.pane_mut().row_tweens[row_idx];

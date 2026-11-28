@@ -1059,13 +1059,27 @@ pub(super) fn draw_inline_choices(
     let x_offsets = rc.row.choice_offsets.as_ref();
     let text_h = rc.row.choice_height;
     // Rows wider than the frame scroll horizontally and clip at its edges.
-    let overflows = inline_row_max_scroll(rc.fc.state, rc.item_idx, rc.row) > 0.0;
+    // A `<` / `>` hint marks each edge that hides choices, and text is
+    // clipped short of it.
+    let max_scroll = inline_row_max_scroll(rc.fc.state, rc.item_idx, rc.row);
+    let overflows = max_scroll > 0.0;
+    let scroll = inline_row_scroll(rc.fc.state, rc.item_idx);
+    let [hidden_left, hidden_right] = inline_row_hidden_edges(scroll, max_scroll);
     let view_left = choice_inner_left;
-    let choice_inner_left = choice_inner_left - inline_row_scroll(rc.fc.state, rc.item_idx);
+    let view_right = inline_choice_view_right();
+    let choice_inner_left = choice_inner_left - scroll;
     let text_clip_x = if overflows {
         [
-            view_left - INLINE_SPACING * 0.5,
-            inline_choice_view_right() + INLINE_SPACING * 0.5,
+            if hidden_left {
+                view_left + SCROLL_HINT_SLOT
+            } else {
+                view_left - INLINE_SPACING * 0.5
+            },
+            if hidden_right {
+                view_right - SCROLL_HINT_SLOT
+            } else {
+                view_right + INLINE_SPACING * 0.5
+            },
         ]
     } else {
         [f32::NEG_INFINITY, f32::INFINITY]
@@ -1136,6 +1150,23 @@ pub(super) fn draw_inline_choices(
             z(Z_ROW_FOREGROUND)
         ));
     }
+    let color_rgba = if rc.is_active {
+        [1.0, 1.0, 1.0, rc.a]
+    } else {
+        rc.sl_gray
+    };
+    for (hidden, hint, align_x, x) in [
+        (hidden_left, "<", 0.0, view_left),
+        (hidden_right, ">", 1.0, view_right),
+    ] {
+        if hidden {
+            actors.push(act!(text: font("miso"): settext(hint):
+                align(align_x, 0.5): xy(x, rc.current_row_y): zoom(value_zoom):
+                diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
+                z(Z_ROW_FOREGROUND)
+            ));
+        }
+    }
     for (idx, text) in rc.row.choices.iter().enumerate() {
         let [offset_x, offset_y] = inline_choice_position(rc.row, idx);
         let x = choice_inner_left + offset_x;
@@ -1143,11 +1174,6 @@ pub(super) fn draw_inline_choices(
         if clip_span(x, w, text_clip_x).is_none() {
             continue;
         }
-        let color_rgba = if rc.is_active {
-            [1.0, 1.0, 1.0, rc.a]
-        } else {
-            rc.sl_gray
-        };
         let mut actor = act!(text: font("miso"): settext(text.clone()):
             align(0.0, 0.5): xy(x, rc.current_row_y + offset_y): zoom(value_zoom):
             diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
