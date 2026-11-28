@@ -15,7 +15,9 @@ use std::{
 };
 
 mod buffer;
+mod hash_slots;
 pub(crate) use buffer::Buffer;
+pub(crate) use hash_slots::HashSlots;
 pub(crate) mod bytes;
 mod shared;
 pub(crate) mod short_strings;
