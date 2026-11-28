@@ -1754,7 +1754,14 @@ impl Table {
             }
             if i == self.array.len() && value != Value::Nil {
                 if !self.hash_part().may_have_array_keys {
-                    self.array.heap_mut().try_push(value)?;
+                    let values = self.array.heap_mut();
+                    // Leave tiny tables at their existing allocation size.
+                    // A fifth consecutive slot justifies skipping the next
+                    // allocation size for arrays that continue to grow.
+                    if i == 4 && values.capacity() == 4 && values.memory().uses_global_allocator() {
+                        values.try_reserve_exact(16 - i)?;
+                    }
+                    values.try_push(value)?;
                     self.touch_array();
                     return Ok(());
                 }
