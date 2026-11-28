@@ -107,6 +107,20 @@ fn cached_plain_fields_handle_binary_literals_and_argument_lengths() {
 }
 
 #[test]
+fn plain_s_matches_generic_integer_coercion() {
+    let actual = string_results(
+        br#"
+        local n, m = -99999999999999, 99999999999999
+        return string.format('%s|%s|%s', n, m, -0),
+               string.format('%s|%s|%s', 1e14, 1.5, 0),
+               string.format('%s', n)..'|'..string.format('%s', m)..'|'..string.format('%s', -0),
+               string.format('%s', 1e14)..'|'..string.format('%s', 1.5)..'|'..string.format('%s', 0)
+        "#,
+    );
+    assert_eq!(actual[..2], actual[2..]);
+}
+
+#[test]
 fn plain_s_preserves_bad_argument_errors_and_subsequent_calls() {
     assert_eq!(
         string_results(

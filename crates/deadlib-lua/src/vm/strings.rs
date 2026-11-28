@@ -25,6 +25,22 @@ pub(super) const STR_FORMAT: u64 = 76;
 
 const FORMAT_ARGUMENTS: usize = 16;
 
+/// Integral number text has at most fourteen digits and a minus sign.
+#[derive(Clone, Copy)]
+enum PlainFormatArgument<'a> {
+    String(&'a [u8]),
+    Integer { bytes: [u8; 15], len: u8 },
+}
+
+impl PlainFormatArgument<'_> {
+    fn bytes(&self) -> &[u8] {
+        match self {
+            Self::String(bytes) => bytes,
+            Self::Integer { bytes, len } => &bytes[..usize::from(*len)],
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(super) struct PlainFormat {
     ends: [u16; FORMAT_ARGUMENTS],
@@ -1427,15 +1443,31 @@ impl Vm {
         let mut total = format.len() - 2 * plan.fields;
         let values = &self.registers[base + 2..base + 2 + plan.fields];
         for (input, &value) in arguments.iter_mut().zip(values) {
-            let Value::String(id) = value else {
-                return Ok(false);
+            let argument = match value {
+                Value::String(id) => PlainFormatArgument::String(
+                    crate::format::plain_string_argument(&self.strings.bytes[slot_index(id.0)]),
+                ),
+                // The default allocator and an unobserved native frame allow
+                // formatting without publishing a coerced argument string.
+                Value::Number(number) if self.hooks.mask == 0 => {
+                    let Some(text) = native::NumberText::short_integer(number) else {
+                        return Ok(false);
+                    };
+                    let text = text.as_bytes();
+                    let mut bytes = [0; 15];
+                    bytes[..text.len()].copy_from_slice(text);
+                    PlainFormatArgument::Integer {
+                        bytes,
+                        len: text.len() as u8,
+                    }
+                }
+                _ => return Ok(false),
             };
-            let bytes = crate::format::plain_string_argument(&self.strings.bytes[slot_index(id.0)]);
-            let Some(size) = total.checked_add(bytes.len()) else {
+            let Some(size) = total.checked_add(argument.bytes().len()) else {
                 return Ok(false);
             };
             total = size;
-            *input = Some(bytes);
+            *input = Some(argument);
         }
         let Some(capacity) = total.checked_add(1) else {
             return Ok(false);
@@ -1448,7 +1480,7 @@ impl Vm {
         for (&end, argument) in plan.ends[..plan.fields].iter().zip(arguments) {
             let end = usize::from(end);
             output.extend_from_slice(&format[start..end]);
-            output.extend_from_slice(argument.expect("validated format argument"));
+            output.extend_from_slice(argument.expect("validated format argument").bytes());
             start = end + 2;
         }
         output.extend_from_slice(&format[start..]);

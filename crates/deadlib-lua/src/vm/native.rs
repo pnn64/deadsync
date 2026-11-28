@@ -1245,6 +1245,15 @@ impl NumberText {
     pub(super) fn as_bytes(&self) -> &[u8] {
         &self.bytes[..self.len]
     }
+    pub(super) fn short_integer(value: f64) -> Option<Self> {
+        if value.abs() < 100_000_000_000_000.0 && value.fract() == 0.0 {
+            let mut text = Self::new();
+            text.integer(value);
+            Some(text)
+        } else {
+            None
+        }
+    }
     fn integer(&mut self, value: f64) {
         const PAIRS: [[u8; 2]; 100] = {
             let mut pairs = [[0; 2]; 100];
@@ -1342,9 +1351,9 @@ pub(super) fn number_text(n: f64) -> NumberText {
         } else {
             output.write_str("inf").unwrap();
         }
-    } else if n.abs() < 100_000_000_000_000.0 && n.fract() == 0.0 {
+    } else if let Some(text) = NumberText::short_integer(n) {
         // Integers with at most fourteen digits need no decimal rounding.
-        output.integer(n);
+        return text;
     } else if let Some((scaled, factor, width)) = short_decimal(n) {
         if n.is_sign_negative() {
             output.write_str("-").unwrap();
