@@ -8,7 +8,10 @@ use crate::bytecode::{
 use crate::memory::fallible::Map as HashMap;
 use crate::{
     Error, ErrorKind,
-    memory::fallible::{self, SliceExt, VecExt},
+    memory::{
+        PackedDebug,
+        fallible::{self, SliceExt, VecExt},
+    },
 };
 
 fn fields(word: u32) -> (usize, u8, u16, u16) {
@@ -447,6 +450,8 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
             out.metadata[pc].gc_live = u32::from(before) | (u32::from(after) << 16);
         }
     }
+    let mut storage = PackedDebug::default();
+    storage.try_replace(&mut names, &mut locals, &mut calls, &[], &temporaries)?;
     Ok(Prototype::new(
         PrototypeBody {
             gc_maps: RegisterMaps::Owned(masks.try_into_boxed_slice()?),
@@ -476,11 +481,7 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
                         vararg: p.vararg,
                     },
                 })?),
-                names: Box::default(),
-                upvalues: names.try_into_boxed_slice()?,
-                locals: locals.try_into_boxed_slice()?,
-                calls: calls.try_into_boxed_slice()?,
-                temporaries: temporaries.try_into_boxed_slice()?,
+                storage,
             },
             ..PrototypeBody::default()
         },

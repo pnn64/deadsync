@@ -177,8 +177,10 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                 .map(|g| g.count)
                 .sum::<u16>()
         };
-        while next_local < p.debug.locals.len() && p.debug.locals[next_local].start as usize <= pc {
-            let local = &p.debug.locals[next_local];
+        while next_local < p.debug.locals().len()
+            && p.debug.locals()[next_local].start as usize <= pc
+        {
+            let local = &p.debug.locals()[next_local];
             if pc < local.end as usize {
                 out.reg(mapped(local.register))?;
             }

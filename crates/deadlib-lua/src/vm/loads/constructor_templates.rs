@@ -281,7 +281,7 @@ impl Template {
         let mut fixed = fallible::repeat(false, total).ok()?;
         // A name stored separately in debug metadata cannot follow a pool
         // substitution. References to constants resolve in the new chunk.
-        for call in root.debug.calls.iter() {
+        for call in root.debug.calls().iter() {
             if call.name.constant_index().is_none()
                 && let Some(slot) = root.constants().iter().position(|value| {
                     value.string(&root.constant_strings) == Some(root.call_name(call))
@@ -724,7 +724,7 @@ mod tests {
         let variant = compile(&mut vm, &source("Later", "Depth", 137));
         assert_eq!(code(&template), code(&variant));
         let root = &variant.data.prototypes[variant.data.entry as usize];
-        assert_eq!(root.call_name(&root.debug.calls[0]), b"Later");
+        assert_eq!(root.call_name(&root.debug.calls()[0]), b"Later");
         assert!(matches!(vm.execute(&variant).unwrap(), [Value::Table(_)]));
 
         let collision = compile(&mut vm, &source("Last", "Init", 42));

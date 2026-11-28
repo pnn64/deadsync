@@ -164,7 +164,7 @@ impl<'a> Plan<'a> {
         // slots live and use ordinary dispatch if those writes are visible.
         scratch &= !(1 << sum);
         if scratch & live != 0
-            || prototype.debug.locals.iter().any(|local| {
+            || prototype.debug.locals().iter().any(|local| {
                 local.start as usize <= edge + 1
                     && edge + 1 < local.end as usize
                     && scratch

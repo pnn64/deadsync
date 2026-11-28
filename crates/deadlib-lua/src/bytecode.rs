@@ -1,7 +1,7 @@
 //! Register instructions and structural verification of immutable compiled programs.
 
 use crate::memory::{
-    Memory, Shared,
+    Memory, PackedDebug, Shared,
     fallible::{SliceExt, VecExt},
 };
 use crate::{Error, ErrorKind};
@@ -301,48 +301,48 @@ pub(crate) struct DebugCall {
 pub(crate) struct DebugInfo {
     pub stack: u16,
     pub native: Option<Box<NativeDebug>>,
-    pub names: Box<[u8]>,
-    pub upvalues: Box<[DebugName]>,
-    pub locals: Box<[DebugLocal]>,
-    pub calls: Box<[DebugCall]>,
-    pub temporaries: Box<[u8]>,
+    pub storage: PackedDebug,
+}
+impl std::ops::Deref for DebugInfo {
+    type Target = PackedDebug;
+
+    #[inline]
+    fn deref(&self) -> &PackedDebug {
+        &self.storage
+    }
 }
 impl DebugInfo {
     pub(crate) fn name<'a>(&'a self, name: &'a DebugName) -> &'a [u8] {
-        name.bytes(&self.names).expect("verified debug name")
+        name.bytes(self.names()).expect("verified debug name")
     }
 
     pub(crate) fn upvalue_names(&self) -> &[DebugName] {
         let count = self
             .native
             .as_ref()
-            .map_or(self.upvalues.len(), |native| native.wire.names);
-        &self.upvalues[..count]
+            .map_or(self.upvalues().len(), |native| native.wire.names);
+        &self.upvalues()[..count]
     }
 
     pub fn heap_bytes(&self) -> usize {
         self.native.as_ref().map_or(0, |n| {
             std::mem::size_of_val(n.as_ref()) + n.wire.heap_bytes()
-        }) + std::mem::size_of_val(self.upvalues.as_ref())
-            + self.names.len()
+        }) + self.storage.heap_bytes()
             + self
-                .upvalues
+                .upvalues()
                 .iter()
                 .map(DebugName::heap_bytes)
                 .sum::<usize>()
-            + std::mem::size_of_val(self.locals.as_ref())
             + self
-                .locals
+                .locals()
                 .iter()
                 .map(|l| l.name.heap_bytes())
                 .sum::<usize>()
-            + std::mem::size_of_val(self.calls.as_ref())
             + self
-                .calls
+                .calls()
                 .iter()
                 .map(|c| c.name.heap_bytes())
                 .sum::<usize>()
-            + self.temporaries.len()
     }
 }
 
@@ -621,7 +621,7 @@ impl Prototype {
                 .get(index as usize)?
                 .string(&self.constant_strings)
         } else {
-            call.name.bytes(&self.debug.names)
+            call.name.bytes(self.debug.names())
         }
     }
 
@@ -1173,7 +1173,9 @@ impl Prototype {
             || self.params > self.registers
             || self.upvalues.len() > if self.debug.native.is_some() { 255 } else { 60 }
             || self.debug.native.as_ref().is_some_and(|n| {
-                n.stack == 0 || n.stack > self.registers || n.wire.names > self.debug.upvalues.len()
+                n.stack == 0
+                    || n.stack > self.registers
+                    || n.wire.names > self.debug.upvalues().len()
             })
             || self.metadata.len() != self.code.len()
             || self.metadata.iter().any(|m| {
@@ -1185,35 +1187,35 @@ impl Prototype {
                 matches!(constant, Constant::PooledString { start, end }
                     if start > end || *end as usize > self.constant_strings.len())
             })
-            || self.debug.upvalues.len() != self.upvalues.len()
+            || self.debug.upvalues().len() != self.upvalues.len()
             || self
                 .debug
-                .upvalues
+                .upvalues()
                 .iter()
-                .any(|name| name.bytes(&self.debug.names).is_none())
+                .any(|name| name.bytes(self.debug.names()).is_none())
             || self.defined[0] > self.defined[1]
             || self.active_lines.first() == Some(&0)
             || self.active_lines.windows(2).any(|l| l[0] >= l[1])
-            || self.debug.locals.iter().any(|l| {
+            || self.debug.locals().iter().any(|l| {
                 l.start > l.end
                     || l.end as usize > self.code.len()
                     || l.register >= self.registers
-                    || l.name.bytes(&self.debug.names).is_none()
+                    || l.name.bytes(self.debug.names()).is_none()
             })
-            || self.debug.calls.windows(2).any(|c| c[0].pc >= c[1].pc)
-            || self.debug.calls.iter().any(|c| {
+            || self.debug.calls().windows(2).any(|c| c[0].pc >= c[1].pc)
+            || self.debug.calls().iter().any(|c| {
                 let Some(i) = self.code.get(c.pc as usize) else {
                     return true;
                 };
                 !matches!(i.op, Op::Call | Op::TailCall | Op::CallIter)
                     || self.call_name_bytes(c).is_none()
                     || c.temporaries.start > c.temporaries.end
-                    || c.temporaries.end as usize > self.debug.temporaries.len()
-                    || self.debug.temporaries
+                    || c.temporaries.end as usize > self.debug.temporaries().len()
+                    || self.debug.temporaries()
                         [c.temporaries.start as usize..c.temporaries.end as usize]
                         .windows(2)
                         .any(|r| r[0] >= r[1])
-                    || self.debug.temporaries
+                    || self.debug.temporaries()
                         [c.temporaries.start as usize..c.temporaries.end as usize]
                         .iter()
                         .any(|&r| {
@@ -1695,12 +1697,12 @@ mod tests {
             let data = p.data_mut();
             let proto = &mut data.prototypes[data.entry as usize];
             match corrupt {
-                0 => proto.debug.locals[0].start = u32::MAX,
-                1 => proto.debug.locals[0].end = u32::MAX,
-                2 => proto.debug.locals[0].register = proto.registers,
-                3 => proto.debug.calls[0].pc = u32::MAX,
-                4 => proto.debug.calls[0].pc = 0,
-                5 => proto.debug.calls[1].pc = proto.debug.calls[0].pc,
+                0 => proto.debug.storage.locals_mut()[0].start = u32::MAX,
+                1 => proto.debug.storage.locals_mut()[0].end = u32::MAX,
+                2 => proto.debug.storage.locals_mut()[0].register = proto.registers,
+                3 => proto.debug.storage.calls_mut()[0].pc = u32::MAX,
+                4 => proto.debug.storage.calls_mut()[0].pc = 0,
+                5 => proto.debug.storage.calls_mut()[1].pc = proto.debug.calls()[0].pc,
                 6 => proto.active_lines = Box::new([3, 2]),
                 7 => {
                     data.prototypes
@@ -1708,22 +1710,32 @@ mod tests {
                         .find(|p| !p.upvalues.is_empty())
                         .unwrap()
                         .debug
-                        .upvalues = Box::new([])
+                        .storage = PackedDebug::default()
                 }
-                8 => proto.debug.calls[0].temporaries = 0..u32::MAX,
+                8 => proto.debug.storage.calls_mut()[0].temporaries = 0..u32::MAX,
                 9 => {
-                    proto.debug.temporaries =
-                        Box::new([proto.code[proto.debug.calls[0].pc as usize].a]);
-                    proto.debug.calls[0].temporaries = 0..1;
+                    let debug = &proto.debug;
+                    let mut upvalues = debug.upvalues().to_vec();
+                    let mut locals = debug.locals().to_vec();
+                    let mut calls = debug.calls().to_vec();
+                    let names = debug.names().to_vec();
+                    let register = proto.code[calls[0].pc as usize].a;
+                    calls[0].temporaries = 0..1;
+                    proto
+                        .debug
+                        .storage
+                        .try_replace(&mut upvalues, &mut locals, &mut calls, &names, &[register])
+                        .unwrap();
                 }
                 10 => {
-                    proto.debug.locals[0].name = DebugName::Reference(DebugNameRef::Pool {
-                        start: 2,
-                        end: std::num::NonZeroU32::new(2).unwrap(),
-                    })
+                    proto.debug.storage.locals_mut()[0].name =
+                        DebugName::Reference(DebugNameRef::Pool {
+                            start: 2,
+                            end: std::num::NonZeroU32::new(2).unwrap(),
+                        })
                 }
                 _ => {
-                    proto.debug.calls[0].name = DebugName::constant(u32::MAX);
+                    proto.debug.storage.calls_mut()[0].name = DebugName::constant(u32::MAX);
                 }
             }
             assert_eq!(

@@ -51,7 +51,7 @@ fn definition(proto: &Prototype, end: usize, register: u8) -> Option<(usize, Ins
 }
 
 fn local_name(proto: &Prototype, pc: usize, register: u8) -> Option<&[u8]> {
-    proto.debug.locals.iter().rev().find_map(|local| {
+    proto.debug.locals().iter().rev().find_map(|local| {
         (local.register == u16::from(register)
             && local.start as usize <= pc
             && pc < local.end as usize)
@@ -75,7 +75,7 @@ fn object_name(proto: &Prototype, pc: usize, mut register: u8) -> Option<(&[u8],
                 return Some((
                     proto
                         .debug
-                        .name(&proto.debug.upvalues[instruction.c as usize]),
+                        .name(&proto.debug.upvalues()[instruction.c as usize]),
                     NameKind::Upvalue,
                 ));
             }
@@ -267,10 +267,10 @@ impl Vm {
                 && register == usize::from(instruction.a)
                 && let Ok(index) = proto
                     .debug
-                    .calls
+                    .calls()
                     .binary_search_by_key(&(pc as u32), |c| c.pc)
             {
-                let call = &proto.debug.calls[index];
+                let call = &proto.debug.calls()[index];
                 if matches!(call.kind, NameKind::Method) {
                     return Some((proto.call_name(call), call.kind));
                 }

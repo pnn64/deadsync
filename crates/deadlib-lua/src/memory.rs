@@ -25,6 +25,8 @@ pub(crate) mod text;
 pub(crate) use shared::Shared;
 pub(crate) mod compilation;
 pub(crate) mod fallible;
+mod packed_debug;
+pub(crate) use packed_debug::PackedDebug;
 
 pub(crate) type Callback =
     unsafe extern "C" fn(*mut c_void, *mut c_void, usize, usize) -> *mut c_void;

@@ -80,10 +80,10 @@ fn frame_name<'a>(
     let pc = caller.pc.saturating_sub(1);
     let call = proto
         .debug
-        .calls
+        .calls()
         .binary_search_by_key(&pc, |c| c.pc)
         .ok()
-        .map(|i| &proto.debug.calls[i])?;
+        .map(|i| &proto.debug.calls()[i])?;
     if call.kind.bytes().is_empty() {
         return None;
     }
@@ -98,17 +98,10 @@ impl Vm {
     /// Read an immediately consumed field of a name-only stack query.
     /// The caller proves that the lookup overwrites the fresh result table.
     #[cold]
-    pub(super) fn try_debug_name_field(
-        &mut self,
-        call: usize,
-        frame: usize,
-        key: Value,
-    ) -> bool {
-        let (Value::Number(1.0), Value::String(options), Value::String(key)) = (
-            self.registers[call + 1],
-            self.registers[call + 2],
-            key,
-        ) else {
+    pub(super) fn try_debug_name_field(&mut self, call: usize, frame: usize, key: Value) -> bool {
+        let (Value::Number(1.0), Value::String(options), Value::String(key)) =
+            (self.registers[call + 1], self.registers[call + 2], key)
+        else {
             return false;
         };
         let key = self.strings.bytes[slot_index(key.0)].as_ref();
@@ -408,7 +401,7 @@ impl Vm {
         };
         let data = self.programs[closure.program].data.clone();
         let debug = &data.prototypes[closure.prototype].debug;
-        let name = c_bytes(debug.name(&debug.upvalues[n as usize - 1]));
+        let name = c_bytes(debug.name(&debug.upvalues()[n as usize - 1]));
         if id == SET_UPVALUE {
             // lua_setupvalue consumes the actual top, including extra arguments.
             self.set_cell(cell as usize, self.argument(base, count, count - 1))?;
@@ -541,7 +534,7 @@ impl Vm {
                 };
                 let mut active = [0u64; 4];
                 let mut named = 0;
-                for (local_index, local) in proto.debug.locals.iter().enumerate() {
+                for (local_index, local) in proto.debug.locals().iter().enumerate() {
                     if local.start <= pc && pc < local.end {
                         if named == n {
                             return Some((
@@ -594,11 +587,11 @@ impl Vm {
                 let pc = (pc as usize).min(proto.metadata.len() - 1);
                 if let Ok(i) = proto
                     .debug
-                    .calls
+                    .calls()
                     .binary_search_by_key(&(pc as u32), |c| c.pc)
                 {
-                    let range = &proto.debug.calls[i].temporaries;
-                    let register = *proto.debug.temporaries
+                    let range = &proto.debug.calls()[i].temporaries;
+                    let register = *proto.debug.temporaries()
                         [range.start as usize..range.end as usize]
                         .get(n.checked_sub(named)?)?;
                     return Some((
@@ -817,7 +810,7 @@ impl Vm {
         let name = match name {
             LocalName::Named(program, prototype, local) => {
                 let debug = &self.programs[program].data.prototypes[prototype].debug;
-                let bytes = debug.name(&debug.locals[local].name);
+                let bytes = debug.name(&debug.locals()[local].name);
                 Value::String(
                     self.strings
                         .try_intern(c_bytes(bytes))

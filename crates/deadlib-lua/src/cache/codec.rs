@@ -1,5 +1,5 @@
 //! Little-endian, bounded serialization of the shared compiler representation.
-use crate::{Program, bytecode::*, chunk51::Wire};
+use crate::{Program, bytecode::*, chunk51::Wire, memory::PackedDebug};
 use std::mem::size_of;
 
 // Bump for a wire-layout change. Cargo's build identity also invalidates entries
@@ -210,14 +210,14 @@ impl Writer {
         for n in p.defined {
             self.u32(n)?;
         }
-        self.list(&d.upvalues, |w, name| w.bytes(d.name(name)))?;
-        self.list(&d.locals, |w, local| {
+        self.list(d.upvalues(), |w, name| w.bytes(d.name(name)))?;
+        self.list(d.locals(), |w, local| {
             w.bytes(d.name(&local.name))?;
             w.u32(local.start)?;
             w.u32(local.end)?;
             w.u16(local.register)
         })?;
-        self.list(&d.calls, |w, call| {
+        self.list(d.calls(), |w, call| {
             w.u32(call.pc)?;
             w.bytes(p.call_name(call))?;
             w.u8(match call.kind {
@@ -235,7 +235,7 @@ impl Writer {
         self.list(&p.metadata, |w, metadata| {
             w.u32(p.adjust_hook_line(metadata.hook_line))
         })?;
-        self.bytes(&d.temporaries)?;
+        self.bytes(d.temporaries())?;
         self.u8(u8::from(d.native.is_some()))?;
         if let Some(n) = &d.native {
             self.u32(n.source)?;
@@ -303,8 +303,15 @@ impl<'a> Reader<'a> {
     fn list<T>(
         &mut self,
         minimum: usize,
-        mut read: impl FnMut(&mut Self) -> Option<T>,
+        read: impl FnMut(&mut Self) -> Option<T>,
     ) -> Option<Box<[T]>> {
+        Some(self.list_vec(minimum, read)?.into_boxed_slice())
+    }
+    fn list_vec<T>(
+        &mut self,
+        minimum: usize,
+        mut read: impl FnMut(&mut Self) -> Option<T>,
+    ) -> Option<Vec<T>> {
         let n = self.u32()? as usize;
         if n > (self.bytes.len() - self.position) / minimum {
             return None;
@@ -314,7 +321,7 @@ impl<'a> Reader<'a> {
         for _ in 0..n {
             out.push(read(self)?);
         }
-        Some(out.into_boxed_slice())
+        Some(out)
     }
     fn words(&mut self) -> Option<Box<[u32]>> {
         self.list(4, Self::u32)
@@ -380,8 +387,8 @@ impl<'a> Reader<'a> {
         })?;
         let stack = self.u16()?;
         let defined = [self.u32()?, self.u32()?];
-        let names = self.list(4, |r| Some(DebugName::Owned(r.boxed()?)))?;
-        let locals = self.list(14, |r| {
+        let mut names = self.list_vec(4, |r| Some(DebugName::Owned(r.boxed()?)))?;
+        let mut locals = self.list_vec(14, |r| {
             Some(DebugLocal {
                 name: DebugName::Owned(r.boxed()?),
                 start: r.u32()?,
@@ -389,7 +396,7 @@ impl<'a> Reader<'a> {
                 register: r.u16()?,
             })
         })?;
-        let calls = self.list(17, |r| {
+        let mut calls = self.list_vec(17, |r| {
             let pc = r.u32()?;
             let name = DebugName::Owned(r.boxed()?);
             let kind = match r.u8()? {
@@ -410,7 +417,8 @@ impl<'a> Reader<'a> {
         })?;
         let active_lines = self.words()?;
         self.metadata_words(&mut metadata, |m, value| m.hook_line = value)?;
-        let temporaries = self.boxed()?;
+        let temporaries = self.bytes()?;
+        self.charge(temporaries.len().next_multiple_of(size_of::<usize>()))?;
         let native = if self.boolean()? {
             self.charge(size_of::<NativeDebug>())?;
             Some(Box::new(NativeDebug {
@@ -430,6 +438,10 @@ impl<'a> Reader<'a> {
         } else {
             None
         };
+        let mut storage = PackedDebug::default();
+        storage
+            .try_replace(&mut names, &mut locals, &mut calls, &[], temporaries)
+            .ok()?;
         Some(Prototype::new(
             PrototypeBody {
                 registers,
@@ -445,11 +457,7 @@ impl<'a> Reader<'a> {
                 debug: DebugInfo {
                     stack,
                     native,
-                    names: Box::default(),
-                    upvalues: names,
-                    locals,
-                    calls,
-                    temporaries,
+                    storage,
                 },
                 ..PrototypeBody::default()
             },
@@ -574,8 +582,8 @@ pub(super) fn decode(
             let n = p.debug.native.as_ref()?;
             let w = &n.wire;
             if w.constants > p.constants().len()
-                || w.names > p.debug.upvalues.len()
-                || w.locals.len() != p.debug.locals.len()
+                || w.names > p.debug.upvalues().len()
+                || w.locals.len() != p.debug.locals().len()
                 || w.vararg & !7 != 0
                 || (w.vararg & 2 != 0) != p.vararg
                 || (w.vararg & 4 != 0) != p.compat_arg

@@ -95,7 +95,7 @@ fn find_fill_end(prototype: &Prototype, begin: usize) -> Option<usize> {
     let before_map = prototype.metadata.get(after)?.gc_live as u16 as usize;
     let register = usize::from(table);
     if prototype.gc_maps[before_map][register / 64] & (1 << (register % 64)) != 0
-        || prototype.debug.locals.iter().any(|local| {
+        || prototype.debug.locals().iter().any(|local| {
             usize::from(local.register) == register
                 && (local.start as usize) <= after
                 && (local.end as usize) > begin - 1

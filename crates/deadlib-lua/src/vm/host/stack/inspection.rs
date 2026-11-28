@@ -214,7 +214,7 @@ impl NativeStack<'_, '_> {
                 let debug = &data.prototypes[proto].debug;
                 self.call
                     .vm
-                    .native_debug_string(p, debug.name(&debug.locals[local].name))
+                    .native_debug_string(p, debug.name(&debug.locals()[local].name))
             }
         }
     }
@@ -413,7 +413,7 @@ impl NativeStack<'_, '_> {
             });
             if let Some((p, proto, pc, data, kind)) = name {
                 let debug = &data.prototypes[proto].debug;
-                let calls = &debug.calls;
+                let calls = debug.calls();
                 let call = &calls[calls.binary_search_by_key(&pc, |c| c.pc).unwrap()];
                 info.name = Some(Some(
                     self.call

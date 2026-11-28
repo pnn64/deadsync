@@ -97,7 +97,7 @@ fn table_dead(prototype: &Prototype, pc: usize, table: usize) -> bool {
     };
     let before = metadata.gc_live as u16 as usize;
     prototype.gc_maps[before][table / 64] & (1 << (table % 64)) == 0
-        && !prototype.debug.locals.iter().any(|local| {
+        && !prototype.debug.locals().iter().any(|local| {
             usize::from(local.register) == table
                 && local.start as usize <= pc
                 && pc < local.end as usize

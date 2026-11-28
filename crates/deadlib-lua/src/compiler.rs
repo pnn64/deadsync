@@ -132,6 +132,7 @@ struct Function {
     vararg: bool,
     compat_arg: bool,
     defined: [u32; 2],
+    debug_upvalues: Vec<DebugName>,
     debug_locals: Vec<DebugLocal>,
     debug_calls: Vec<DebugCall>,
     debug_names: Vec<u8>,
@@ -166,6 +167,7 @@ impl Function {
         self.vararg = false;
         self.compat_arg = false;
         self.defined = [0; 2];
+        self.debug_upvalues.clear();
         self.debug_locals.clear();
         self.debug_calls.clear();
         self.debug_names.clear();
@@ -230,13 +232,6 @@ fn recycle<'b>(mut tasks: Vec<Task<'_>>) -> Vec<Task<'b>> {
     tasks.clear();
     // An empty source yields nothing; in-place collection keeps the allocation.
     tasks.into_iter().map(|_| unreachable!()).collect()
-}
-
-/// Move a buffer's values into an exact-size box, keeping the buffer's capacity.
-fn drain_boxed<T>(values: &mut Vec<T>, old: Option<Box<[T]>>) -> Result<Box<[T]>, Error> {
-    let mut exact = reusable_vec(values.len(), old)?;
-    exact.append(values);
-    exact.try_into_boxed_slice()
 }
 
 fn reusable_vec<T>(capacity: usize, old: Option<Box<[T]>>) -> Result<Vec<T>, Error> {
@@ -402,10 +397,10 @@ impl<'a> Compiler<'a> {
                 local.end = f.code.len() as u32;
             }
         }
-        let mut names = fallible::with_capacity(f.upvalues.len())?;
+        fallible::reserve(&mut f.debug_upvalues, f.upvalues.len())?;
         let mut upvalues = fallible::with_capacity(f.upvalues.len())?;
         for &(name, value) in &f.upvalues {
-            names.push(DebugName::store(
+            f.debug_upvalues.push(DebugName::store(
                 &mut f.debug_names,
                 &self.names[name.range()],
             )?);
@@ -522,14 +517,16 @@ impl<'a> Compiler<'a> {
             f.active_lines.sort_unstable();
             f.active_lines.dedup();
         }
-        let mut debug = old_body.as_mut().map(|p| std::mem::take(&mut p.debug));
-        let debug_locals = drain_boxed(
+        let mut debug = old_body
+            .as_mut()
+            .map_or_else(DebugInfo::default, |p| std::mem::take(&mut p.debug));
+        debug.stack = f.debug_stack;
+        debug.storage.try_replace(
+            &mut f.debug_upvalues,
             &mut f.debug_locals,
-            debug.as_mut().map(|d| std::mem::take(&mut d.locals)),
-        )?;
-        let debug_calls = drain_boxed(
             &mut f.debug_calls,
-            debug.as_mut().map(|d| std::mem::take(&mut d.calls)),
+            &f.debug_names,
+            &f.debug_temporaries,
         )?;
         let old_constants = old_body.as_mut().map(|p| constants::PackedConstants {
             values: std::mem::take(&mut p.original_constants),
@@ -561,18 +558,7 @@ impl<'a> Compiler<'a> {
                 compat_arg: f.compat_arg,
                 upvalues: upvalues.try_into_boxed_slice()?,
                 bindings: Box::default(),
-                debug: DebugInfo {
-                    stack: f.debug_stack,
-                    native: None,
-                    names: copy_boxed(
-                        &f.debug_names,
-                        debug.as_mut().map(|d| std::mem::take(&mut d.names)),
-                    )?,
-                    upvalues: names.try_into_boxed_slice()?,
-                    locals: debug_locals,
-                    calls: debug_calls,
-                    temporaries: copy_boxed(&f.debug_temporaries, debug.map(|d| d.temporaries))?,
-                },
+                debug,
                 ..PrototypeBody::default()
             },
             metadata.try_into_boxed_slice()?,

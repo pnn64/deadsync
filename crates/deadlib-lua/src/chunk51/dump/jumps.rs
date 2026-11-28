@@ -253,8 +253,8 @@ pub(super) fn relax(
 fn scopes(prototype: &Prototype, pcs: &[u32], sites: &[Site]) -> Result<Vec<LocalRange>, Error> {
     let mut relays = Vec::new();
     relays.try_extend(sites.iter().filter(|s| s.relay))?;
-    let mut ranges = fallible::with_capacity(prototype.debug.locals.len())?;
-    for (index, local) in prototype.debug.locals.iter().enumerate() {
+    let mut ranges = fallible::with_capacity(prototype.debug.locals().len())?;
+    for (index, local) in prototype.debug.locals().iter().enumerate() {
         let mut start = pcs[local.start as usize];
         let end = pcs[local.end as usize];
         let first = relays.partition_point(|s| (s.pc as u32) < start);
@@ -283,11 +283,11 @@ fn scopes(prototype: &Prototype, pcs: &[u32], sites: &[Site]) -> Result<Vec<Loca
     let mut active: Vec<usize> = Vec::new();
     let mut next = 0;
     for relay in by_origin {
-        active.retain(|&i| relay.origin < prototype.debug.locals[i].end as usize);
-        while next < prototype.debug.locals.len()
-            && prototype.debug.locals[next].start as usize <= relay.origin
+        active.retain(|&i| relay.origin < prototype.debug.locals()[i].end as usize);
+        while next < prototype.debug.locals().len()
+            && prototype.debug.locals()[next].start as usize <= relay.origin
         {
-            if relay.origin < prototype.debug.locals[next].end as usize {
+            if relay.origin < prototype.debug.locals()[next].end as usize {
                 active.try_push(next)?;
             }
             next += 1;

@@ -182,11 +182,11 @@ fn serialize(data: &ProgramOwner, entry: usize, blocks: bool) -> Result<Output, 
                     Body::Source(lowered) => lowered.locals.as_deref(),
                     _ => None,
                 };
-                let count = remapped.map_or(p.debug.locals.len(), <[_]>::len);
+                let count = remapped.map_or(p.debug.locals().len(), <[_]>::len);
                 output.integer(count)?;
                 for index in 0..count {
                     let local =
-                        &p.debug.locals[remapped.map_or(index, |ranges| ranges[index].index)];
+                        &p.debug.locals()[remapped.map_or(index, |ranges| ranges[index].index)];
                     output.string(Some(p.debug.name(&local.name)))?;
                     let bounds = match (&body, remapped) {
                         (Body::Native(wire), _) => wire.locals[index],
@@ -202,10 +202,10 @@ fn serialize(data: &ProgramOwner, entry: usize, blocks: bool) -> Result<Output, 
                 }
                 let count = match &body {
                     Body::Native(wire) => wire.names,
-                    Body::Source(_) => p.debug.upvalues.len(),
+                    Body::Source(_) => p.debug.upvalues().len(),
                 };
                 output.integer(count)?;
-                for name in &p.debug.upvalues[..count] {
+                for name in &p.debug.upvalues()[..count] {
                     output.string(Some(p.debug.name(name)))?;
                 }
             }

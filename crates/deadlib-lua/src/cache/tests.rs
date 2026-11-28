@@ -204,7 +204,7 @@ fn retained_native_export_ranges_and_tree_edges_are_checked() {
         let data = bad.data_mut();
         let p = &mut data.prototypes[0];
         let constants = p.constants().len();
-        let names = p.debug.upvalues.len();
+        let names = p.debug.upvalues().len();
         let n = p.debug.native.as_mut().unwrap();
         match change {
             0 => n.wire.children = Box::new([0]),
