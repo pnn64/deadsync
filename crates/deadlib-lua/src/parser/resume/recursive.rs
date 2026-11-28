@@ -649,13 +649,21 @@ impl Parser {
                     name.set_string_slot(slot);
                     let call_line = self.current().end_line;
                     let args = self.rargs(input)?;
-                    id = self.expression_with::<false>(input, Expr::Method(id, name, args, call_line), line)?;
+                    id = self.expression_with::<false>(
+                        input,
+                        Expr::Method(id, name, args, call_line),
+                        line,
+                    )?;
                 }
                 Kind::LParen | Kind::LBrace | Kind::String => {
                     self.raccount(input, |r, cx| r.next(id, cx))?;
                     let call_line = self.current().end_line;
                     let args = self.rargs(input)?;
-                    id = self.expression_with::<false>(input, Expr::Call(id, args, call_line), line)?;
+                    id = self.expression_with::<false>(
+                        input,
+                        Expr::Call(id, args, call_line),
+                        line,
+                    )?;
                 }
                 _ => return Ok(id),
             }
@@ -699,13 +707,30 @@ impl Parser {
     }
 
     fn rtable(&mut self, input: &[u8]) -> Result<ExprId, Error> {
+        if input.len() > crate::parser::SOURCE_REUSE_LIMIT
+            && self.native_events.is_none()
+            && !crate::memory::compilation::active()
+        {
+            return self.rwide_table(input);
+        }
+        self.rtable_impl::<false>(input)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn rwide_table(&mut self, input: &[u8]) -> Result<ExprId, Error> {
+        self.rtable_impl::<true>(input)
+    }
+
+    #[inline(always)]
+    fn rtable_impl<const WIDE: bool>(&mut self, input: &[u8]) -> Result<ExprId, Error> {
         self.raccount(input, |r, _| r.begin_table())?;
         let previous = self.previous_line;
         let line = self.rexpect(input, Kind::LBrace)?.line;
         let mark = self.scratch.fields.len();
         loop {
             if self.kind() != Kind::RBrace {
-                self.raccount(input, |r, cx| r.prepare_field(cx))?;
+                self.raccount(input, |r, cx| r.prepare_field_for_source::<WIDE>(cx))?;
             }
             if self.kind() == Kind::Name && self.lookahead.is_none() {
                 self.lookahead = Some(self.rtoken(input)?);
@@ -740,7 +765,11 @@ impl Parser {
                 None
             };
             let value = self.rexpr(input, 0)?;
-            self.raccount(input, |r, cx| r.field(key, value, cx))?;
+            if WIDE {
+                self.raccount(input, |r, cx| r.wide_field(key, value, cx))?;
+            } else {
+                self.raccount(input, |r, cx| r.field(key, value, cx))?;
+            }
             self.scratch.fields.try_push(TableField::new(key, value))?;
             if matches!(self.kind(), Kind::Comma | Kind::Semi) {
                 let separator = self.bump(input)?;

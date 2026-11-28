@@ -188,7 +188,7 @@ impl Spare {
     }
 }
 /// Sources above this size release their storage instead of retaining it.
-const SPARE_SOURCE_LIMIT: usize = 64 * 1024;
+const SPARE_SOURCE_LIMIT: usize = crate::parser::SOURCE_REUSE_LIMIT;
 
 impl Vm {
     /// Compile source or a native Lua chunk using this VM's compiler workspace.

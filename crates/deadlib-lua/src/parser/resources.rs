@@ -84,6 +84,7 @@ struct Pool {
     entries: Vec<Key>,
     buckets: Vec<u32>,
     first_number_reused: bool,
+    omitted_numbers: bool,
 }
 pub(super) struct Context<'a> {
     pub ast: &'a Ast,
@@ -170,6 +171,7 @@ impl Pool {
         self.entries.clear();
         self.buckets.clear();
         self.first_number_reused = false;
+        self.omitted_numbers = false;
     }
 
     // The table holds at most half as many entries as buckets. A compact
@@ -275,7 +277,8 @@ impl Resources {
     pub(super) fn initializer_numbers(&self, first: f64) -> Option<impl Iterator<Item = f64> + '_> {
         let pool = &self.function.pool;
         let (initializer, rest) = pool.entries.split_first()?;
-        if pool.first_number_reused
+        if pool.omitted_numbers
+            || pool.first_number_reused
             || initializer.kind() != 0
             || initializer.data != first.to_bits()
         {
@@ -891,12 +894,23 @@ impl Resources {
         Ok(())
     }
     pub(super) fn prepare_field(&mut self, cx: &Context<'_>) -> Check {
+        self.prepare_field_for_source::<false>(cx)
+    }
+    pub(super) fn prepare_field_for_source<const WIDE: bool>(&mut self, cx: &Context<'_>) -> Check {
         let t = self.tables.last().expect("constructor");
         if t.prepared {
             return Ok(());
         }
         if let Some(last) = t.last {
-            self.next(last, cx)?;
+            if WIDE && self.function.pool.entries.len() > 255 && self.values[last].numeral() {
+                let register = self.reserve(1)?;
+                self.omit_number(self.values[last].number);
+                let value = &mut self.values[last];
+                value.form = Form::Temp;
+                value.info = u32::from(register);
+            } else {
+                self.next(last, cx)?;
+            }
         }
         let t = self.tables.last_mut().unwrap();
         if t.pending == 50 {
@@ -930,6 +944,33 @@ impl Resources {
         t.prepared = false;
         Ok(())
     }
+    pub(super) fn wide_field(
+        &mut self,
+        key: Option<ExprId>,
+        value: ExprId,
+        cx: &Context<'_>,
+    ) -> Check {
+        let number = self.values[value];
+        if key.is_none() || self.function.pool.entries.len() <= 255 || !number.numeral() {
+            return self.field(key, value, cx);
+        }
+        // A saturated RK pool cannot supply an operand for the number. The
+        // emitter interns this register load while assigning its final slot.
+        self.check(1)?;
+        self.omit_number(number.number);
+        let table = self.tables.last_mut().expect("constructor");
+        self.function.next = table.saved;
+        table.prepared = false;
+        Ok(())
+    }
+
+    fn omit_number(&mut self, number: f64) {
+        if number == 0.0 && self.function.zero_sign.is_none() {
+            self.function.zero_sign = Some(number.is_sign_negative());
+        }
+        self.function.pool.omitted_numbers = true;
+    }
+
     fn string_constant(&mut self, id: ExprId, text: &Lexeme, cx: &Context<'_>) -> Check<u32> {
         let slot = self
             .function

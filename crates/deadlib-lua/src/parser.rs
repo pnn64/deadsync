@@ -311,6 +311,9 @@ const _: () = assert!(size_of::<ConstantOperand>() == 16);
 mod bindings;
 mod resources;
 mod resume;
+/// Chunks up to this size can reuse a parsed numeric source template.
+pub(crate) const SOURCE_REUSE_LIMIT: usize = 64 * 1024;
+
 pub(crate) use resume::{Parser, Spare};
 
 use crate::hash::hash_bytes as hash;
