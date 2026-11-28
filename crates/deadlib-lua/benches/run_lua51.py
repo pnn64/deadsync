@@ -185,6 +185,8 @@ def main() -> None:
         paths.append(bench / "pgo" / PGO_DYNAMIC)
     if args.allocations:
         paths.append(crate / "examples/official_suite/allocations.rs")
+    elif sys.platform == "linux" and os.uname().machine == "x86_64":
+        paths.append(crate / "examples/official_suite/linux_cycles.rs")
     hashes = {p.relative_to(root).as_posix(): sha256(p) for p in paths}
     command = ["cargo", "build", "--release", "--locked", "-p", "deadlib-lua",
                "--example", "official_suite", "-j2"]

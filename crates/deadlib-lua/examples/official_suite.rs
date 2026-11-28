@@ -7,22 +7,38 @@ use std::{env, fs, path::Path, process::ExitCode};
 mod allocations;
 #[cfg(not(feature = "bench-allocations"))]
 use std::time::Instant;
+#[cfg(all(
+    not(feature = "bench-allocations"),
+    target_os = "linux",
+    target_arch = "x86_64"
+))]
+#[path = "official_suite/linux_cycles.rs"]
+mod linux_cycles;
+#[cfg(all(
+    not(feature = "bench-allocations"),
+    target_os = "linux",
+    target_arch = "x86_64"
+))]
+use linux_cycles::cycles;
 
-#[cfg(not(feature = "bench-allocations"))]
+#[cfg(all(not(feature = "bench-allocations"), windows))]
 fn cycles() -> Option<u64> {
-    #[cfg(windows)]
-    {
-        #[link(name = "kernel32")]
-        unsafe extern "system" {
-            fn GetCurrentProcess() -> *mut std::ffi::c_void;
-            fn QueryProcessCycleTime(handle: *mut std::ffi::c_void, cycles: *mut u64) -> i32;
-        }
-        let mut value = 0;
-        // SAFETY: The pseudo-handle is always valid; the output points to live
-        // writable storage for this synchronous call.
-        (unsafe { QueryProcessCycleTime(GetCurrentProcess(), &mut value) } != 0).then_some(value)
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetCurrentProcess() -> *mut std::ffi::c_void;
+        fn QueryProcessCycleTime(handle: *mut std::ffi::c_void, cycles: *mut u64) -> i32;
     }
-    #[cfg(not(windows))]
+    let mut value = 0;
+    // SAFETY: The pseudo-handle is always valid; the output points to live
+    // writable storage for this synchronous call.
+    (unsafe { QueryProcessCycleTime(GetCurrentProcess(), &mut value) } != 0).then_some(value)
+}
+
+#[cfg(all(
+    not(feature = "bench-allocations"),
+    not(any(windows, all(target_os = "linux", target_arch = "x86_64")))
+))]
+fn cycles() -> Option<u64> {
     None
 }
 

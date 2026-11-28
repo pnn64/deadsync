@@ -23,6 +23,8 @@ driver happen before the clock. Results include elapsed nanoseconds, Windows
 process CPU cycles, original output, return values, source checksums, and binary
 identity. `--cpu N` pins child processes where supported; `--output PATH` selects
 the JSON result path. Workload order is shuffled with a fixed seed.
+On Linux x86-64, the driver also records user-mode hardware cycles for the
+benchmark thread when the host permits access to the hardware counter.
 
 Measure allocator requests using a separate release build:
 
