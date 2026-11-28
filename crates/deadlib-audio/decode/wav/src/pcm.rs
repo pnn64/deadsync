@@ -164,19 +164,45 @@ impl<'a> Pcm<'a> {
                 }
             }
             SampleFormat::I24 => {
-                for (o, b) in out.iter_mut().zip(src.as_chunks::<3>().0) {
-                    *o = match e {
-                        Endian::Little => {
-                            ((u32::from(b[0]) << 8 | u32::from(b[1]) << 16 | u32::from(b[2]) << 24)
-                                as i32)
-                                >> 8
+                let (input, tail) = src.as_chunks::<12>();
+                let (output, output_tail) = out.as_chunks_mut::<4>();
+                match e {
+                    Endian::Little => {
+                        for (bytes, samples) in input.iter().zip(output) {
+                            let low = u64::from_le_bytes(bytes[..8].try_into().unwrap());
+                            let high = u32::from_le_bytes(bytes[8..].try_into().unwrap());
+                            samples[0] = (((low as u32) << 8) as i32) >> 8;
+                            samples[1] = ((((low >> 24) as u32) << 8) as i32) >> 8;
+                            let third = (low >> 48) as u32 | ((high & 255) << 16);
+                            samples[2] = ((third << 8) as i32) >> 8;
+                            samples[3] = (((high >> 8) << 8) as i32) >> 8;
                         }
-                        Endian::Big => {
-                            ((u32::from(b[2]) << 8 | u32::from(b[1]) << 16 | u32::from(b[0]) << 24)
+                        for (sample, bytes) in output_tail.iter_mut().zip(tail.as_chunks::<3>().0) {
+                            *sample = ((u32::from(bytes[0]) << 8
+                                | u32::from(bytes[1]) << 16
+                                | u32::from(bytes[2]) << 24)
                                 as i32)
-                                >> 8
+                                >> 8;
                         }
-                    };
+                    }
+                    Endian::Big => {
+                        for (bytes, samples) in input.iter().zip(output) {
+                            let high = u64::from_be_bytes(bytes[..8].try_into().unwrap());
+                            let low = u32::from_be_bytes(bytes[8..].try_into().unwrap());
+                            samples[0] = ((((high >> 40) as u32) << 8) as i32) >> 8;
+                            samples[1] = ((((high >> 16) as u32) << 8) as i32) >> 8;
+                            let third = ((high as u32 & 65535) << 8) | (low >> 24);
+                            samples[2] = ((third << 8) as i32) >> 8;
+                            samples[3] = ((low << 8) as i32) >> 8;
+                        }
+                        for (sample, bytes) in output_tail.iter_mut().zip(tail.as_chunks::<3>().0) {
+                            *sample = ((u32::from(bytes[2]) << 8
+                                | u32::from(bytes[1]) << 16
+                                | u32::from(bytes[0]) << 24)
+                                as i32)
+                                >> 8;
+                        }
+                    }
                 }
             }
             SampleFormat::I32 => {
