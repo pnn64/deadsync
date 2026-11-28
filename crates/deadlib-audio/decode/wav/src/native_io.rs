@@ -125,18 +125,36 @@ impl NativeIo {
             expand_i24_in_place(b, n, self.endian);
             return Ok(n);
         }
-        for i in (0..n).rev() {
-            let src = &b[i * width..(i + 1) * width];
-            let value = match self.sample {
-                SampleFormat::U8 => i32::from(src[0]) - 128,
-                SampleFormat::I16 => unreachable!("handled above"),
-                SampleFormat::I24 => unreachable!("handled above"),
-                SampleFormat::I32 => self.endian.u32(src) as i32,
-                _ => unreachable!(),
-            };
-            b[i * 4..i * 4 + 4].copy_from_slice(&value.to_ne_bytes());
+        if self.sample == SampleFormat::U8 {
+            expand_u8_in_place(b, n);
+            return Ok(n);
         }
-        Ok(n)
+        unreachable!("all integer PCM formats are dispatched above")
+    }
+}
+
+/// Move eight unsigned PCM bytes to signed i32 lanes directly in the output
+/// allocation. Reverse traversal preserves unread bytes during expansion.
+#[inline(never)]
+fn expand_u8_in_place(bytes: &mut [u8], samples: usize) {
+    let full = samples / 8 * 8;
+    for i in (full..samples).rev() {
+        let value = i32::from(bytes[i]) - 128;
+        bytes[i * 4..][..4].copy_from_slice(&value.to_ne_bytes());
+    }
+    for start in (0..full).step_by(8).rev() {
+        let word = u64::from_le_bytes(bytes[start..][..8].try_into().unwrap());
+        let output = [
+            (i32::from(word as u8) - 128).to_ne_bytes(),
+            (i32::from((word >> 8) as u8) - 128).to_ne_bytes(),
+            (i32::from((word >> 16) as u8) - 128).to_ne_bytes(),
+            (i32::from((word >> 24) as u8) - 128).to_ne_bytes(),
+            (i32::from((word >> 32) as u8) - 128).to_ne_bytes(),
+            (i32::from((word >> 40) as u8) - 128).to_ne_bytes(),
+            (i32::from((word >> 48) as u8) - 128).to_ne_bytes(),
+            (i32::from((word >> 56) as u8) - 128).to_ne_bytes(),
+        ];
+        bytes[start * 4..][..32].copy_from_slice(output.as_flattened());
     }
 }
 

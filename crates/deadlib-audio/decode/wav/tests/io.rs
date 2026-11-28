@@ -94,7 +94,7 @@ fn native_integer_roundtrip_all_containers_and_packing() {
 
 #[test]
 fn streaming_integer_widening_preserves_all_short_group_tails_and_channels() {
-    for sample in [SampleFormat::I16, SampleFormat::I24] {
+    for sample in [SampleFormat::U8, SampleFormat::I16, SampleFormat::I24] {
         let bits = sample.bits();
         let shift = u32::from(32 - bits);
         let edge = 1i32 << (bits - 1);
