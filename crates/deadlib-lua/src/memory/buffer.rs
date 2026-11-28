@@ -8,35 +8,48 @@ use std::{
     ptr::NonNull,
 };
 
-struct Raw<T> {
+struct Raw<T, const EMBEDDED: bool> {
     pointer: NonNull<T>,
     capacity: usize,
     memory: Memory,
     marker: PhantomData<T>,
 }
-impl<T> Raw<T> {
+impl<T, const EMBEDDED: bool> Raw<T, EMBEDDED> {
     fn layout(capacity: usize) -> Result<Layout, Error> {
         Layout::array::<T>(capacity).map_err(|_| Error::memory())
     }
-    fn grow(&mut self, capacity: usize) -> Result<(), Error> {
-        let old = Self::layout(self.capacity)?;
+    const EMBEDDED_CAPACITY: usize = 1 << (usize::BITS - 1);
+
+    fn embedded(&self) -> bool {
+        EMBEDDED && self.capacity & Self::EMBEDDED_CAPACITY != 0
+    }
+
+    fn grow(&mut self, capacity: usize, initialized: usize) -> Result<(), Error> {
+        let embedded = self.embedded();
+        let old_capacity = if embedded { 0 } else { self.capacity };
+        let old = Self::layout(old_capacity)?;
         let new = Self::layout(capacity)?;
-        let pointer = if self.capacity == 0 {
+        let pointer = if old_capacity == 0 {
             std::ptr::null_mut()
         } else {
             self.pointer.as_ptr().cast()
         };
-        // SAFETY: Raw owns the old allocation with this exact Layout. No slices
-        // survive the exclusive borrow; initialized elements remain byte-identical.
-        let pointer = unsafe { self.memory.resize(pointer, old, new) }?;
-        self.pointer = NonNull::new(pointer.cast()).expect("nonzero buffer growth");
+        // SAFETY: an independently owned allocation has this exact layout.
+        // Borrowed storage stays in place until the new allocation succeeds.
+        let pointer = unsafe { self.memory.resize(pointer, old, new) }?.cast::<T>();
+        if embedded {
+            // SAFETY: a fresh block and the initialized borrowed prefix are
+            // disjoint. The raw copy transfers ownership to the new block.
+            unsafe { std::ptr::copy_nonoverlapping(self.pointer.as_ptr(), pointer, initialized) };
+        }
+        self.pointer = NonNull::new(pointer).expect("nonzero buffer growth");
         self.capacity = capacity;
         Ok(())
     }
 }
-impl<T> Drop for Raw<T> {
+impl<T, const EMBEDDED: bool> Drop for Raw<T, EMBEDDED> {
     fn drop(&mut self) {
-        if self.capacity != 0 && size_of::<T>() != 0 {
+        if self.capacity != 0 && size_of::<T>() != 0 && !self.embedded() {
             let old = Self::layout(self.capacity).expect("allocated buffer layout");
             let new = Self::layout(0).expect("empty layout");
             // SAFETY: all elements have been dropped, including when their Drop
@@ -47,30 +60,32 @@ impl<T> Drop for Raw<T> {
     }
 }
 
-pub(crate) struct Buffer<T> {
-    raw: Raw<T>,
+pub(crate) struct Buffer<T, const EMBEDDED: bool = false> {
+    raw: Raw<T, EMBEDDED>,
     len: usize,
 }
 // SAFETY: the sole element/allocation owner follows the buffer. Memory serializes
 // callback access across owners; element access obeys the usual slice bounds.
-unsafe impl<T: Send> Send for Buffer<T> {}
-unsafe impl<T: Sync> Sync for Buffer<T> {}
+unsafe impl<T: Send, const EMBEDDED: bool> Send for Buffer<T, EMBEDDED> {}
+unsafe impl<T: Sync, const EMBEDDED: bool> Sync for Buffer<T, EMBEDDED> {}
 impl<T> Default for Buffer<T> {
     fn default() -> Self {
-        Self::new_in(Memory::default())
+        Self::new_raw(Memory::default())
     }
 }
-impl<T: std::fmt::Debug> std::fmt::Debug for Buffer<T> {
+impl<T: std::fmt::Debug, const EMBEDDED: bool> std::fmt::Debug for Buffer<T, EMBEDDED> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.deref().fmt(f)
     }
 }
 impl<T> Buffer<T> {
-    pub(crate) const fn empty_global() -> Self {
-        Self::new_in(Memory(None))
-    }
-
     pub(crate) const fn new_in(memory: Memory) -> Self {
+        Self::new_raw(memory)
+    }
+}
+
+impl<T, const EMBEDDED: bool> Buffer<T, EMBEDDED> {
+    const fn new_raw(memory: Memory) -> Self {
         Self {
             raw: Raw {
                 pointer: NonNull::dangling(),
@@ -85,7 +100,11 @@ impl<T> Buffer<T> {
         &self.raw.memory
     }
     pub(crate) fn capacity(&self) -> usize {
-        self.raw.capacity
+        if EMBEDDED && size_of::<T>() != 0 {
+            self.raw.capacity & !Raw::<T, EMBEDDED>::EMBEDDED_CAPACITY
+        } else {
+            self.raw.capacity
+        }
     }
     #[inline]
     pub(crate) fn try_reserve_exact(&mut self, additional: usize) -> Result<(), Error> {
@@ -117,7 +136,7 @@ impl<T> Buffer<T> {
         } else {
             needed.max(self.capacity().saturating_mul(2)).max(minimum)
         };
-        self.raw.grow(capacity)
+        self.raw.grow(capacity, self.len)
     }
     #[inline]
     pub(crate) fn push(&mut self, value: T) {
@@ -263,32 +282,61 @@ impl<T> Buffer<T> {
         Ok(())
     }
 }
-impl<T> Deref for Buffer<T> {
+impl<T> Buffer<T, true> {
+    pub(crate) const fn empty_embeddable_global() -> Self {
+        Self::new_raw(Memory(None))
+    }
+
+    pub(crate) const fn new_embeddable_in(memory: Memory) -> Self {
+        Self::new_raw(memory)
+    }
+
+    /// The caller owns this aligned, uninitialized storage and keeps it
+    /// exclusive until the buffer grows or is dropped. Only initialized
+    /// elements belong to the buffer.
+    pub(crate) unsafe fn attach(&mut self, pointer: NonNull<T>, capacity: usize) {
+        debug_assert_ne!(size_of::<T>(), 0);
+        debug_assert_eq!(self.raw.capacity, 0);
+        debug_assert!(capacity < Raw::<T, true>::EMBEDDED_CAPACITY);
+        self.raw.pointer = pointer;
+        self.raw.capacity = capacity | Raw::<T, true>::EMBEDDED_CAPACITY;
+    }
+
+    pub(crate) fn allocated_capacity(&self) -> usize {
+        if self.raw.embedded() {
+            0
+        } else {
+            self.capacity()
+        }
+    }
+}
+
+impl<T, const EMBEDDED: bool> Deref for Buffer<T, EMBEDDED> {
     type Target = [T];
     fn deref(&self) -> &[T] {
         // SAFETY: exactly len elements are initialized, and Raw owns the buffer.
         unsafe { std::slice::from_raw_parts(self.raw.pointer.as_ptr(), self.len) }
     }
 }
-impl<T> DerefMut for Buffer<T> {
+impl<T, const EMBEDDED: bool> DerefMut for Buffer<T, EMBEDDED> {
     fn deref_mut(&mut self) -> &mut [T] {
         // SAFETY: the exclusive borrow covers every initialized element.
         unsafe { std::slice::from_raw_parts_mut(self.raw.pointer.as_ptr(), self.len) }
     }
 }
-impl<T> Drop for Buffer<T> {
+impl<T, const EMBEDDED: bool> Drop for Buffer<T, EMBEDDED> {
     fn drop(&mut self) {
         self.truncate(0);
     }
 }
-impl<'a, T> IntoIterator for &'a Buffer<T> {
+impl<'a, T, const EMBEDDED: bool> IntoIterator for &'a Buffer<T, EMBEDDED> {
     type Item = &'a T;
     type IntoIter = std::slice::Iter<'a, T>;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
-impl<'a, T> IntoIterator for &'a mut Buffer<T> {
+impl<'a, T, const EMBEDDED: bool> IntoIterator for &'a mut Buffer<T, EMBEDDED> {
     type Item = &'a mut T;
     type IntoIter = std::slice::IterMut<'a, T>;
     fn into_iter(self) -> Self::IntoIter {

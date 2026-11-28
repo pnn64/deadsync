@@ -354,9 +354,18 @@ struct UnpublishedFields {
     nested: Option<UnpublishedRows>,
 }
 
+const INLINE_HASH_ENTRIES: usize = 2;
+const HASH_STORAGE_WORDS: usize =
+    HashSlots::INITIAL + INLINE_HASH_ENTRIES * size_of::<Entry>() / size_of::<u32>();
+const _: () = {
+    assert!(align_of::<Entry>() <= align_of::<HashPart>());
+    assert!(size_of::<Entry>() % size_of::<u32>() == 0);
+    assert!(HashSlots::INITIAL * size_of::<u32>() % align_of::<Entry>() == 0);
+};
+
 #[derive(Debug)]
 struct HashPart {
-    entries: Buffer<Entry>,
+    entries: Buffer<Entry, true>,
     slots: HashSlots,
     native_dead_keys: u32,
     last_free: u32,
@@ -375,15 +384,18 @@ impl HashPart {
     }
 
     #[allow(unsafe_code)]
-    fn allocate(self, memory: Memory) -> Result<Unique<Self, { HashSlots::INITIAL }>, Error> {
+    fn allocate(self, memory: Memory) -> Result<Unique<Self, HASH_STORAGE_WORDS>, Error> {
         let mut part = Unique::try_new_with_storage_in(self, memory)?;
-        if let Some(words) = part.suffix_words()
-            && part.slots.is_empty()
-        {
-            // SAFETY: the words follow the stable HashPart allocation and
-            // remain valid until it drops. HashSlots gives up this span when
-            // it grows, and never releases the suffix itself.
-            unsafe { part.slots.attach(words) };
+        if let Some(words) = part.suffix_words() {
+            // SAFETY: the two uninitialized, aligned spans are disjoint from
+            // each other and the stable hash header. They outlive both buffers.
+            unsafe {
+                if part.slots.is_empty() {
+                    part.slots.attach(words);
+                }
+                let entries = words.add(HashSlots::INITIAL).cast::<Entry>();
+                part.entries.attach(entries, INLINE_HASH_ENTRIES);
+            }
         }
         Ok(part)
     }
@@ -413,7 +425,7 @@ impl HashPart {
 }
 
 static EMPTY_HASH: HashPart = HashPart {
-    entries: Buffer::empty_global(),
+    entries: Buffer::empty_embeddable_global(),
     slots: HashSlots::empty_global(),
     native_dead_keys: 0,
     last_free: 0,
@@ -451,7 +463,7 @@ impl ParserTableLayout {
 #[derive(Debug, Default)]
 pub(crate) struct Table {
     array: ArrayStorage,
-    hash: Option<Unique<HashPart, { HashSlots::INITIAL }>>,
+    hash: Option<Unique<HashPart, HASH_STORAGE_WORDS>>,
     native51: bool,
     // Arena identities have a nonzero generation; zero denotes no metatable.
     // The private attachment below uses the same optional-identity encoding.
@@ -560,7 +572,6 @@ impl Table {
         let array = ArrayStorage::heap(copy(&self.array, memory)?);
         let hash = if let Some(part) = &self.hash {
             debug_assert!(part.unpublished_rows.is_none());
-            let entries = copy(&part.entries, memory)?;
             let mut copy_slots = HashSlots::new_in(memory.clone());
             let inline = memory.uses_global_allocator() && part.slots.len() <= HashSlots::INITIAL;
             if !inline {
@@ -568,7 +579,7 @@ impl Table {
                 copy_slots.extend_from_slice(&part.slots);
             }
             let mut copy = HashPart {
-                entries,
+                entries: Buffer::new_embeddable_in(memory.clone()),
                 slots: copy_slots,
                 native_dead_keys: part.native_dead_keys,
                 last_free: part.last_free,
@@ -577,6 +588,8 @@ impl Table {
                 unpublished_rows: None,
             }
             .allocate(memory.clone())?;
+            copy.entries.try_reserve_exact(part.entries.len())?;
+            copy.entries.extend_from_slice(&part.entries);
             if inline {
                 copy.slots.extend_from_slice(&part.slots);
             }
@@ -658,7 +671,7 @@ impl Table {
         if self.hash.is_none() {
             let memory = self.array.memory().clone();
             let part = HashPart {
-                entries: Buffer::new_in(memory.clone()),
+                entries: Buffer::new_embeddable_in(memory.clone()),
                 slots: HashSlots::new_in(memory.clone()),
                 native_dead_keys: 0,
                 last_free: 0,
@@ -797,7 +810,7 @@ impl Table {
         self.array.allocated_capacity() * size_of::<Value>()
             + self.hash.as_ref().map_or(0, |part| {
                 part.heap_bytes()
-                    + part.entries.capacity() * size_of::<Entry>()
+                    + part.entries.allocated_capacity() * size_of::<Entry>()
                     + part.slots.heap_bytes()
                     + usize::from(part.unpublished_rows.is_some()) * size_of::<UnpublishedFields>()
             })
@@ -2573,19 +2586,22 @@ mod allocation_tests {
         }
     }
     #[test]
-    fn colocated_hash_words_survive_moves_copies_and_growth() {
-        let mut table = Table::with_capacity(0, 3).unwrap();
-        for n in 1..=3 {
+    fn colocated_hash_storage_survives_moves_copies_and_growth() {
+        let mut table = Table::with_capacity(0, INLINE_HASH_ENTRIES).unwrap();
+        for n in 1..=INLINE_HASH_ENTRIES as i32 {
             table.set(hash_key(n), Value::Number(f64::from(n))).unwrap();
         }
         assert_eq!(table.hash_part().slots.heap_bytes(), 0);
+        assert_eq!(table.hash_part().entries.allocated_capacity(), 0);
         let mut tables = [table.copy_literal().unwrap(), table];
         assert_eq!(tables[0].hash_part().slots.heap_bytes(), 0);
+        assert_eq!(tables[0].hash_part().entries.allocated_capacity(), 0);
         for table in &mut tables {
-            for n in 4..=17 {
+            for n in INLINE_HASH_ENTRIES as i32 + 1..=17 {
                 table.set(hash_key(n), Value::Number(f64::from(n))).unwrap();
             }
             assert!(table.hash_part().slots.heap_bytes() > 0);
+            assert!(table.hash_part().entries.allocated_capacity() >= 17);
             check_hash(table, 17);
         }
     }
@@ -2594,9 +2610,9 @@ mod allocation_tests {
     fn hash_reservations_preserve_values_and_pending_traversal_on_failure() {
         for initialized in [false, true] {
             let mut points = 0;
-            // Reserve entries and either the first hash header with its
-            // initial index or a larger index for the existing hash.
-            let expected_points = 2;
+            // A first entry fits in the new header. Growing the populated
+            // table reserves both its entries and its lookup words.
+            let expected_points = if initialized { 2 } else { 1 };
             for nth in 0..=expected_points {
                 let mut table = if initialized {
                     Table::with_capacity(0, 5).unwrap()

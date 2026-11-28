@@ -7,29 +7,36 @@ use std::cell::{Cell, RefCell};
 #[derive(Clone, Copy, Debug)]
 enum Shape {
     EmptyHash,
+    EmbeddedGrowth,
     HashGrowth,
     ArrayMigration,
 }
-const SHAPES: [Shape; 3] = [Shape::EmptyHash, Shape::HashGrowth, Shape::ArrayMigration];
+const SHAPES: [Shape; 4] = [
+    Shape::EmptyHash,
+    Shape::EmbeddedGrowth,
+    Shape::HashGrowth,
+    Shape::ArrayMigration,
+];
 impl Shape {
     fn hints(self) -> (usize, usize) {
         match self {
             Self::EmptyHash => (0, 0),
+            Self::EmbeddedGrowth => (0, 2),
             Self::HashGrowth => (0, 5),
             Self::ArrayMigration => (4, 0),
         }
     }
     fn key(self) -> i32 {
         match self {
-            Self::EmptyHash | Self::HashGrowth => -6,
+            Self::EmptyHash | Self::EmbeddedGrowth | Self::HashGrowth => -6,
             Self::ArrayMigration => 5,
         }
     }
     fn points(self) -> usize {
         match self {
-            // The first write reserves the hash header and index together,
-            // then reserves the entries.
-            Self::EmptyHash => 2,
+            // The first write allocates the header with its index and entries.
+            // The third entry grows the entry buffer within the existing index.
+            Self::EmptyHash | Self::EmbeddedGrowth => 1,
             Self::HashGrowth => 2,
             Self::ArrayMigration => 1,
         }
@@ -37,6 +44,7 @@ impl Shape {
     fn entries(self) -> Vec<i32> {
         match self {
             Self::EmptyHash => vec![],
+            Self::EmbeddedGrowth => vec![-1, -2],
             Self::HashGrowth => (1..=5).map(|n| -n).collect(),
             Self::ArrayMigration => (1..=4).chain(6..=20).collect(),
         }
