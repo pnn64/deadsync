@@ -527,6 +527,54 @@ impl Table {
         table.fields_version = u32::from(native51);
         Ok(table)
     }
+    /// Copy the storage of a fresh table built entirely from bound constants.
+    pub(crate) fn copy_literal(&self) -> Result<Self, Error> {
+        fn copy<T: Copy>(values: &[T], memory: &Memory) -> Result<Buffer<T>, Error> {
+            let mut buffer = Buffer::new_in(memory.clone());
+            buffer.try_reserve_exact(values.len())?;
+            buffer.extend_from_slice(values);
+            Ok(buffer)
+        }
+
+        debug_assert!(self.metatable().is_none() && self.host_state().is_none());
+        let memory = self.array.memory();
+        let array = ArrayStorage::heap(copy(&self.array, memory)?);
+        let hash = if let Some(part) = &self.hash {
+            debug_assert!(part.unpublished_rows.is_none());
+            Some(Unique::try_new_in(
+                HashPart {
+                    entries: copy(&part.entries, memory)?,
+                    slots: copy(&part.slots, memory)?,
+                    native_dead_keys: part.native_dead_keys,
+                    last_free: part.last_free,
+                    may_have_array_keys: part.may_have_array_keys,
+                    next_hash_hint: AtomicU64::new(part.next_hash_hint.load(Ordering::Relaxed)),
+                    unpublished_rows: None,
+                },
+                memory.clone(),
+            )?)
+        } else {
+            None
+        };
+        Ok(Self {
+            array,
+            hash,
+            native51: self.native51,
+            fields_version: self.fields_version,
+            string_keys_added: self.string_keys_added,
+            ..Self::default()
+        })
+    }
+
+    pub(crate) fn from_literal_array(values: Buffer<Value>, native51: bool) -> Self {
+        Self {
+            array: ArrayStorage::heap(values),
+            native51,
+            fields_version: u32::from(native51),
+            ..Self::default()
+        }
+    }
+
     pub(crate) fn with_dense_sequence(len: usize, native51: bool, memory: Memory) -> Option<Self> {
         Some(Self {
             array: ArrayStorage::SharedScalars {

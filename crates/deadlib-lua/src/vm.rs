@@ -2490,6 +2490,16 @@ impl Vm {
                                 program_index,
                                 proto_index,
                             )
+                        } else if (i.c == 0 && i.b >= table_literals::MIN_WIDE_HINT)
+                            || (i.b == 0 && i.c >= u32::from(table_literals::MIN_WIDE_HINT))
+                        {
+                            self.build_wide_table_literal(
+                                &mut table_literal_cache,
+                                function,
+                                prototype,
+                                base,
+                                pc,
+                            )?
                         } else if i.c == 0 && i.b >= table_literals::MIN_ARRAY_HINT {
                             self.copy_table_literal(
                                 &mut table_literal_cache,
