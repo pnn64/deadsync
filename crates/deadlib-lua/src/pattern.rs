@@ -102,12 +102,19 @@ enum Repeat {
     DisjointStar,
     DisjointPlus,
     Minimal,
+    EndStar,
+    EndPlus,
+    EndDisjointStar,
+    EndDisjointPlus,
+    EndMinimal,
 }
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 struct Instruction {
     kind: Kind,
     repeat: Repeat,
+    // Literal width, or an end-anchored repeat's suffix bounds. The low
+    // byte holds the minimum and the high byte holds the maximum.
     width: u16,
     arg: u32,
 }
@@ -148,6 +155,7 @@ enum Alternative {
     Once,
     Shorter(usize),
     Longer(usize),
+    LongerBounded(usize),
 }
 #[derive(Clone, Copy, Debug)]
 struct Choice {
@@ -675,6 +683,49 @@ fn prune_disjoint_repeats(code: &mut [Instruction], sets: &[[u64; 4]]) {
     }
 }
 
+fn bound_end_repeat(code: &mut [Instruction]) {
+    let Some((end, suffix)) = code.split_last_mut() else {
+        return;
+    };
+    if end.kind != Kind::End {
+        return;
+    }
+    let (mut min, mut max) = (0, 0);
+    for i in suffix.iter_mut().rev() {
+        match (i.kind, i.repeat) {
+            (Kind::Open | Kind::Close | Kind::Position | Kind::Frontier, _) => {}
+            (Kind::Literal, _) => {
+                min += i.width;
+                max += i.width;
+            }
+            (Kind::Byte | Kind::Any | Kind::Set, Repeat::One) => {
+                min += 1;
+                max += 1;
+            }
+            (Kind::Byte | Kind::Any | Kind::Set, Repeat::Optional) => max += 1,
+            (Kind::Byte | Kind::Any | Kind::Set, _) => {
+                // Ending outside this window fails the suffix. Keep the
+                // existing greedy or minimal order within the window.
+                i.repeat = match i.repeat {
+                    Repeat::Star => Repeat::EndStar,
+                    Repeat::Plus => Repeat::EndPlus,
+                    Repeat::DisjointStar => Repeat::EndDisjointStar,
+                    Repeat::DisjointPlus => Repeat::EndDisjointPlus,
+                    Repeat::Minimal => Repeat::EndMinimal,
+                    _ => unreachable!("unbounded repeat"),
+                };
+                i.width = min | (max << 8);
+                return;
+            }
+            // A reference or deferred error may raise before the end check.
+            _ => return,
+        }
+        if max > u16::from(u8::MAX) {
+            return;
+        }
+    }
+}
+
 impl Pattern {
     pub fn compile(pattern: &[u8], anchor: bool, memory: Memory) -> Result<Self, Error> {
         // Lua 5.1's pattern interpreter treats a zero byte as the pattern terminator.
@@ -833,6 +884,7 @@ impl Pattern {
         if prune_repeats {
             prune_disjoint_repeats(&mut code, &sets);
         }
+        bound_end_repeat(&mut code);
         Ok(Self {
             code,
             sets,
@@ -848,6 +900,58 @@ impl Pattern {
             _ => unreachable!("repeated pattern atom"),
         }
     }
+    fn repeat_run(&self, i: Instruction, bytes: &[u8]) -> usize {
+        match i.kind {
+            Kind::Any => bytes.len(),
+            Kind::Byte => byte_run(bytes, i.arg as u8),
+            Kind::Set => class_run::<false>(bytes, &self.sets[i.arg as usize]),
+            _ => unreachable!("repeated pattern atom"),
+        }
+    }
+    #[inline(never)]
+    fn end_repeat(
+        &self,
+        i: Instruction,
+        source: &[u8],
+        pc: usize,
+        start: usize,
+        work: &mut Work,
+    ) -> Result<Option<usize>, Error> {
+        let min = usize::from(i.width as u8);
+        let max = usize::from(i.width >> 8);
+        let required = usize::from(matches!(
+            i.repeat,
+            Repeat::EndPlus | Repeat::EndDisjointPlus
+        ));
+        let first = (start + required).max(source.len().saturating_sub(max));
+        let Some(last) = source.len().checked_sub(min).filter(|&last| first <= last) else {
+            return Ok(None);
+        };
+        let shortest = i.repeat == Repeat::EndMinimal;
+        let stop = if shortest { first } else { last };
+        let end = start + self.repeat_run(i, &source[start..stop]);
+        if end < first {
+            return Ok(None);
+        }
+        let alternative = if shortest && end < last && self.atom(pc, source[end]) {
+            Some((end + 1, Alternative::LongerBounded(last)))
+        } else if matches!(i.repeat, Repeat::EndStar | Repeat::EndPlus) && end > first {
+            Some((end - 1, Alternative::Shorter(first)))
+        } else {
+            None
+        };
+        if let Some((pos, alternative)) = alternative {
+            work.push_choice(Choice {
+                pc: pc + 1,
+                pos,
+                undo: work.undo_len,
+                count: work.count,
+                alternative,
+            })?;
+        }
+        Ok(Some(end))
+    }
+
     fn literal_byte(&self, pc: usize) -> Option<u8> {
         let next = self.code.get(pc)?;
         (next.repeat == Repeat::One && matches!(next.kind, Kind::Byte | Kind::Literal))
@@ -861,7 +965,11 @@ impl Pattern {
         })?;
         if !matches!(
             first.repeat,
-            Repeat::One | Repeat::Plus | Repeat::DisjointPlus
+            Repeat::One
+                | Repeat::Plus
+                | Repeat::DisjointPlus
+                | Repeat::EndPlus
+                | Repeat::EndDisjointPlus
         ) {
             return None;
         }
@@ -1014,6 +1122,17 @@ impl Pattern {
                                 }
                             }
                         }
+                        Repeat::EndStar
+                        | Repeat::EndPlus
+                        | Repeat::EndDisjointStar
+                        | Repeat::EndDisjointPlus
+                        | Repeat::EndMinimal => {
+                            if let Some(end) = self.end_repeat(i, source, pc, pos, work)? {
+                                pos = end;
+                            } else {
+                                matched = false;
+                            }
+                        }
                     }
                 }
                 Kind::Open | Kind::Position | Kind::Close => {
@@ -1123,6 +1242,12 @@ impl Pattern {
                             pos += find_byte(tail, needle).unwrap_or(tail.len());
                         }
                         if source.get(pos).is_some_and(|&b| self.atom(atom, b)) {
+                            choice.pos = pos + 1;
+                            work.choices.push(choice);
+                        }
+                    }
+                    Alternative::LongerBounded(last) => {
+                        if pos < last && source.get(pos).is_some_and(|&b| self.atom(pc - 1, b)) {
                             choice.pos = pos + 1;
                             work.choices.push(choice);
                         }
@@ -1238,6 +1363,39 @@ mod byte_search_tests {
         source[64..].fill(b'x');
         let plus = compile(b"^.+|head");
         assert!(plus.find(&source, 0, &mut work).unwrap().is_none());
+    }
+
+    #[test]
+    fn end_bounds_preserve_repeat_order_and_captures() {
+        let mut work = Work::default();
+        let compile = |bytes: &[u8]| Pattern::compile(bytes, true, Memory::default()).unwrap();
+        let source = b"baaaabx";
+        for (pattern, first, second) in [
+            (b"^([ab]-)([ab]?[ab]?)x$".as_slice(), 0..4, 4..6),
+            (b"^([ab]*)([ab]?[ab]?)x$", 0..6, 6..6),
+        ] {
+            let found = compile(pattern)
+                .find(source, 0, &mut work)
+                .unwrap()
+                .unwrap();
+            assert_eq!(found.end, source.len());
+            assert_eq!(found.capture(0).unwrap().range().unwrap(), first);
+            assert_eq!(found.capture(1).unwrap().range().unwrap(), second);
+        }
+
+        assert!(
+            compile(b"^a+bc$")
+                .find(b"bc", 0, &mut work)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            compile(b"^a+bc$")
+                .find(b"a", 0, &mut work)
+                .unwrap()
+                .is_none()
+        );
+        assert!(compile(b"^a-%1$").find(b"aa", 0, &mut work).is_err());
     }
 
     #[test]
