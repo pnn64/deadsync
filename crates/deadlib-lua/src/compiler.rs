@@ -250,9 +250,12 @@ fn reusable_vec<T>(capacity: usize, old: Option<Box<[T]>>) -> Result<Vec<T>, Err
 }
 
 fn copy_boxed<T: Copy>(values: &[T], old: Option<Box<[T]>>) -> Result<Box<[T]>, Error> {
-    let mut exact = reusable_vec(values.len(), old)?;
-    exact.extend_from_slice(values);
-    exact.try_into_boxed_slice()
+    if let Some(mut buffer) = old.filter(|buffer| buffer.len() == values.len()) {
+        buffer.copy_from_slice(values);
+        Ok(buffer)
+    } else {
+        values.try_boxed()
+    }
 }
 
 pub(crate) fn compile(ast: Ast, source: &[u8], name: &[u8]) -> Result<Program, Error> {
@@ -542,7 +545,13 @@ impl<'a> Compiler<'a> {
                         len: f.gc_prefix_len,
                     }
                 } else {
-                    RegisterMaps::Owned(f.gc_maps.try_boxed()?)
+                    let old_maps = old_body.as_mut().and_then(|body| {
+                        match std::mem::take(&mut body.gc_maps) {
+                            RegisterMaps::Owned(maps) => Some(maps),
+                            RegisterMaps::Prefix { .. } => None,
+                        }
+                    });
+                    RegisterMaps::Owned(copy_boxed(&f.gc_maps, old_maps)?)
                 },
                 original_constants: constants.values,
                 constant_strings: constants.strings,

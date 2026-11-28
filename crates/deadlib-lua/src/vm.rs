@@ -2910,6 +2910,26 @@ impl Vm {
                             numeric_checkpoint_ready = self.open_upvalues.is_empty();
                             continue;
                         }
+                        // A variable-result producer can still deliver exactly one input.
+                        if i.op == Op::Call && i.b == OPEN_ARGS && self.top == a + 2 {
+                            let completed = match self.registers[a] {
+                                Value::Native(LOAD_STRING) if matches!(i.c, 1 | OPEN) => {
+                                    let completed = self.try_inline_source_load(a, i.c)?;
+                                    if completed && !self.sort_gc_ready() {
+                                        continue 'frames;
+                                    }
+                                    completed
+                                }
+                                Value::Native(0) if i.c <= 1 => {
+                                    self.try_inline_assert(a, i.c == 1, checkpoint_ready)
+                                }
+                                _ => false,
+                            };
+                            if completed {
+                                numeric_checkpoint_ready = true;
+                                continue;
+                            }
+                        }
                         if i.op == Op::Call && i.b != OPEN_ARGS {
                             if i.b >= 2
                                 && i.c <= 1
