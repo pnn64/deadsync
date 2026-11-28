@@ -244,14 +244,17 @@ impl Compositor {
             let mut r = r;
             let mut visible = r.w * r.h;
             let mut indices = frame.indices.as_slice();
-            // Wider rows already use bulk fills. Probe them only to skip transparent spans.
-            if (width < 64 || transparent.is_some())
+            // Probe large full-width frames as one span to avoid per-row
+            // palette work when the indices are uniform.
+            if (width < 64 || transparent.is_some() || visible >= 65_536)
                 && r.w == stride
                 && width == stride
                 && visible >= 256
             {
                 let first = indices[0];
-                if (width < 64 || transparent == Some(first)) && indices[1] == first {
+                if indices[1] == first
+                    && (width < 64 || transparent == Some(first) || indices[..16] == [first; 16])
+                {
                     let (chunks, tail) = indices[..visible].as_chunks::<16>();
                     let rows = if let Some(chunk) =
                         chunks.iter().position(|chunk| *chunk != [first; 16])
