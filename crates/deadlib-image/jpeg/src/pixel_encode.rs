@@ -418,6 +418,11 @@ pub(crate) fn resample(
                     SampleData::U8(v) => u32::from(v[index + channel]),
                     SampleData::U16(v) => u32::from(v[index + channel]),
                 };
+                // Equal precision makes the rounded scale exactly the original
+                // sample; avoid a division for every channel of every footprint.
+                if input.precision == precision {
+                    return i64::from(value);
+                }
                 let source_max = (1u32 << input.precision) - 1;
                 ((value * ((1u32 << precision) - 1) + source_max / 2) / source_max) as i64
             };
