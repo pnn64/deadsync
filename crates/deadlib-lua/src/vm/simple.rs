@@ -4,7 +4,8 @@
 //! source line: nothing can observe the frame until an instruction outside
 //! this set runs, and that instruction publishes both first.
 use super::{
-    Arena, ByteString, Cell, StringId, Table, TableId, ThreadId, Value, Vm, slot_index, threads,
+    Arena, ByteString, Cell, FunctionId, StringId, Table, TableId, ThreadId, Value, Vm, slot_index,
+    threads,
 };
 use crate::bytecode::{COMPARE_BRANCH, Instruction, NUMERIC_WHILE, OPEN, Op, RK};
 use std::ops::Deref;
@@ -424,4 +425,55 @@ pub(super) fn step(
         _ => return None,
     }
     Some(next)
+}
+
+#[inline]
+pub(super) fn reload_fixed_tail_registers(
+    registers: &mut [Value],
+    base: usize,
+    arguments: usize,
+    count: usize,
+) {
+    match count {
+        0 => {}
+        1 => registers[base] = registers[arguments],
+        2 => {
+            let first = registers[arguments];
+            let second = registers[arguments + 1];
+            registers[base] = first;
+            registers[base + 1] = second;
+        }
+        _ => registers.copy_within(arguments..arguments + count, base),
+    }
+    registers[base + count..].fill(Value::Nil);
+}
+
+/// An ordinary fixed self-tail restart already checked frame and register
+/// capacity and cleared the idle GC checkpoint. Simple instructions cannot
+/// change those conditions, so retain the dispatch context until a slow
+/// instruction or a different callee needs normal frame bookkeeping.
+#[inline(never)]
+pub(super) fn run_fixed_self_tails(
+    cx: &mut Context<'_>,
+    function: FunctionId,
+    max_args: usize,
+) -> (usize, u32) {
+    let mut tails = 0u32;
+    loop {
+        let mut pc = 0;
+        while let Some(next) = step(cx, pc) {
+            pc = next;
+        }
+        let call = cx.code[pc];
+        let count = usize::from(call.b);
+        if call.op != Op::TailCall || count > max_args {
+            return (pc, tails);
+        }
+        let callee = cx.base + usize::from(call.a);
+        if cx.registers[callee] != Value::Function(function) {
+            return (pc, tails);
+        }
+        reload_fixed_tail_registers(cx.registers, cx.base, callee + 1, count);
+        tails = tails.saturating_add(1);
+    }
 }

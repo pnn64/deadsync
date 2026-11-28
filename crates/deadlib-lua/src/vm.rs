@@ -3054,7 +3054,16 @@ impl Vm {
                                 base + usize::from(prototype.registers),
                             )
                         {
-                            pc = 0;
+                            pc = self.run_simple_tail_chain(
+                                &mut frame,
+                                prototype,
+                                function,
+                                &mut field_hints,
+                                reduction_retry
+                                    .as_ref()
+                                    .filter(|retry| retry.frame == frame_index)
+                                    .map(|retry| retry.pc),
+                            );
                             numeric_checkpoint_ready = false;
                             resume_hints.clear();
                             ignored_numeric_while = None;
@@ -3120,6 +3129,52 @@ impl Vm {
         }
     }
 
+    /// Continue an already restarted fixed self-tail call. Restrict the run
+    /// to simple instructions and leave any host resolver to ordinary dispatch.
+    #[inline(never)]
+    fn run_simple_tail_chain(
+        &mut self,
+        frame: &mut Frame,
+        prototype: &crate::bytecode::Prototype,
+        function: FunctionId,
+        field_hints: &mut [[u32; 2]; simple::FIELD_HINTS],
+        stop_before_for_loop: Option<usize>,
+    ) -> usize {
+        if !self.sort_fast_context() {
+            return 0;
+        }
+        let max_args =
+            usize::from(prototype.params).min(self.registers.capacity() - self.registers.len());
+        let closure = &self.functions[slot_index(function.0)];
+        let can_change_field_liveness = self.gc_can_change_field_liveness();
+        let mut context = simple::Context {
+            registers: &mut self.registers,
+            constants: &self.programs[closure.program].constants[prototype.bound_constant_range()],
+            field_hints,
+            tables: &mut self.tables,
+            strings: &self.strings.bytes,
+            upvalue_ids: &closure.upvalues,
+            upvalues: &self.upvalues,
+            threads: &self.threads,
+            thread: self.thread,
+            code: &prototype.code,
+            stop_before_for_loop,
+            ignored_numeric_while: None,
+            env: closure.env,
+            base: frame.base,
+            gc_pending: false,
+            can_change_field_liveness,
+            closed: true,
+            index_name: self.meta_names[Meta::Index as usize],
+            resolvers: None,
+            string_metatable: self.type_metatables[meta::STRING_METATABLE_SLOT],
+        };
+        let (next, tail_calls) = simple::run_fixed_self_tails(&mut context, function, max_args);
+        frame.tail_calls = frame.tail_calls.saturating_add(tail_calls);
+        self.frames.last_mut().expect("active Lua frame").tail_calls = frame.tail_calls;
+        next
+    }
+
     #[inline]
     fn restart_fixed_tail(
         &mut self,
@@ -3148,20 +3203,7 @@ impl Vm {
 
         // The fixed self-call can reuse its prototype, environment and register
         // window. Publish a new logical activation before dispatching its code.
-        match count {
-            0 => {}
-            1 => self.registers[base] = self.registers[arguments],
-            2 => {
-                let first = self.registers[arguments];
-                let second = self.registers[arguments + 1];
-                self.registers[base] = first;
-                self.registers[base + 1] = second;
-            }
-            _ => self
-                .registers
-                .copy_within(arguments..arguments + count, base),
-        }
-        self.registers[base + count..end].fill(Value::Nil);
+        simple::reload_fixed_tail_registers(&mut self.registers[..end], base, arguments, count);
         self.registers.truncate(end);
         self.top = base;
         self.gc.pending = false;
