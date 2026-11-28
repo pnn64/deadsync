@@ -62,7 +62,7 @@ impl Vm {
         frame: Frame,
         source: usize,
         count: usize,
-    ) -> Result<Option<Buffer<Value>>, Error> {
+    ) -> Result<Option<hooks::ReturnStack>, Error> {
         if !(REQUIRE..=LUA).contains(&code) {
             return Ok(None);
         }

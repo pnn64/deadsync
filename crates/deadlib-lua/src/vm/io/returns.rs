@@ -8,7 +8,7 @@ impl Vm {
         lines: bool,
         frame: Frame,
         source: usize,
-        stack: &mut Buffer<Value>,
+        stack: &mut hooks::ReturnStack,
         results: &[Value],
     ) -> Result<bool, Error> {
         if !(FIRST..=LAST).contains(&code) && !lines {
@@ -92,7 +92,7 @@ impl Vm {
         stack.extend_from_slice(results);
         Ok(true)
     }
-    fn io_close_temporaries(&self, file: Value, stack: &mut Buffer<Value>) -> Value {
+    fn io_close_temporaries(&self, file: Value, stack: &mut hooks::ReturnStack) -> Value {
         let Value::Userdata(id) = file else {
             unreachable!("validated file")
         };

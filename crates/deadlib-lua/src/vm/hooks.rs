@@ -4,6 +4,7 @@ use crate::bytecode::Prototype;
 #[cfg(test)]
 mod allocation_tests;
 mod returns;
+pub(in crate::vm) use returns::ReturnStack;
 
 pub(super) fn stack_top(proto: &Prototype, frame: Frame, next: Option<&Frame>) -> Option<usize> {
     let next = next?;

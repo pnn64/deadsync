@@ -2,22 +2,98 @@
 use super::*;
 mod libraries;
 
+const INLINE_RETURN_VALUES: usize = 12;
+
+/// An owned snapshot of the C stack. Short return windows usually fit on
+/// the host stack while the VM register buffer is resized or inspected.
+pub(in crate::vm) enum ReturnStack {
+    Inline {
+        values: [Value; INLINE_RETURN_VALUES],
+        len: usize,
+    },
+    Heap(Buffer<Value>),
+}
+
+impl ReturnStack {
+    pub(in crate::vm) fn push(&mut self, value: Value) {
+        self.extend_from_slice(std::slice::from_ref(&value));
+    }
+
+    pub(in crate::vm) fn pop(&mut self) {
+        self.truncate(self.len().saturating_sub(1));
+    }
+
+    pub(in crate::vm) fn clear(&mut self) {
+        self.truncate(0);
+    }
+
+    pub(in crate::vm) fn truncate(&mut self, len: usize) {
+        match self {
+            Self::Inline { len: old, .. } => *old = (*old).min(len),
+            Self::Heap(values) => values.truncate(len),
+        }
+    }
+
+    pub(in crate::vm) fn resize(&mut self, new_len: usize, value: Value) {
+        match self {
+            Self::Inline { values, len } => {
+                if new_len > *len {
+                    values[*len..new_len].fill(value);
+                }
+                *len = new_len;
+            }
+            Self::Heap(values) => values.resize(new_len, value),
+        }
+    }
+
+    pub(in crate::vm) fn extend_from_slice(&mut self, extra: &[Value]) {
+        match self {
+            Self::Inline { values, len } => {
+                let end = *len + extra.len();
+                values[*len..end].copy_from_slice(extra);
+                *len = end;
+            }
+            Self::Heap(values) => values.extend_from_slice(extra),
+        }
+    }
+}
+
+impl std::ops::Deref for ReturnStack {
+    type Target = [Value];
+
+    fn deref(&self) -> &[Value] {
+        match self {
+            Self::Inline { values, len } => &values[..*len],
+            Self::Heap(values) => values,
+        }
+    }
+}
+
 impl Vm {
     pub(in crate::vm) fn return_scratch(
         &self,
         values: &[Value],
         additional: usize,
-    ) -> Result<Buffer<Value>, Error> {
+    ) -> Result<ReturnStack, Error> {
         let capacity = values
             .len()
             .checked_add(additional)
             .ok_or_else(|| self.memory_failure())?;
-        let mut stack = Buffer::new_in(self.registers.memory().clone());
+        let memory = self.registers.memory();
+        if capacity <= INLINE_RETURN_VALUES && memory.uses_global_allocator() {
+            let mut inline = [Value::Nil; INLINE_RETURN_VALUES];
+            inline[..values.len()].copy_from_slice(values);
+            return Ok(ReturnStack::Inline {
+                values: inline,
+                len: values.len(),
+            });
+        }
+        let mut stack = Buffer::new_in(memory.clone());
         stack
             .try_reserve_exact(capacity)
             .map_err(|_| self.memory_failure())?;
         stack.extend_from_slice(values);
-        Ok(stack)
+        Ok(ReturnStack::Heap(stack))
     }
     pub(in crate::vm) fn native_return_stack(
         &mut self,
@@ -153,7 +229,7 @@ impl Vm {
     fn install_return_stack(
         &mut self,
         frame: &mut Frame,
-        stack: Buffer<Value>,
+        stack: ReturnStack,
         count: usize,
     ) -> Result<usize, Error> {
         let old = frame.vararg_start..frame.vararg_start + frame.argc();

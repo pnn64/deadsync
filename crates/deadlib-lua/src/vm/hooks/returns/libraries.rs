@@ -9,7 +9,7 @@ impl Vm {
         frame: Frame,
         source: usize,
         count: usize,
-    ) -> Result<Option<Buffer<Value>>, Error> {
+    ) -> Result<Option<ReturnStack>, Error> {
         let supported = (tables::TAB_FIRST..=tables::TAB_SORT).contains(&code)
             || matches!(
                 code,
