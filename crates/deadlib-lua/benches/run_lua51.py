@@ -40,7 +40,7 @@ def run_sample(
     shutil.copytree(source, cwd)
     # Cargo/Git do not retain the archive's empty module-search directory.
     (cwd / "libs/P1").mkdir(parents=True, exist_ok=True)
-    child_command = [str(binary), "rust-bench", str(cwd / name)]
+    child_command = [str(binary), "rust-bench", name]
     child = subprocess.Popen(child_command, cwd=cwd, env=environment,
                              stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE,

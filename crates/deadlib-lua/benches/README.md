@@ -16,7 +16,9 @@ python crates/deadlib-lua/benches/run_lua51.py --files literals.lua strings.lua 
 By default the runner builds the normal release `official_suite` example,
 freezes its executable, and checks source identities. Each sample uses a fresh
 process/VM and a private copy of the suite under ignored
-`target/lua51-benchmark/` output.
+`target/lua51-benchmark/` output. The driver opens the fixture by its relative
+name, so the location of that copy does not contribute to chunk names or their
+allocation cost.
 The clock covers `dofile` loading, compilation, and execution. Standard-library
 initialization, the common bootstrap, and preparation of the small `dofile`
 driver happen before the clock. Results include elapsed nanoseconds, Windows
