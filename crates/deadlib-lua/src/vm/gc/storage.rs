@@ -1,6 +1,8 @@
 //! Reserve a complete trace item before consuming it or changing any marks.
 use super::*;
 
+const TABLE_SLICE_WORK: usize = 2 * TABLE_TRACE_SLOTS + 2;
+
 impl Vm {
     pub(in crate::vm) fn reserve_gc_close_slot(&mut self) -> Result<(), Error> {
         let total = self
@@ -61,7 +63,14 @@ impl Vm {
                     .count(),
             )
     }
-    fn table_trace_count(&self, slot: u32, cursor: usize, restart: bool) -> usize {
+    fn table_trace_count(
+        &mut self,
+        slot: u32,
+        cursor: usize,
+        restart: bool,
+        direct_leaves: bool,
+        work: &mut Work,
+    ) -> usize {
         let table = &self.tables[slot as usize];
         let (cursor, weak_keys, weak_values) = match table.trace {
             TableTrace::Pending(wk, wv) if !restart => (cursor, wk, wv),
@@ -71,6 +80,16 @@ impl Vm {
             }
         };
         let (next, array, pairs) = table.trace_slice(cursor, TABLE_TRACE_SLOTS);
+        // Full marking can leave a smaller queue after marking leaves in
+        // place. Make a wide scan reserve once instead of counting every
+        // subsequent slice. An unsuccessful reservation falls back to the
+        // actual edge count, which can fit in the existing queue.
+        if direct_leaves
+            && (cursor != 0 || next.is_some())
+            && try_reserve_work(work, TABLE_SLICE_WORK, &mut self.gc.control_allocated).is_ok()
+        {
+            return 0;
+        }
         let array_edges = if weak_values {
             array
                 .iter()
@@ -141,20 +160,27 @@ impl Vm {
         }
         (count, registers.len().div_ceil(64))
     }
-    pub(super) fn reserve_trace_item(&mut self, item: Trace, work: &mut Work) -> Result<(), Error> {
+    pub(super) fn reserve_trace_item(
+        &mut self,
+        item: Trace,
+        work: &mut Work,
+        direct_leaves: bool,
+    ) -> Result<(), Error> {
         let mut words = 0;
         let count = match item {
             // A slice queues at most two edges per slot, a continuation, a
             // metatable, and host state. The current item frees one slot.
             Trace::Table(_, _) | Trace::TableAgain(_) | Trace::TableSlice(_, _)
-                if work.capacity() - work.len() >= 2 * TABLE_TRACE_SLOTS + 2 =>
+                if work.capacity() - work.len() >= TABLE_SLICE_WORK =>
             {
                 return Ok(());
             }
             Trace::Table(id, _) | Trace::TableAgain(id) => {
-                self.table_trace_count(id.slot(), 0, true)
+                self.table_trace_count(id.slot(), 0, true, direct_leaves, work)
             }
-            Trace::TableSlice(id, cursor) => self.table_trace_count(id, cursor, false),
+            Trace::TableSlice(id, cursor) => {
+                self.table_trace_count(id, cursor, false, direct_leaves, work)
+            }
             Trace::Thread(id, _) | Trace::ThreadAgain(id) => {
                 let (count, needed) = self.thread_trace_count(id);
                 words = needed;
@@ -174,6 +200,9 @@ impl Vm {
             }
             Trace::Userdata(id, _) => {
                 1 + usize::from(self.userdata[slot_index(id.0)].metatable.is_some())
+            }
+            Trace::ParserPrototype(id, _) if direct_leaves => {
+                self.parser_prototypes[slot_index(id.0)].children.len()
             }
             Trace::ParserPrototype(id, _) => {
                 let prototype = &self.parser_prototypes[slot_index(id.0)];

@@ -216,6 +216,58 @@ fn table_edge(value: Value, weak: bool) -> Option<Trace> {
     }
     edge(value)
 }
+struct TableLeaves<'a> {
+    strings: &'a mut Arena<ByteString>,
+    natives: &'a mut [u64; 4],
+    tables: &'a Arena<Table>,
+    environments: &'a [Option<TableId>],
+    initial: TableId,
+}
+
+impl TableLeaves<'_> {
+    #[inline(always)]
+    fn discover(&mut self, value: Value, weak: bool, work: &mut Work) {
+        if weak {
+            if let Value::String(id) = value {
+                self.strings.mark(id.0);
+            }
+            return;
+        }
+        let item = match value {
+            Value::String(id) => {
+                self.strings.mark(id.0);
+                return;
+            }
+            Value::Native(id) if id < 256 => {
+                let word = &mut self.natives[id as usize / 64];
+                let bit = 1u64 << (id % 64);
+                if *word & bit != 0 {
+                    return;
+                }
+                *word |= bit;
+                let env = self
+                    .environments
+                    .get(id as usize)
+                    .copied()
+                    .flatten()
+                    .unwrap_or(self.initial);
+                if self.tables.marked(env.0) {
+                    return;
+                }
+                Trace::Table(env, false)
+            }
+            Value::Table(id) => Trace::Table(id, false),
+            Value::Function(id) => Trace::Function(id, false),
+            Value::Thread(id) => Trace::Thread(id, false),
+            Value::Userdata(id) => Trace::Userdata(id, false),
+            Value::ParserPrototype(id) => Trace::ParserPrototype(id, false),
+            Value::Native(id) => Trace::Native(id, false),
+            Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_) => return,
+        };
+        work.push(item);
+    }
+}
+
 #[derive(Default)]
 struct TableModeCache {
     entries: [(u64, (bool, bool)); 4],
@@ -1452,6 +1504,7 @@ impl Vm {
         mut refresh: Option<&mut ThreadRefresh>,
     ) -> Result<usize, Error> {
         let mut visited = 0;
+        let direct_leaves = budget == usize::MAX && self.registers.memory().uses_global_allocator();
         // No mutator runs within this trace batch.
         let mut modes = TableModeCache::default();
         let mut layouts = parked::Layouts::default();
@@ -1470,6 +1523,27 @@ impl Vm {
                 Trace::Userdata(id, false) => self.userdata.marked(id.0),
                 Trace::ParserPrototype(id, false) => self.parser_prototypes.marked(id.0),
                 Trace::Native(id, false) => self.marked_native(id),
+                Trace::Program(slot) if direct_leaves => {
+                    if self.programs.mark_slot(slot) {
+                        // Bound bytecode constants are primitives or strings.
+                        // Names and debug data likewise contain only strings.
+                        let program = &self.programs[slot];
+                        for value in &program.constants {
+                            if let Value::String(id) = value {
+                                self.strings.bytes.mark(id.0);
+                            }
+                        }
+                        for names in &program.upvalue_names {
+                            for id in names {
+                                self.strings.bytes.mark(id.0);
+                            }
+                        }
+                        for id in &program.debug_strings {
+                            self.strings.bytes.mark(id.0);
+                        }
+                    }
+                    true
+                }
                 Trace::Program(slot) => self.programs.slot_marked(slot),
                 Trace::Cell(slot) => self.upvalues.slot_marked(slot),
                 _ => false,
@@ -1543,14 +1617,14 @@ impl Vm {
                 visited += 1;
                 continue;
             }
-            self.reserve_trace_item(item, work)?;
+            self.reserve_trace_item(item, work, direct_leaves)?;
             work.pop();
             visited += 1;
             match item {
                 Trace::String(_) => unreachable!("string was marked before reservation"),
                 Trace::Table(id, forced) => {
                     if self.tables.mark(id.0) || forced {
-                        self.trace_table(id, work, &mut modes);
+                        self.trace_table(id, work, &mut modes, direct_leaves);
                     }
                 }
                 Trace::Function(id, forced) => {
@@ -1581,7 +1655,20 @@ impl Vm {
                 Trace::ParserPrototype(id, forced) => {
                     if self.parser_prototypes.mark(id.0) || forced {
                         let p = &self.parser_prototypes[slot_index(id.0)];
-                        work.extend(p.roots().filter_map(edge));
+                        if direct_leaves {
+                            let strings = &mut self.strings.bytes;
+                            strings.mark(p.source.0);
+                            for id in p.constant_strings.iter().chain(&p.debug_strings) {
+                                strings.mark(id.0);
+                            }
+                            work.extend(
+                                p.children
+                                    .iter()
+                                    .map(|&child| Trace::ParserPrototype(child, false)),
+                            );
+                        } else {
+                            work.extend(p.roots().filter_map(edge));
+                        }
                     }
                 }
                 Trace::Thread(id, forced) => {
@@ -1612,9 +1699,9 @@ impl Vm {
                     }
                 }
                 Trace::ThreadAgain(id) => self.trace_thread(id, work),
-                Trace::TableAgain(id) => self.trace_table(id, work, &mut modes),
+                Trace::TableAgain(id) => self.trace_table(id, work, &mut modes, direct_leaves),
                 Trace::TableSlice(id, cursor) => {
-                    self.trace_table_slice(id, cursor, work, &mut modes)
+                    self.trace_table_slice(id, cursor, work, &mut modes, direct_leaves)
                 }
                 Trace::CellAgain(i) => work.extend(edge(self.cell_value(i))),
                 Trace::Program(i) => {
@@ -1646,10 +1733,16 @@ impl Vm {
     fn trace_graph(&mut self, work: &mut Work) -> Result<(), Error> {
         self.trace_some(work, usize::MAX).map(|_| ())
     }
-    fn trace_table(&mut self, id: TableId, work: &mut Work, modes: &mut TableModeCache) {
+    fn trace_table(
+        &mut self,
+        id: TableId,
+        work: &mut Work,
+        modes: &mut TableModeCache,
+        direct_leaves: bool,
+    ) {
         // Fresh marks also discard scan state left by an interrupted cycle.
         self.tables[slot_index(id.0)].trace = TableTrace::Restart;
-        self.trace_table_slice(id.slot(), 0, work, modes);
+        self.trace_table_slice(id.slot(), 0, work, modes, direct_leaves);
     }
     fn trace_table_slice(
         &mut self,
@@ -1657,6 +1750,7 @@ impl Vm {
         cursor: usize,
         work: &mut Work,
         modes: &mut TableModeCache,
+        direct_leaves: bool,
     ) {
         let index = slot as usize;
         let table = &self.tables[index];
@@ -1700,9 +1794,25 @@ impl Vm {
         } else {
             work.extend(array.iter().copied().filter_map(edge));
         }
-        for (_, key, value) in pairs {
-            work.extend(table_edge(key, weak_keys));
-            work.extend(table_edge(value, weak_values));
+        if direct_leaves && cursor == 0 && next.is_none() {
+            // Small tables can mark hash leaves immediately in a full pass.
+            // Multi-slice scans keep the regular, low-overhead edge loop.
+            let mut leaves = TableLeaves {
+                strings: &mut self.strings.bytes,
+                natives: &mut self.gc.natives,
+                tables: &self.tables,
+                environments: &self.builtin_envs,
+                initial: self.initial_globals,
+            };
+            for (_, key, value) in pairs {
+                leaves.discover(key, weak_keys, work);
+                leaves.discover(value, weak_values, work);
+            }
+        } else {
+            for (_, key, value) in pairs {
+                work.extend(table_edge(key, weak_keys));
+                work.extend(table_edge(value, weak_values));
+            }
         }
         if next.is_none() {
             self.tables[index].trace = TableTrace::Idle;
