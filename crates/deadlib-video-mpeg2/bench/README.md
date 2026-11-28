@@ -84,3 +84,13 @@ The table uses the eleven-pair run on logical CPU 4. Logical CPU 2 supplied
 nine additional pairs. Across all three clips and both CPUs, the highest paired
 Deadlib/FFmpeg cycle ratio was 0.828. All six allocation repetitions per clip
 agreed. [CPU 4 measurements](results/windows-x86_64-20261126/mpeg1/cpu4/) · [CPU 2 measurements](results/windows-x86_64-20261126/mpeg1/cpu2/)
+
+## ITG corpus optimization pass (2026-11-28)
+
+The paired revision benchmark measures start-code scanning, pixel reconstruction
+and inverse transforms independently, and checks their effect on the entire
+decoder pipeline. The two builds run in the same process, alternating order.
+It uses the original MPEG files directly, including program-stream extraction
+when needed, and captures real coded blocks in temporary source copies for
+the isolated reconstruction measurements. See the [measurements and reproduction
+instructions](results/windows-x86_64-20261128-itg-pass/README.md).
