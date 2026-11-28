@@ -200,8 +200,14 @@ impl<P: Pixel, const MBAFF: bool> SliceContext<'_, P, MBAFF> {
             // An all-zero block adds nothing
             return;
         }
-        block[0] = dc;
-        inverse_dct_4x4(&mut block);
+        if has_ac {
+            block[0] = dc;
+            inverse_dct_4x4(&mut block);
+        } else {
+            // Both transform passes preserve a DC-only value at every
+            // position; only the final rounding and normalization remain.
+            block.fill(dc.wrapping_add(32) >> 6);
+        }
         let dst = if plane == 0 {
             &mut self.frame.u
         } else {
