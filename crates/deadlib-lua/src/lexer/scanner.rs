@@ -377,6 +377,90 @@ impl Scanner {
         Ok(())
     }
 
+    /// Borrow an unmodified long string from complete input.
+    #[inline(never)]
+    fn closed_bracket(&mut self, input: &[u8], out: &mut Token) -> Result<bool, Error> {
+        let start = self.pos;
+        let delimiter = &input[start + 1..];
+        let equals = if delimiter.first() == Some(&b'=') {
+            byte_run(delimiter, b'=')
+        } else {
+            0
+        };
+        let opening = start + 1 + equals;
+        let line = self.line;
+        if input.get(opening) != Some(&b'[') {
+            if equals != 0 {
+                return Ok(false);
+            }
+            self.pos = opening;
+            *out = Token {
+                kind: Kind::LBracket,
+                ..empty(line)
+            };
+            return Ok(true);
+        }
+
+        let mut first = opening + 1;
+        let mut end_line = line;
+        if let Some(&newline @ (b'\r' | b'\n')) = input.get(first) {
+            first += 1;
+            if matches!(
+                (newline, input.get(first)),
+                (b'\r', Some(b'\n')) | (b'\n', Some(b'\r'))
+            ) {
+                first += 1;
+            }
+            let Some(next_line) = end_line.checked_add(1) else {
+                return Ok(false);
+            };
+            end_line = next_line;
+        }
+
+        let mut end = first;
+        let nested = if equals == 0 { b'[' } else { b']' };
+        loop {
+            end += scan_token_boundary(&input[end..], |byte| {
+                (byte == b']') | (byte == b'\n') | (byte == b'\r') | (byte == nested)
+            });
+            match input.get(end) {
+                Some(b']') => {
+                    let tail = &input[end + 1..];
+                    let seen = if tail.first() == Some(&b'=') {
+                        byte_run(tail, b'=')
+                    } else {
+                        0
+                    };
+                    if seen == equals && tail.get(seen) == Some(&b']') {
+                        let text = Lexeme::source(input, first, end)?;
+                        self.pos = end + 2 + seen;
+                        self.line = end_line;
+                        *out = Token {
+                            kind: Kind::String,
+                            line,
+                            end_line,
+                            text,
+                            ..empty(line)
+                        };
+                        return Ok(true);
+                    }
+                    end += 1 + seen;
+                }
+                Some(b'\n') => {
+                    let Some(next_line) = end_line.checked_add(1) else {
+                        return Ok(false);
+                    };
+                    end_line = next_line;
+                    end += 1;
+                }
+                Some(b'[') if input.get(end + 1) != Some(&b'[') => end += 1,
+                // Carriage returns require normalization. Nested [[ is
+                // diagnosed by the resumable scanner.
+                _ => return Ok(false),
+            }
+        }
+    }
+
     /// Scan one common token before the next possible reader boundary.
     /// Reader boundaries and uncommon tokens fall through to the resumable
     /// scanner. The parser that restarts on errors only needs scanner spans
@@ -480,6 +564,7 @@ impl Scanner {
                 text = Lexeme::source(input, start + 1, start + 1 + len)?;
                 (Kind::String, start + len + 2)
             }
+            b'[' if CLOSED && !DIAGNOSTICS => return self.closed_bracket(input, out),
             b'-' if next != Some(b'-') => (Kind::Minus, start + 1),
             b'.' if next.is_some_and(crate::locale::is_digit) => return Ok(false),
             b'.' if matches!(next, Some(b'.' | 0)) => {
@@ -1344,6 +1429,43 @@ mod tests {
             let expected = tokens(&source, &[source.len()]);
             let ends = (0..=source.len()).collect::<Vec<_>>();
             assert_eq!(tokens(&source, &ends), expected, "{source:?}");
+        }
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn closed_long_strings_preserve_tokens_and_borrow_unchanged_bytes() {
+    let inputs: &[(&[u8], bool)] = &[
+        (b" \r\n [==[\nfirst\n\0last]=]]==] next", true),
+        (b"[=[\r\npoint\nlast]=];", true),
+        (b"[[a[b]]", true),
+        (b"[==[a\n\rchange]==]", false),
+        (b"[==[a\r\nchange]==]", false),
+        (b"[[a[[nested]]", false),
+        (b"[=[unfinished", false),
+        (b"[=wrong", false),
+        (b"[1]", false),
+    ];
+    for &(input, borrowed) in inputs {
+        let mut reference = Scanner::default();
+        let mut scanner = Scanner::default();
+        let mut actual = Token::default();
+        let expected = reference.next(input, true).map(|token| token.unwrap());
+        let result = scanner.next_closed(input, &mut actual);
+        match expected {
+            Ok(expected) => {
+                result.unwrap();
+                assert_eq!(actual.kind, expected.kind);
+                assert_eq!(actual.line, expected.line);
+                assert_eq!(actual.end_line, expected.end_line);
+                assert_eq!(actual.text.bytes(input), expected.text.bytes(input));
+                assert_eq!(scanner.pos, reference.pos);
+                if actual.kind == Kind::String {
+                    assert_eq!(matches!(actual.text, Lexeme::Source { .. }), borrowed);
+                }
+            }
+            Err(error) => assert_eq!(result, Err(error)),
         }
     }
 }

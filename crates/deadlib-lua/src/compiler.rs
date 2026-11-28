@@ -24,6 +24,8 @@ mod tasks;
 mod templates;
 pub(crate) use buffers::recycle_retired_code;
 pub(crate) use direct::compile_direct;
+mod literal;
+pub(crate) use literal::compile_literal_return;
 use tasks::Task;
 
 /// Bytes of a local or upvalue name in the compiler's name pool.

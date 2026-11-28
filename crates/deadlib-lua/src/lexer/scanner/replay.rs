@@ -14,6 +14,7 @@ struct Entry {
     before: u16,
     after: u16,
     lines: u16,
+    token_lines: u16,
     start: u16,
     end: u16,
 }
@@ -139,6 +140,7 @@ impl ClosedTokens {
             before: before as u16,
             after: after as u16,
             lines: lines as u16,
+            token_lines: (token.end_line - token.line) as u16,
             start: start as u16,
             end: end as u16,
         });
@@ -168,7 +170,7 @@ impl ClosedTokens {
             if before == *pos {
                 *pos = shift(token.after);
                 *line += u32::from(token.lines);
-                out.line = *line;
+                out.line = *line - u32::from(token.token_lines);
                 out.end_line = *line;
                 out.kind = token.kind;
                 out.number = token.number;
@@ -241,4 +243,43 @@ mod tests {
             history = scanner.into_closed_tokens();
         }
     }
+}
+
+#[cfg(test)]
+#[test]
+fn replay_preserves_a_multiline_tokens_start_line() {
+    let mut history = ClosedTokens::default();
+    history.record(
+        7,
+        20,
+        4,
+        &Token {
+            kind: Kind::String,
+            line: 3,
+            end_line: 5,
+            text: Lexeme::Source {
+                start: 11,
+                end: 18,
+                string_id: 0,
+            },
+            ..Token::default()
+        },
+    );
+    history.mode = Mode::Replay {
+        first: 11,
+        offset: 4,
+        next: 0,
+    };
+    let (mut pos, mut line) = (11, 100);
+    let mut token = Token::default();
+    assert!(history.next(&mut pos, &mut line, &mut token));
+    assert_eq!((pos, line, token.line, token.end_line), (24, 104, 102, 104));
+    assert!(matches!(
+        token.text,
+        Lexeme::Source {
+            start: 15,
+            end: 22,
+            ..
+        }
+    ));
 }

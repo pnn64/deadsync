@@ -331,6 +331,17 @@ pub(super) fn compile(
             .resume(source, true)
             .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), source, name));
     }
+    if source.len() < 128
+        && depth <= 96
+        && source
+            .iter()
+            .position(|&byte| !crate::locale::ascii_space(byte))
+            .is_some_and(|start| source[start..].starts_with(b"return"))
+        && let Some(program) =
+            crate::compiler::compile_literal_return(source, name, &mut spare.compiler)?
+    {
+        return Ok(program);
+    }
     let parse_locale = crate::locale::revision();
     let preamble = source_templates::Preamble::scan(source);
     if let Some(program) = spare.find_text(source, name, depth, parse_locale, preamble.as_ref()) {
