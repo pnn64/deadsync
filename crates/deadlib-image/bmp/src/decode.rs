@@ -80,6 +80,27 @@ pub fn decode_rgba8_with_limits(input: &[u8], limits: Limits) -> Result<(Info, V
             }
         }
         Format::Rgb24 => rgb24_rgba(source, &header)?,
+        Format::Rgb555 => rgb16_rgba::<5>(source, &header)?,
+        Format::Masked {
+            red,
+            green,
+            blue,
+            alpha: None,
+        } if header.info.bit_depth == 16
+            && [red.mask, green.mask, blue.mask] == [0x7c00, 0x03e0, 0x001f] =>
+        {
+            rgb16_rgba::<5>(source, &header)?
+        }
+        Format::Masked {
+            red,
+            green,
+            blue,
+            alpha: None,
+        } if header.info.bit_depth == 16
+            && [red.mask, green.mask, blue.mask] == [0xf800, 0x07e0, 0x001f] =>
+        {
+            rgb16_rgba::<6>(source, &header)?
+        }
         Format::Masked {
             red,
             green,
@@ -854,6 +875,13 @@ fn rgb16<const GREEN_BITS: u32>(packed: [u8; 2]) -> [u8; 3] {
     let word = u16::from_le_bytes(packed);
     let [red, green, blue, _] = expand_rgb16::<GREEN_BITS>(word).to_le_bytes();
     [red, green, blue]
+}
+
+fn rgb16_rgba<const GREEN_BITS: u32>(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> {
+    // Write opaque RGBA directly instead of allocating and converting RGB triples.
+    map_rows::<2, 4>(source, header, |packed| {
+        (expand_rgb16::<GREEN_BITS>(u16::from_le_bytes(packed)) | 0xff00_0000).to_le_bytes()
+    })
 }
 
 // RGB555 and RGB565 differ only in the green field's width. Repeat the high

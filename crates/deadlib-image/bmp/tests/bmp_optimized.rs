@@ -1,4 +1,6 @@
-use deadlib_image_bmp::{Bitmap, Error, Limits, Pixels, decode, decode_rgba8};
+use deadlib_image_bmp::{
+    Bitmap, Error, Limits, Pixels, decode, decode_rgba8, decode_rgba8_with_limits,
+};
 
 #[derive(Clone, Copy)]
 struct Format {
@@ -107,6 +109,12 @@ fn every_16_bit_word_preserves_555_565_and_explicit_alpha() {
         .iter()
         .flat_map(|row| row.iter().copied().chain([0xad, 0xcf]))
         .collect();
+    let padded_singles: Vec<_> = narrow_rows
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .flat_map(|row| row.iter().copied().chain([0xad, 0xcf]))
+        .collect();
     for (format, green_bits, has_alpha) in [
         (Format::rgb(16), 5, false),
         (
@@ -179,16 +187,99 @@ fn every_16_bit_word_preserves_555_565_and_explicit_alpha() {
             .collect();
         for (width, height, rows, expected) in [
             (width, height, rows.as_slice(), expected.as_slice()),
+            (1, 6, padded_singles.as_slice(), narrow_expected.as_slice()),
             (2, 3, narrow_rows.as_slice(), narrow_expected.as_slice()),
             (3, 2, padded_triples.as_slice(), narrow_expected.as_slice()),
         ] {
+            let expected_rgba = if has_alpha {
+                expected.to_vec()
+            } else {
+                expected
+                    .chunks_exact(3)
+                    .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255])
+                    .collect()
+            };
             for top_down in [false, true] {
-                let bitmap = decode(&wire(format, width, height, top_down, &[], rows)).unwrap();
+                let bytes = wire(format, width, height, top_down, &[], rows);
+                let bitmap = decode(&bytes).unwrap();
                 match &bitmap.pixels {
                     Pixels::Rgb(samples) if !has_alpha => assert_eq!(samples, expected),
                     Pixels::Rgba(samples) if has_alpha => assert_eq!(samples, expected),
                     _ => panic!("unexpected pixel model for 16-bit mask combination"),
                 }
+                let (info, rgba) = decode_rgba8(&bytes).unwrap();
+                assert_eq!((info.width, info.height), (width as u32, height as u32));
+                assert_eq!((info.bit_depth, info.top_down), (16, top_down));
+                assert_eq!(rgba, expected_rgba);
+            }
+        }
+    }
+}
+
+#[test]
+fn opaque_rgb16_rgba_preserves_resource_limits_and_truncation() {
+    for format in [
+        Format::rgb(16),
+        Format {
+            compression: 3,
+            masks: [0x7c00, 0x03e0, 0x001f, 0],
+            ..Format::rgb(16)
+        },
+        Format {
+            compression: 3,
+            masks: [0xf800, 0x07e0, 0x001f, 0],
+            ..Format::rgb(16)
+        },
+    ] {
+        for width in [1usize, 2, 3, 17] {
+            let height = 3;
+            let count = width * height;
+            let rows = vec![0xa5; (width * 2).div_ceil(4) * 4 * height];
+            for top_down in [false, true] {
+                let bytes = wire(format, width, height, top_down, &[], &rows);
+                let limits = Limits {
+                    max_input_bytes: bytes.len(),
+                    max_pixels: count,
+                    max_decoded_bytes: count * 4,
+                };
+                assert_eq!(
+                    decode_rgba8_with_limits(&bytes, limits).unwrap().1,
+                    decode(&bytes).unwrap().into_rgba8().unwrap(),
+                );
+                for limited in [
+                    Limits {
+                        max_input_bytes: bytes.len() - 1,
+                        ..limits
+                    },
+                    Limits {
+                        max_pixels: count - 1,
+                        ..limits
+                    },
+                    Limits {
+                        max_decoded_bytes: count * 4 - 1,
+                        ..limits
+                    },
+                ] {
+                    assert_eq!(
+                        decode_rgba8_with_limits(&bytes, limited),
+                        Err(Error::LimitExceeded)
+                    );
+                }
+                let truncated = &bytes[..bytes.len() - 1];
+                assert_eq!(
+                    decode_rgba8_with_limits(truncated, limits),
+                    Err(Error::Truncated)
+                );
+                assert_eq!(
+                    decode_rgba8_with_limits(
+                        truncated,
+                        Limits {
+                            max_decoded_bytes: count * 4 - 1,
+                            ..limits
+                        },
+                    ),
+                    Err(Error::LimitExceeded),
+                );
             }
         }
     }
@@ -474,6 +565,8 @@ fn repeat_bits(value: u32, bits: u32) -> u8 {
 #[test]
 fn common_and_unusual_32_bit_masks_preserve_channel_order_and_bit_replication() {
     for layout in [
+        [(10, 5), (5, 5), (0, 5), (0, 0)],
+        [(11, 5), (5, 6), (0, 5), (0, 0)],
         [(16, 8), (8, 8), (0, 8), (24, 8)],
         [(16, 8), (8, 8), (0, 8), (0, 0)],
         [(0, 8), (8, 8), (16, 8), (24, 8)],
