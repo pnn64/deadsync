@@ -261,8 +261,10 @@ impl Strings {
                 Ok(id)
             }
             Err(vacant) => {
+                // Once the string table is warm, short strings can share
+                // a page. Small bare states avoid reserving a page up front.
                 let string = if self.bytes.memory().uses_global_allocator()
-                    && self.bytes.live_len() >= 512
+                    && self.bytes.live_len() >= 32
                     && ShortStrings::fits(bytes)
                 {
                     let (storage, growth) = self.short.insert(bytes)?;
