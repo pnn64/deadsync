@@ -102,13 +102,15 @@ struct Picture {
     frame: Option<Frame>,
     next_macroblock: usize,
     discard: bool,
+    damaged: bool,
 }
 
 /// Accepts complete video start-code units and emits reconstructed frames
 /// in display order. Call [`Decoder::finish`] to drain the last reference frame.
 ///
 /// At an open GOP entry point, leading B pictures with a missing reference
-/// are discarded. After a decoding error, start a new decoder.
+/// are discarded. Use [`Decoder::with_mpeg1_recovery`] to conceal damaged
+/// MPEG-1 pictures during playback. After a returned error, start a new decoder.
 #[derive(Default)]
 pub struct Decoder {
     sequence: Option<Sequence>,
@@ -116,11 +118,22 @@ pub struct Decoder {
     older: Option<Arc<Frame>>,
     newest: Option<Arc<Frame>>,
     spare: Option<Frame>,
+    recover_mpeg1: bool,
 }
 
 impl Decoder {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Repeat a compatible reference frame for MPEG-1 pictures with damaged
+    /// or missing slices. The replacement keeps the picture's display slot
+    /// and participates in reference ordering like the original picture.
+    pub fn with_mpeg1_recovery() -> Self {
+        Self {
+            recover_mpeg1: true,
+            ..Self::default()
+        }
     }
 
     pub fn push(&mut self, unit: Unit<'_>, mut output: impl FnMut(Arc<Frame>)) -> Result<()> {
@@ -150,10 +163,29 @@ impl Decoder {
                     frame: None,
                     next_macroblock: 0,
                     discard,
+                    damaged: false,
                 });
                 Ok(())
             }
-            0x01..=0xaf => self.decode_slice(unit),
+            0x01..=0xaf => {
+                let result = self.decode_slice(unit);
+                if self.recover_mpeg1
+                    && matches!(
+                        result,
+                        Err(Error::Invalid(_) | Error::Truncated | Error::MissingReference)
+                    )
+                    && self
+                        .sequence
+                        .as_ref()
+                        .is_some_and(|sequence| !sequence.extended)
+                {
+                    if let Some(picture) = &mut self.picture {
+                        picture.damaged = true;
+                        return Ok(());
+                    }
+                }
+                result
+            }
             0xb2 => Ok(()), // User data.
             0xb3 => {
                 self.finish_picture(&mut output)?;
@@ -231,7 +263,7 @@ impl Decoder {
             .coding
             .as_ref()
             .ok_or(Error::Invalid("missing picture coding extension"))?;
-        if picture.discard {
+        if picture.discard || picture.damaged {
             return Ok(());
         }
         let references = match picture.header.kind {
@@ -272,10 +304,27 @@ impl Decoder {
             .as_ref()
             .ok_or(Error::Invalid("missing sequence header"))?;
         let count = sequence.width.div_ceil(16) * sequence.macroblock_rows();
-        if picture.next_macroblock != count {
+        let frame = if !picture.damaged && picture.next_macroblock == count {
+            picture.frame.ok_or(Error::Truncated)?
+        } else if self.recover_mpeg1 && !sequence.extended {
+            let reference = match picture.header.kind {
+                PictureKind::B => &self.older,
+                PictureKind::I | PictureKind::P => &self.newest,
+            };
+            let reference = reference
+                .as_deref()
+                .filter(|frame| frame.matches(sequence))
+                .ok_or(Error::Truncated)?;
+            let mut frame = picture.frame.unwrap_or_else(|| match self.spare.take() {
+                Some(frame) => frame.reuse(sequence, &picture.header),
+                None => Frame::new(sequence, &picture.header),
+            });
+            frame.copy_samples(reference);
+            frame
+        } else {
             return Err(Error::Truncated);
-        }
-        let frame = Arc::new(picture.frame.ok_or(Error::Truncated)?);
+        };
+        let frame = Arc::new(frame);
         if frame.picture_kind() == PictureKind::B {
             output(Arc::clone(&frame));
             self.spare = Arc::try_unwrap(frame).ok();

@@ -1125,6 +1125,31 @@ mod tests {
     }
 
     #[test]
+    fn raw_mpeg_one_shot_plays_past_the_bitrate_estimate() {
+        use std::time::{Duration, Instant};
+
+        // Eight pictures at 25 fps. Its variable-bitrate sequence header would
+        // make a duration derived from file size stop in the first frame.
+        let video = include_bytes!("../../deadlib-video-mpeg2/tests/fixtures/progressive.m1v");
+        let dir = TempDir::new("raw-mpeg-clock");
+        let path = dir.path().join("variable-rate.mpg");
+        fs::write(&path, video).unwrap();
+        let native = super::native::Video::open(&path, false).unwrap().unwrap();
+        assert_eq!(native.info.duration_sec, Some(8.0 / 25.0));
+        let mut player = super::open_native_player(native, &path, None).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        for index in 0..8 {
+            while player.take_due_frame(index as f32 / 25.0 + 0.005).is_none() {
+                assert!(
+                    Instant::now() < deadline,
+                    "missing native MPEG frame {index}"
+                );
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+    }
+
+    #[test]
     fn decode_outputs_planar_yuv420_without_matrix_conversion() {
         let info = Info {
             width: 640,

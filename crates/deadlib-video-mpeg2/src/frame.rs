@@ -174,6 +174,12 @@ impl Frame {
         self.kind
     }
 
+    pub(crate) fn copy_samples(&mut self, reference: &Self) {
+        for (plane, source) in self.planes.iter_mut().zip(reference.planes()) {
+            plane.samples.copy_from_slice(&source.samples);
+        }
+    }
+
     pub(crate) fn predict(&mut self, x: usize, y: usize, reference: Prediction<'_>) {
         let [dx, dy] = reference.motion;
         let source = &reference.frame.planes;

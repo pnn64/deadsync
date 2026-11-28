@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use deadlib_video_mpeg2::{
-    decode_elementary_stream, decode_program_stream, video_elementary_stream, Error, Frame,
+    decode_elementary_stream, decode_program_stream, units, video_elementary_stream, Decoder,
+    Error, Frame,
     PictureKind::{B, I, P},
 };
 
@@ -75,6 +76,41 @@ fn decodes_mpeg1_elementary_and_program_streams() {
     let mut unpacked = Vec::new();
     decode_program_stream(&program, |frame| collect(&mut unpacked, frame)).unwrap();
     assert_eq!(unpacked, frames);
+}
+
+#[test]
+fn mpeg1_recovery_preserves_display_order_after_bad_and_missing_slices() {
+    let mut damaged = Vec::new();
+    let mut reference = 0;
+    for unit in units(MPEG1_VIDEO) {
+        if unit.code == 0 {
+            reference = u16::from_be_bytes([unit.payload[0], unit.payload[1]]) >> 6;
+        }
+        if reference == 7 && unit.code == 3 {
+            continue;
+        }
+        damaged.extend_from_slice(&[0, 0, 1, unit.code]);
+        if reference != 1 || unit.code != 1 {
+            damaged.extend_from_slice(unit.payload);
+        }
+    }
+
+    assert!(decode_elementary_stream(&damaged, |_| {}).is_err());
+
+    let mut expected = Vec::new();
+    decode_elementary_stream(MPEG1_VIDEO, |frame| collect(&mut expected, frame)).unwrap();
+    expected[1].2 = expected[0].2; // Damaged B picture repeats its older reference.
+    expected[7].2 = expected[6].2; // The final P picture is missing its last slice.
+
+    let mut decoder = Decoder::with_mpeg1_recovery();
+    let mut actual = Vec::new();
+    for unit in units(&damaged) {
+        decoder
+            .push(unit, |frame| collect(&mut actual, frame))
+            .unwrap();
+    }
+    decoder.finish(|frame| collect(&mut actual, frame)).unwrap();
+    assert_eq!(actual, expected);
 }
 
 #[test]

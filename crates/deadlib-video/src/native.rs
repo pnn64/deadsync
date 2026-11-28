@@ -254,7 +254,7 @@ impl Video {
                 })
             }
             Codec::Mpeg1 => {
-                let mut decoder = deadlib_video_mpeg2::Decoder::new();
+                let mut decoder = deadlib_video_mpeg2::Decoder::with_mpeg1_recovery();
                 let mut consume = consume;
                 let mut output = |frame, result: &mut Result<bool, String>| {
                     if matches!(result, Ok(true)) {
@@ -532,19 +532,11 @@ fn open_mpeg(mut input: BufReader<File>, looped: bool) -> Result<Option<Video>, 
     if frames == 0 {
         return Ok(None);
     }
-    let (fps, duration) = if program_stream {
-        (frame_rate, frames as f64 / frame_rate)
-    } else {
-        // Elementary MPEG files carry no container clock. The legacy raw
-        // demuxer defaults to 25 output ticks per second and estimates length
-        // from the declared bit rate. Pictures still arrive at sequence rate.
-        let duration = if video.bit_rate == 0 {
-            frames as f64 / frame_rate
-        } else {
-            file_size as f64 * 8.0 / video.bit_rate as f64
-        };
-        (25.0, duration)
-    };
+    // Raw streams keep the legacy 25 output ticks per second. Count pictures at
+    // the sequence rate to get the duration, since the bitrate header may
+    // declare a maximum rate for variable-bit-rate video.
+    let fps = if program_stream { frame_rate } else { 25.0 };
+    let duration = frames as f64 / frame_rate;
     Ok(Some(Video {
         source: Source::Mpeg { bytes, frame_rate },
         info: Info {
@@ -564,7 +556,7 @@ fn decode_mpeg(
     mut cancelled: impl FnMut() -> bool,
     mut emit: impl FnMut(&Picture, u64) -> Result<bool, String>,
 ) -> Result<bool, String> {
-    let mut decoder = deadlib_video_mpeg2::Decoder::new();
+    let mut decoder = deadlib_video_mpeg2::Decoder::with_mpeg1_recovery();
     let mut tick = 0;
     let mut index = 0u64;
     let mut output = |frame, result: &mut Result<bool, String>| {
@@ -930,7 +922,7 @@ mod tests {
     #[test]
     fn decodes_legacy_intro_and_avi_logo() {
         let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/media/openitg");
-        for (name, fps, duration) in [("intro.mpg", 25.0, 31.366_344), ("logo.mpg", 30.0, 30.0)] {
+        for (name, fps, duration) in [("intro.mpg", 25.0, 941.0 / 30.0), ("logo.mpg", 30.0, 30.0)] {
             let path = assets.join(name);
             let mut video = Video::open(&path, false).unwrap().unwrap();
             assert_eq!(video.info.fps, fps);
