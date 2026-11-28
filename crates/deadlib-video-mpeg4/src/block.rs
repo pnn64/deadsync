@@ -229,8 +229,7 @@ const fn short_dc<const N: usize>(codes: &[u16; N], invert: bool) -> [u16; DC_EN
 }
 
 fn inverse_quantize<const MP42: bool>(level: i32, q: i32) -> i16 {
-    let magnitude = 2 * level.abs() * q + ((q - 1) | 1);
-    let scaled = level.signum() * magnitude;
+    let scaled = 2 * level * q + level.signum() * ((q - 1) | 1);
     if MP42 {
         scaled as i16
     } else {
@@ -400,6 +399,20 @@ fn read_escape<const MP42: bool>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signed_inverse_quantization_matches_magnitude_formula() {
+        for q in 1..=31 {
+            for level in i32::from(i16::MIN)..=i32::from(i16::MAX) {
+                let expected = level.signum() * (2 * level.abs() * q + ((q - 1) | 1));
+                assert_eq!(inverse_quantize::<true>(level, q), expected as i16);
+                assert_eq!(
+                    inverse_quantize::<false>(level, q),
+                    expected.clamp(-2048, 2047) as i16
+                );
+            }
+        }
+    }
 
     #[test]
     fn uncoded_visual_dc_clips_prediction_and_samples_separately() {
