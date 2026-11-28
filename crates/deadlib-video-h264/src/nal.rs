@@ -319,7 +319,8 @@ pub fn avcc_units(mut data: &[u8], length_size: usize) -> impl Iterator<Item = N
 fn find_start_code(data: &[u8], offset: usize) -> Option<(usize, usize)> {
     let mut i = offset;
     while i + 2 < data.len() {
-        if data[i] == 0 && data[i + 1] == 0 {
+        i += find_zero(&data[i..data.len() - 2])?;
+        if data[i + 1] == 0 {
             if data[i + 2] == 1 {
                 return Some((i + 3, i));
             }
@@ -330,6 +331,24 @@ fn find_start_code(data: &[u8], offset: usize) -> Option<(usize, usize)> {
         i += 1;
     }
     None
+}
+
+/// Locate the first zero byte, skipping eight nonzero bytes at a time.
+#[inline]
+fn find_zero(data: &[u8]) -> Option<usize> {
+    let (words, tail) = data.as_chunks::<8>();
+    for (i, bytes) in words.iter().enumerate() {
+        let word = u64::from_le_bytes(*bytes);
+        let zeros = word.wrapping_sub(0x0101_0101_0101_0101) & !word & 0x8080_8080_8080_8080;
+        if zeros != 0 {
+            // Borrow propagation can mark later bytes, but never before the
+            // first zero byte in little-endian order.
+            return Some(i * 8 + zeros.trailing_zeros() as usize / 8);
+        }
+    }
+    tail.iter()
+        .position(|&b| b == 0)
+        .map(|i| words.len() * 8 + i)
 }
 
 /// Remove emulation prevention bytes (0x03 in 00 00 03 sequences).
@@ -361,6 +380,24 @@ fn remove_emulation_prevention(data: &[u8]) -> Cow<'_, [u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn start_codes_at_word_boundaries() {
+        for offset in 0..24 {
+            for prefix in [&[0, 0, 1][..], &[0, 0, 0, 1]] {
+                let mut input = vec![0x81; offset];
+                input.extend_from_slice(prefix);
+                input.extend_from_slice(&[0x01, 0x00, 0x01]);
+                for start in 0..=offset {
+                    assert_eq!(
+                        find_start_code(&input, start),
+                        Some((offset + prefix.len(), offset))
+                    );
+                }
+                assert_eq!(find_start_code(&input, offset + prefix.len()), None);
+            }
+        }
+    }
 
     #[test]
     fn test_emulation_prevention_removal() {
