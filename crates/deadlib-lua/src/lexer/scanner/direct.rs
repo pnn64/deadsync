@@ -70,7 +70,7 @@ impl DirectScanner {
 
     pub(crate) fn next(&mut self, input: &[u8], token: &mut DirectToken) -> Result<(), Error> {
         debug_assert!(input.len() <= u32::MAX as usize);
-        if self.next_ascii(input, token) {
+        if self.next_ascii(input, token)? {
             return Ok(());
         }
         let slow = &mut self.slow_token;
@@ -89,13 +89,28 @@ impl DirectScanner {
         Ok(())
     }
 
-    fn next_ascii(&mut self, input: &[u8], token: &mut DirectToken) -> bool {
+    fn next_ascii(&mut self, input: &[u8], token: &mut DirectToken) -> Result<bool, Error> {
         let mut start = self.scanner.pos;
         let c = loop {
             match input.get(start) {
                 Some(b' ' | b'\t' | 11 | 12) => start += 1,
+                Some(b'\n' | b'\r') => {
+                    self.scanner.pos = start;
+                    self.scanner.newline(input, true)?;
+                    start = self.scanner.pos;
+                }
                 Some(&c) => break c,
-                None => return false,
+                None => {
+                    self.scanner.pos = start;
+                    let line = self.scanner.line;
+                    *token = DirectToken {
+                        kind: Kind::Eof,
+                        line,
+                        end_line: line,
+                        payload: 0,
+                    };
+                    return Ok(true);
+                }
             }
         };
         self.scanner.pos = start;
@@ -105,7 +120,7 @@ impl DirectScanner {
             Kind::Name => {
                 end += short_identifier_end(&input[end..]);
                 if input.get(end).is_some_and(|&b| b >= 128) {
-                    return false;
+                    return Ok(false);
                 }
                 payload = span(start as u32, end as u32);
                 if end == start + 1 {
@@ -116,7 +131,7 @@ impl DirectScanner {
             }
             Kind::Number => {
                 let Some((value, finish)) = decimal_token(input, start, c) else {
-                    return false;
+                    return Ok(false);
                 };
                 payload = value.to_bits();
                 end = finish;
@@ -134,11 +149,11 @@ impl DirectScanner {
                         (b'>', false) => Kind::Gt,
                         (b'>', true) => Kind::Ge,
                         (b'~', true) => Kind::Ne,
-                        _ => return false,
+                        _ => return Ok(false),
                     }
                 }
                 b'-' if input.get(end) != Some(&b'-') => Kind::Minus,
-                _ => return false,
+                _ => return Ok(false),
             },
             kind => kind,
         };
@@ -150,7 +165,7 @@ impl DirectScanner {
             end_line: line,
             payload,
         };
-        true
+        Ok(true)
     }
 }
 
