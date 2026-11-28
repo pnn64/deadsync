@@ -32,10 +32,19 @@ pub(super) fn open(path: &[u8], mode: u8, update: bool) -> Result<Result<File, i
         #[link_name = "open64"]
         fn open_file(path: *const c_char, flags: c_int, ...) -> c_int;
     }
-    let mut terminated = Vec::new();
-    terminated.try_extend_from_slice(path)?;
-    terminated.try_push(0)?;
-    // SAFETY: terminated owns a NUL-terminated byte path for this call. Linux
+    let mut inline = [0; 256];
+    let mut allocated;
+    let terminated = if path.len() < inline.len() {
+        inline[..path.len()].copy_from_slice(path);
+        &inline[..=path.len()]
+    } else {
+        let capacity = path.len().checked_add(1).ok_or_else(Error::memory)?;
+        allocated = fallible::with_capacity(capacity)?;
+        allocated.extend_from_slice(path);
+        allocated.push(0);
+        &allocated
+    };
+    // SAFETY: terminated points to a NUL-terminated byte path for this call. Linux
     // open64 supports large files on i686. The caller validated r/w/a; the
     // creation mode matches OpenOptions' 0666, subject to the process umask.
     let access = if update { 2 } else { i32::from(mode != b'r') };
