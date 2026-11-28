@@ -397,7 +397,55 @@ pub(crate) fn median(left: Vector, top: Vector, diagonal: Vector) -> Vector {
     core::array::from_fn(|i| left[i].clamp(top[i].min(diagonal[i]), top[i].max(diagonal[i])))
 }
 
+const MOTION_BITS: u8 = 10;
+const MOTION_SIZE: usize = 1 << MOTION_BITS;
+
+// Include the sign and residual of common motion codes in one lookup.
+static SHORT_MOTION: [[u16; MOTION_SIZE]; 7] = {
+    let mut table = [[0; MOTION_SIZE]; 7];
+    let mut shift = 0;
+    while shift < table.len() {
+        let mut prefix = 0;
+        while prefix < MOTION_SIZE {
+            let entry = tables::MOTION[prefix << (12 - MOTION_BITS)];
+            let length = (entry & 31) as usize;
+            let magnitude = (entry >> 5) as i32;
+            if length != 0 {
+                if magnitude == 0 {
+                    table[shift][prefix] = length as u16;
+                } else {
+                    let total = length + 1 + shift;
+                    if total <= MOTION_BITS as usize {
+                        let suffix = prefix >> (MOTION_BITS as usize - total);
+                        let residual = suffix & ((1 << shift) - 1);
+                        let delta = ((magnitude - 1) << shift) + residual as i32 + 1;
+                        let signed = if suffix & (1 << shift) == 0 {
+                            delta
+                        } else {
+                            -delta
+                        };
+                        table[shift][prefix] = ((signed as u16) << 4) | total as u16;
+                    }
+                }
+            }
+            prefix += 1;
+        }
+        shift += 1;
+    }
+    table
+};
+
 pub(crate) fn motion_delta(bits: &mut Bits<'_>, shift: u8) -> Result<i32> {
+    let entry = SHORT_MOTION[shift as usize][bits.peek(MOTION_BITS) as usize];
+    if entry != 0 {
+        bits.skip((entry & 15) as u8)?;
+        return Ok(i32::from((entry as i16) >> 4));
+    }
+    motion_delta_long(bits, shift)
+}
+
+#[cold]
+fn motion_delta_long(bits: &mut Bits<'_>, shift: u8) -> Result<i32> {
     let magnitude = bits.vlc(&tables::MOTION)? as i32;
     if magnitude == 0 {
         return Ok(0);
@@ -448,6 +496,26 @@ pub(crate) fn predict(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn short_motion_codes_match_the_long_decoder() {
+        for shift in 0..=6 {
+            for prefix in 0..=u16::MAX {
+                let [a, b] = prefix.to_be_bytes();
+                let bytes = [a, b, 0xa5];
+                for len in 1..=3 {
+                    let mut expected = Bits::new(&bytes[..len]);
+                    let mut actual = expected;
+                    let result = motion_delta_long(&mut expected, shift);
+                    assert_eq!(motion_delta(&mut actual, shift), result);
+                    if result.is_ok() {
+                        assert_eq!(actual.peek(24), expected.peek(24));
+                        assert_eq!(actual.alignment_stuffing(), expected.alignment_stuffing());
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn motion_components_wrap_both_boundaries_for_every_code() {
