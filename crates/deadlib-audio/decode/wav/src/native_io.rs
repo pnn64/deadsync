@@ -117,6 +117,10 @@ impl NativeIo {
             )
         };
         let n = read(&mut b[..capacity * width])? * self.channels;
+        if self.sample == SampleFormat::I16 {
+            expand_i16_in_place(b, n, self.endian);
+            return Ok(n);
+        }
         if self.sample == SampleFormat::I24 {
             expand_i24_in_place(b, n, self.endian);
             return Ok(n);
@@ -125,7 +129,7 @@ impl NativeIo {
             let src = &b[i * width..(i + 1) * width];
             let value = match self.sample {
                 SampleFormat::U8 => i32::from(src[0]) - 128,
-                SampleFormat::I16 => i32::from(self.endian.u16(src) as i16),
+                SampleFormat::I16 => unreachable!("handled above"),
                 SampleFormat::I24 => unreachable!("handled above"),
                 SampleFormat::I32 => self.endian.u32(src) as i32,
                 _ => unreachable!(),
@@ -136,7 +140,44 @@ impl NativeIo {
     }
 }
 
-/// A separate bulk kernel keeps I8/I16 dispatch and its short loop compact.
+/// Widen four 16-bit integers per word, processing from the end of the buffer
+/// so the wider output never overwrites unread input.
+#[inline(never)]
+fn expand_i16_in_place(bytes: &mut [u8], samples: usize, endian: Endian) {
+    let full = samples / 4 * 4;
+    for i in (full..samples).rev() {
+        let value = endian.u16(&bytes[i * 2..]) as i16 as i32;
+        bytes[i * 4..][..4].copy_from_slice(&value.to_ne_bytes());
+    }
+    match endian {
+        Endian::Little => {
+            for start in (0..full).step_by(4).rev() {
+                let word = u64::from_le_bytes(bytes[start * 2..][..8].try_into().unwrap());
+                let output = [
+                    (word as u16 as i16 as i32).to_ne_bytes(),
+                    ((word >> 16) as u16 as i16 as i32).to_ne_bytes(),
+                    ((word >> 32) as u16 as i16 as i32).to_ne_bytes(),
+                    ((word >> 48) as u16 as i16 as i32).to_ne_bytes(),
+                ];
+                bytes[start * 4..][..16].copy_from_slice(output.as_flattened());
+            }
+        }
+        Endian::Big => {
+            for start in (0..full).step_by(4).rev() {
+                let word = u64::from_be_bytes(bytes[start * 2..][..8].try_into().unwrap());
+                let output = [
+                    ((word >> 48) as u16 as i16 as i32).to_ne_bytes(),
+                    ((word >> 32) as u16 as i16 as i32).to_ne_bytes(),
+                    ((word >> 16) as u16 as i16 as i32).to_ne_bytes(),
+                    (word as u16 as i16 as i32).to_ne_bytes(),
+                ];
+                bytes[start * 4..][..16].copy_from_slice(output.as_flattened());
+            }
+        }
+    }
+}
+
+/// A separate bulk kernel keeps the remaining narrow-format loop compact.
 /// Every group is loaded before expansion, and reverse order protects unread
 /// bytes when the 24-bit source and 32-bit destination overlap.
 #[inline(never)]
