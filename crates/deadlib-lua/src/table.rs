@@ -369,6 +369,11 @@ struct HashPart {
 }
 
 impl HashPart {
+    #[inline]
+    fn needs_rebuild(&self, entries: usize) -> bool {
+        entries * 4 >= self.slots.len() * 3
+    }
+
     fn array_key(entry: &Entry) -> bool {
         matches!(entry.key, Key::Number(bits)
             if array_index(Value::Number(f64::from_bits(bits))).is_some())
@@ -1212,6 +1217,11 @@ impl Table {
         let Some(index) = array_index(key) else {
             return false;
         };
+        self.set_array_scalar_at(index, value)
+    }
+
+    #[inline]
+    fn set_array_scalar_at(&mut self, index: usize, value: Value) -> bool {
         if self.replace_array_value(index, value) {
             true
         } else if index == self.array.len()
@@ -1226,6 +1236,61 @@ impl Table {
         } else {
             false
         }
+    }
+
+    /// Write a non-reference key and value once the caller resolves metamethods.
+    #[inline]
+    pub(crate) fn set_scalar_in_place(&mut self, key: Value, value: Value) -> bool {
+        if !array_scalar(value) {
+            return false;
+        }
+        let array = array_index(key);
+        if let Some(index) = array {
+            if self.set_array_scalar_at(index, value) {
+                return true;
+            }
+            // Growing or materializing the array can move existing hash keys.
+            if index <= self.array.len() {
+                return false;
+            }
+        }
+        if self.native51 {
+            return false;
+        }
+        let key = match key {
+            Value::Number(n) if !n.is_nan() => Key::Number(n.to_bits()),
+            Value::Boolean(b) => Key::Boolean(b),
+            Value::LightUserdata(p) => Key::LightUserdata(p),
+            _ => return false,
+        };
+        self.set_reserved_scalar_hash(key, value, array.is_some())
+    }
+
+    #[inline(never)]
+    fn set_reserved_scalar_hash(&mut self, key: Key, value: Value, array_key: bool) -> bool {
+        let hash = key.hash();
+        let Some((slot, entry)) = self.slot_hashed(key, hash) else {
+            return value == Value::Nil;
+        };
+        if let Some(entry) = entry {
+            self.hash_part_mut().entries[entry].value = value;
+            self.touch_fields();
+            return true;
+        }
+        if value == Value::Nil {
+            return true;
+        }
+        let part = self.hash_part_mut();
+        let next = part.entries.len() + 1;
+        if next > part.entries.capacity() || part.needs_rebuild(next) {
+            return false;
+        }
+        let Ok(index) = u32::try_from(next) else {
+            return false;
+        };
+        part.may_have_array_keys |= array_key;
+        self.append_hash_entry(key, value, slot, index, hash);
+        true
     }
     pub(crate) fn can_replace_array_value(&self, index: usize) -> bool {
         !matches!(self.array, ArrayStorage::SharedScalars { .. }) && index < self.array.len()
@@ -1518,7 +1583,7 @@ impl Table {
             || self.native51
             || self.metatable != 0
             || next > part.entries.capacity()
-            || next * 4 >= part.slots.len() * 3
+            || part.needs_rebuild(next)
         {
             return false;
         }
@@ -1679,7 +1744,9 @@ impl Table {
         if value == Value::Nil {
             return Ok(());
         }
-        let rebuild = (self.hash_part().entries.len() + 1) * 4 >= self.hash_part().slots.len() * 3;
+        let rebuild = self
+            .hash_part()
+            .needs_rebuild(self.hash_part().entries.len() + 1);
         let live = if rebuild {
             self.hash_part()
                 .entries
@@ -1691,7 +1758,7 @@ impl Table {
         };
         let index = u32::try_from(live + 1)
             .map_err(|_| Error::new(ErrorKind::Runtime, 0, "table overflow"))?;
-        let slots = if rebuild && (live + 1) * 4 >= self.hash_part().slots.len() * 3 {
+        let slots = if rebuild && self.hash_part().needs_rebuild(live + 1) {
             self.hash_part()
                 .slots
                 .len()
