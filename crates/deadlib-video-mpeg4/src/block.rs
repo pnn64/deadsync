@@ -60,12 +60,21 @@ pub(crate) fn intra<const MP42: bool>(
     } else {
         0
     };
-    if MP42 && !coded && !predict_ac {
-        let dc = ((predictor + difference) * scale) as i16;
+    if !coded && !predict_ac {
+        let dc = (predictor + difference) * scale;
+        let coefficient = if MP42 {
+            dc as i16
+        } else {
+            dc.clamp(-2048, 2047) as i16
+        };
         return Ok((
-            [transform::inverse_dc(dc); 64],
+            [transform::inverse_dc(coefficient); 64],
             Predictor {
-                dc: i32::from(dc),
+                dc: i32::from(if MP42 {
+                    coefficient
+                } else {
+                    coefficient.max(0)
+                }),
                 quantizer,
                 ..Predictor::default()
             },
@@ -380,4 +389,33 @@ fn read_escape<const MP42: bool>(
         level += limits.level[usize::from(last)][run];
     }
     Ok((run, if bits.flag()? { -level } else { level }, last))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uncoded_visual_dc_clips_prediction_and_samples_separately() {
+        for (dc, encoded, coefficient, expected_dc) in [
+            (0, 0b1100_0000, -8, 0),
+            (2047, 0b1110_0000, 2047, 2047),
+            (1024, 0b0110_0000, 1024, 1024),
+        ] {
+            let neighbors = [Predictor {
+                dc,
+                ..Predictor::default()
+            }; 3];
+            let mut bits = Bits::new(core::slice::from_ref(&encoded));
+            let (samples, state) =
+                intra::<false>(&mut bits, false, true, false, 1, 0, neighbors).unwrap();
+            let mut coeff = [0; 64];
+            coeff[0] = coefficient;
+            assert_eq!(samples, transform::inverse(&coeff));
+            assert_eq!(state.dc, expected_dc);
+            assert_eq!(state.vertical, [0; 7]);
+            assert_eq!(state.horizontal, [0; 7]);
+            assert_eq!(state.quantizer, 1);
+        }
+    }
 }
