@@ -291,7 +291,7 @@ const fn escape_limits(events: &[Event; ESCAPE]) -> EscapeLimits {
 static INTRA_LIMITS: EscapeLimits = escape_limits(&tables::INTRA_VALUES);
 static INTER_LIMITS: EscapeLimits = escape_limits(&tables::INTER_VALUES);
 
-const SHORT_BITS: u8 = 9;
+const SHORT_BITS: u8 = 11;
 const SHORT_SIZE: usize = 1 << SHORT_BITS;
 
 static SHORT_INTRA: [u32; SHORT_SIZE] = short_events(&tables::INTRA, &tables::INTRA_VALUES);
@@ -422,6 +422,44 @@ fn read_escape<const MP42: bool>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn short_texture_entries_match_full_codes() {
+        for (short, codes, values, limits) in [
+            (
+                &SHORT_INTRA,
+                &tables::INTRA,
+                &tables::INTRA_VALUES,
+                &INTRA_LIMITS,
+            ),
+            (
+                &SHORT_INTER,
+                &tables::INTER,
+                &tables::INTER_VALUES,
+                &INTER_LIMITS,
+            ),
+        ] {
+            for prefix in 0..=u16::MAX {
+                let bytes = prefix.to_be_bytes();
+                let mut bits = Bits::new(&bytes);
+                let entry = short[bits.peek(SHORT_BITS) as usize];
+                if entry == 0 {
+                    continue;
+                }
+                let mut reference = bits;
+                let expected = read_long::<false>(&mut reference, codes, values, limits).unwrap();
+                let actual = (
+                    ((entry >> 4) & 63) as usize,
+                    (entry as i32) >> 11,
+                    entry & 1024 != 0,
+                );
+                bits.skip((entry & 15) as u8).unwrap();
+                assert_eq!(actual, expected);
+                assert_eq!(bits.alignment_stuffing(), reference.alignment_stuffing());
+                assert_eq!(bits.peek(16), reference.peek(16));
+            }
+        }
+    }
 
     #[test]
     fn visual_dc_reciprocal_matches_all_legal_divisions() {
