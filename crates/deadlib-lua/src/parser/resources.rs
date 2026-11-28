@@ -137,6 +137,14 @@ impl Key {
             self.string(cx.ast).bytes(cx.input)
         }
     }
+    fn matches(self, other: Self, cx: &Context<'_>) -> bool {
+        self.hash == other.hash
+            && if self.kind >= 4 && other.kind >= 4 && (self.kind != 5 || other.kind != 5) {
+                self.bytes(cx) == other.bytes(cx)
+            } else {
+                self.kind == other.kind && self.data == other.data
+            }
+    }
 }
 impl Pool {
     fn clear(&mut self) {
@@ -146,36 +154,46 @@ impl Pool {
     }
 
     fn insert(&mut self, key: Key, cx: &Context<'_>) -> Result<u32, Error> {
+        const INDEX_AT: usize = 8;
         let mut slot = 0;
-        if !self.buckets.is_empty() {
+        let found = if self.buckets.is_empty() {
+            self.entries
+                .iter()
+                .position(|&entry| entry.matches(key, cx))
+        } else {
             let mask = self.buckets.len() - 1;
             slot = key.hash as usize & mask;
-            while self.buckets[slot] != 0 {
-                let index = self.buckets[slot] - 1;
-                let old = self.entries[index as usize];
-                if old.hash == key.hash
-                    && (if old.kind >= 4 && key.kind >= 4 && (old.kind != 5 || key.kind != 5) {
-                        old.bytes(cx) == key.bytes(cx)
-                    } else {
-                        old.kind == key.kind && old.data == key.data
-                    })
-                {
-                    if index == 0 && key.kind == 0 {
-                        self.first_number_reused = true;
-                    }
-                    return Ok(index);
+            loop {
+                let encoded = self.buckets[slot];
+                if encoded == 0 {
+                    break None;
+                }
+                let index = (encoded - 1) as usize;
+                if self.entries[index].matches(key, cx) {
+                    break Some(index);
                 }
                 slot = (slot + 1) & mask;
             }
+        };
+        if let Some(index) = found {
+            if index == 0 && key.kind == 0 {
+                self.first_number_reused = true;
+            }
+            return Ok(index as u32);
+        }
+        let index = self.entries.len() as u32;
+        if self.buckets.is_empty() && self.entries.len() < INDEX_AT {
+            self.entries.try_push(key)?;
+            return Ok(index);
         }
         if (self.entries.len() + 1) * 2 >= self.buckets.len() {
             let size = (self.buckets.len() * 2).max(16);
             self.buckets.clear();
             self.buckets.try_resize(size, 0)?;
             for (index, entry) in self.entries.iter().enumerate() {
-                let mut slot = entry.hash as usize & (self.buckets.len() - 1);
+                let mut slot = entry.hash as usize & (size - 1);
                 while self.buckets[slot] != 0 {
-                    slot = (slot + 1) & (self.buckets.len() - 1);
+                    slot = (slot + 1) & (size - 1);
                 }
                 self.buckets[slot] = index as u32 + 1;
             }
@@ -184,7 +202,6 @@ impl Pool {
                 slot = (slot + 1) & (size - 1);
             }
         }
-        let index = self.entries.len() as u32;
         self.entries.try_push(key)?;
         self.buckets[slot] = index + 1;
         Ok(index)
@@ -219,17 +236,18 @@ pub(super) struct Resources {
     constants: Vec<(ExprId, ConstantOperand)>,
 }
 impl Resources {
-    pub(super) fn initializer_numbers(
-        &self,
-        first: f64,
-    ) -> Option<impl Iterator<Item = f64> + '_> {
+    pub(super) fn initializer_numbers(&self, first: f64) -> Option<impl Iterator<Item = f64> + '_> {
         let pool = &self.function.pool;
         let (initializer, rest) = pool.entries.split_first()?;
         if pool.first_number_reused || initializer.kind != 0 || initializer.data != first.to_bits()
         {
             return None;
         }
-        Some(rest.iter().filter(|key| key.kind == 0).map(|key| f64::from_bits(key.data)))
+        Some(
+            rest.iter()
+                .filter(|key| key.kind == 0)
+                .map(|key| f64::from_bits(key.data)),
+        )
     }
 
     /// Return to the default state, keeping storage.
@@ -497,22 +515,18 @@ impl Resources {
     }
     fn rk(&mut self, value: &mut Value, cx: &Context<'_>) -> Check<u16> {
         self.value(value, cx)?;
-        let key = match value.form {
-            Form::Number => Some(Key::number(value.number)),
-            Form::Nil => Some(Key::scalar(1, 0)),
-            Form::False => Some(Key::scalar(2, 0)),
-            Form::True => Some(Key::scalar(3, 0)),
-            _ => None,
-        };
-        if let Some(key) = key
-            && self.function.pool.entries.len() <= 255
-        {
-            value.info = if value.form == Form::Number {
-                self.number(value.number, cx)?
-            } else {
-                self.function.pool.insert(key, cx)?
+        if self.function.pool.entries.len() <= 255 {
+            let index = match value.form {
+                Form::Number => Some(self.number(value.number, cx)?),
+                Form::Nil => Some(self.function.pool.insert(Key::scalar(1, 0), cx)?),
+                Form::False => Some(self.function.pool.insert(Key::scalar(2, 0), cx)?),
+                Form::True => Some(self.function.pool.insert(Key::scalar(3, 0), cx)?),
+                _ => None,
             };
-            value.form = Form::Constant;
+            if let Some(index) = index {
+                value.info = index;
+                value.form = Form::Constant;
+            }
         }
         if value.form == Form::Constant && value.info <= 255 {
             Ok(RK + value.info as u16)
@@ -1004,6 +1018,30 @@ impl Resources {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn constant_slots_survive_index_promotion() {
+        let ast = Ast::default();
+        let bindings = Bindings::try_new().unwrap();
+        let cx = Context {
+            ast: &ast,
+            input: b"",
+            bindings: &bindings,
+        };
+        let mut pool = Pool::default();
+        assert_eq!(pool.insert(Key::number(-0.0), &cx).unwrap(), 0);
+        for n in 1..8 {
+            assert_eq!(pool.insert(Key::number(f64::from(n)), &cx).unwrap(), n);
+        }
+        assert!(pool.buckets.is_empty());
+        assert_eq!(pool.insert(Key::number(0.0), &cx).unwrap(), 0);
+        assert!(pool.first_number_reused);
+        assert_eq!(pool.insert(Key::number(8.0), &cx).unwrap(), 8);
+        assert!(!pool.buckets.is_empty());
+        for n in 0..9 {
+            assert_eq!(pool.insert(Key::number(f64::from(n)), &cx).unwrap(), n);
+        }
+    }
 
     #[test]
     fn parser_restart_recovers_constant_buffers_from_unfinished_scopes() {
