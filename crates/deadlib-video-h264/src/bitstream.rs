@@ -49,6 +49,17 @@ impl<'a> BitstreamReader<'a> {
 
     /// Peek at the next `n` bits without consuming them. Zero-pads if fewer bits remain.
     pub fn peek_bits(&self, n: u8) -> u32 {
+        // CAVLC table lookups need at most 16 bits. A four-byte window
+        // covers up to 25 bits at every alignment without per-bit reads.
+        if (1..=25).contains(&n) {
+            if let Some(bytes) = self
+                .data
+                .get(self.byte_offset..)
+                .and_then(|tail| tail.first_chunk::<4>())
+            {
+                return (u32::from_be_bytes(*bytes) << self.bit_offset) >> (32 - n);
+            }
+        }
         let mut val: u32 = 0;
         let mut byte_offset = self.byte_offset;
         let mut bit_offset = self.bit_offset;
@@ -234,6 +245,28 @@ mod tests {
         assert_eq!(r.bits_remaining(), 0);
         // Reading into padding returns 0 bits without panic
         assert_eq!(r.read_bits(8).unwrap(), 0);
+    }
+
+    #[test]
+    fn peek_matches_bit_reads_at_every_alignment_and_width() {
+        let data = [0xA6, 0x42, 0x80, 0xFF, 0x00, 0x5D, 0x73, 0x19];
+        for offset in 0..=data.len() + 2 {
+            for bit in 0..8 {
+                for width in 0..=u8::MAX {
+                    let mut reader = BitstreamReader::new(&data);
+                    reader.skip_bits((offset * 8 + bit) as u8);
+                    let position = reader.position();
+                    let mut expected = 0u32;
+                    for i in 0..usize::from(width) {
+                        let absolute = offset * 8 + bit + i;
+                        let byte = data.get(absolute / 8).copied().unwrap_or(0);
+                        expected = (expected << 1) | u32::from((byte >> (7 - absolute % 8)) & 1);
+                    }
+                    assert_eq!(reader.peek_bits(width), expected);
+                    assert_eq!(reader.position(), position);
+                }
+            }
+        }
     }
 
     /// Reading past the virtual padding must report end of input.
