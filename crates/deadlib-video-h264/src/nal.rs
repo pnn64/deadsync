@@ -355,26 +355,35 @@ fn find_zero(data: &[u8]) -> Option<usize> {
 /// Returns a borrowed slice when no emulation prevention bytes are found
 /// (the common case), avoiding allocation entirely.
 fn remove_emulation_prevention(data: &[u8]) -> Cow<'_, [u8]> {
-    // Fast path: scan for 00 00 03. If none found, return borrowed slice.
-    let has_epb = data.windows(3).any(|w| w[0] == 0 && w[1] == 0 && w[2] == 3);
-    if !has_epb {
+    let Some(mut i) = find_emulation_prevention(data) else {
         return Cow::Borrowed(data);
-    }
+    };
 
-    // Slow path: copy with emulation prevention removal.
     let mut rbsp = Vec::with_capacity(data.len());
-    let mut i = 0;
-    while i < data.len() {
-        if i + 2 < data.len() && data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 3 {
-            rbsp.push(0);
-            rbsp.push(0);
-            i += 3; // skip the 0x03 byte
-        } else {
-            rbsp.push(data[i]);
-            i += 1;
-        }
+    let mut remaining = data;
+    loop {
+        // Copy the entire unchanged span and both zeros before the EPB.
+        rbsp.extend_from_slice(&remaining[..i + 2]);
+        remaining = &remaining[i + 3..];
+        let Some(next) = find_emulation_prevention(remaining) else {
+            rbsp.extend_from_slice(remaining);
+            return Cow::Owned(rbsp);
+        };
+        i = next;
     }
-    Cow::Owned(rbsp)
+}
+
+fn find_emulation_prevention(data: &[u8]) -> Option<usize> {
+    let starts = &data[..data.len().saturating_sub(2)];
+    let mut i = 0;
+    while i < starts.len() {
+        i += find_zero(&starts[i..])?;
+        if data[i + 1] == 0 && data[i + 2] == 3 {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
 }
 
 #[cfg(test)]
@@ -420,6 +429,38 @@ mod tests {
             matches!(rbsp, Cow::Borrowed(_)),
             "should borrow when no EPB"
         );
+    }
+
+    #[test]
+    fn emulation_prevention_overlapping_and_boundary_patterns() {
+        // Compare with a scalar reference on all short combinations of
+        // zeros, prevention bytes and ordinary nonzero bytes.
+        for len in 0..=9 {
+            for mut pattern in 0..3usize.pow(len) {
+                let mut input = vec![0x81; len as usize];
+                for byte in &mut input {
+                    *byte = [0, 1, 3][pattern % 3];
+                    pattern /= 3;
+                }
+                let mut expected = Vec::new();
+                let mut rest = input.as_slice();
+                while let Some((&byte, tail)) = rest.split_first() {
+                    if rest.starts_with(&[0, 0, 3]) {
+                        expected.extend_from_slice(&[0, 0]);
+                        rest = &rest[3..];
+                    } else {
+                        expected.push(byte);
+                        rest = tail;
+                    }
+                }
+                let actual = remove_emulation_prevention(&input);
+                assert_eq!(&*actual, &expected, "input: {input:?}");
+                assert_eq!(
+                    matches!(actual, Cow::Borrowed(_)),
+                    expected.len() == input.len()
+                );
+            }
+        }
     }
 
     #[test]
