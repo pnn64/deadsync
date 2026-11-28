@@ -1,6 +1,6 @@
 //! Lua 5.1 module discovery, cached imports and module environments.
 use super::*;
-use crate::memory::fallible::{self, SliceExt, VecExt};
+use crate::memory::fallible::{SliceExt, VecExt};
 #[allow(unsafe_code)]
 mod paths;
 mod returns;
@@ -23,16 +23,13 @@ fn runtime(message: &'static str) -> Error {
     Error::runtime_static(message)
 }
 
-fn replace(source: &[u8], needle: u8, value: &[u8]) -> Result<Vec<u8>, Error> {
-    let mut out = fallible::with_capacity(source.len())?;
-    for &byte in source {
-        if byte == needle {
-            out.try_extend_from_slice(value)?
-        } else {
-            out.try_push(byte)?
-        }
+fn expand_filename(mut template: &[u8], name: &[u8], out: &mut Buffer<u8>) -> Result<(), Error> {
+    while let Some(mark) = crate::pattern::find_byte(template, b'?') {
+        out.try_extend_from_slice(&template[..mark])?;
+        out.try_extend_from_slice(name)?;
+        template = &template[mark + 1..];
     }
-    Ok(out)
+    out.try_extend_from_slice(template)
 }
 
 impl Vm {
@@ -75,17 +72,17 @@ impl Vm {
                 }
             }
             3 => {
-                let name = self.concat_bytes(self.registers[scratch + 8])?;
+                let Value::String(name) = self.registers[scratch + 8] else {
+                    unreachable!("module name")
+                };
+                let bytes = &self.strings.bytes[slot_index(name.0)];
                 let Value::Number(start) = self.registers[scratch + 4] else {
                     unreachable!("module field cursor")
                 };
                 let start = start as usize;
-                let dot = name[start..]
-                    .iter()
-                    .position(|&b| b == b'.')
-                    .map(|n| start + n);
-                let end = dot.unwrap_or(name.len());
-                let key = self.try_intern(&name[start..end])?;
+                let dot = crate::pattern::find_byte(&bytes[start..], b'.').map(|n| start + n);
+                let end = dot.unwrap_or(bytes.len());
+                let key = self.string_slice(name, start..end)?;
                 let target = self.registers[scratch + 2];
                 let value = self.table(target)?.get(key);
                 self.registers[scratch + 4] = Value::Number(dot.map_or(-1., |n| (n + 1) as f64));
@@ -151,9 +148,14 @@ impl Vm {
                 )?;
             }
             9 => {
-                let name = self.concat_bytes(self.registers[scratch + 8])?;
-                let length = name.iter().rposition(|&b| b == b'.').map_or(0, |n| n + 1);
-                let package = self.try_intern(&name[..length])?;
+                let Value::String(name) = self.registers[scratch + 8] else {
+                    unreachable!("module name")
+                };
+                let length = self.strings.bytes[slot_index(name.0)]
+                    .iter()
+                    .rposition(|&b| b == b'.')
+                    .map_or(0, |n| n + 1);
+                let package = self.string_slice(name, 0..length)?;
                 let key = self.try_intern(b"_PACKAGE")?;
                 self.registers[scratch + 2] = package;
                 self.frames[owner].pc = 10;
@@ -398,10 +400,13 @@ impl Vm {
             2 => {
                 self.registers[base + 3] = self.registers[base + 2];
                 if self.registers[base + 2] == Value::Nil {
-                    let name = self.concat_bytes(self.registers[base])?;
-                    let mut bytes = self.try_take_buffer(name.len() + 40)?;
+                    let Value::String(name) = self.registers[base] else {
+                        unreachable!("preload name")
+                    };
+                    let index = slot_index(name.0);
+                    let mut bytes = self.try_take_buffer(self.strings.bytes[index].len() + 40)?;
                     bytes.try_extend_from_slice(b"\n\tno field package.preload['")?;
-                    bytes.try_extend_from_slice(&name)?;
+                    bytes.try_extend_from_slice(&self.strings.bytes[index])?;
                     bytes.try_extend_from_slice(b"']")?;
                     self.registers[base + 2] = self.try_finish_buffer(bytes)?;
                 }
@@ -451,28 +456,39 @@ impl Vm {
         match frame.pc {
             0 => {
                 let name = self.package_name(frame)?;
-                let mut replaced = self.concat_bytes(name)?;
-                let separator = if cfg!(windows) { b'\\' } else { b'/' };
-                for byte in &mut replaced {
-                    *byte = if *byte == b'.' { separator } else { *byte };
-                }
+                let Value::String(id) = name else {
+                    unreachable!("searcher name")
+                };
+                let index = slot_index(id.0);
                 self.reserve_registers(base + 11)?;
                 self.resize_registers(self.registers.len().max(base + 11));
                 self.registers[base] = name;
-                self.registers[base + 1] = self.try_intern(&replaced)?;
+                self.registers[base + 1] = if self.strings.bytes[index].contains(&b'.') {
+                    let separator = if cfg!(windows) { b'\\' } else { b'/' };
+                    let mut replaced = self.try_take_buffer(self.strings.bytes[index].len())?;
+                    for &byte in &self.strings.bytes[index][..] {
+                        replaced.push(if byte == b'.' { separator } else { byte });
+                    }
+                    self.try_finish_buffer(replaced)?
+                } else {
+                    name
+                };
                 self.registers[base + 8] = self.registers[base + 1];
                 self.frames[owner].pc = 1;
                 self.package_field(LUA, b"path", base + 2)?;
             }
             1 => {
-                if !matches!(
-                    self.registers[base + 2],
-                    Value::String(_) | Value::Number(_)
-                ) {
-                    return Err(runtime("'package.path' must be a string"));
-                }
-                let path = self.concat_bytes(self.registers[base + 2])?;
-                let path = self.try_intern(io::c_bytes(&path))?;
+                let path = match self.registers[base + 2] {
+                    Value::String(id) => {
+                        let full = &self.strings.bytes[slot_index(id.0)];
+                        self.string_slice(id, 0..io::c_bytes(full).len())?
+                    }
+                    value @ Value::Number(_) => {
+                        let path = self.concat_bytes(value)?;
+                        self.try_intern(io::c_bytes(&path))?
+                    }
+                    _ => return Err(runtime("'package.path' must be a string")),
+                };
                 self.registers[base + 2] = path;
                 self.registers[base + 9] = path;
                 self.registers[base + 3] = self.try_intern(b"")?;
@@ -500,23 +516,36 @@ impl Vm {
                 let Value::String(name_id) = self.registers[base + 8] else {
                     unreachable!("search name string")
                 };
-                let filename = replace(
-                    &path[start..end],
-                    b'?',
+                let mut filename = self.try_take_buffer(end - start)?;
+                expand_filename(
+                    &self.strings.bytes[slot_index(path_id.0)][start..end],
                     &self.strings.bytes[slot_index(name_id.0)],
+                    &mut filename,
                 )?;
                 if io::open_input(&filename, false)?.is_ok() {
-                    self.registers[base + 5] = self.try_intern(&filename)?;
+                    self.registers[base + 5] = self.try_finish_buffer(filename)?;
                     self.registers[base + 6] = Value::Native(CONT_FILE);
                     self.registers[base + 7] = self.registers[base + 5];
                     self.frames[owner].pc = 3;
                     self.package_call(base + 6, 1, 2)?;
                 } else {
-                    let mut bytes = self.concat_bytes(self.registers[base + 3])?;
-                    bytes.try_extend_from_slice(b"\n\tno file '")?;
-                    bytes.try_extend_from_slice(&filename)?;
-                    bytes.try_push(b'\'')?;
-                    self.registers[base + 3] = self.try_intern(&bytes)?;
+                    let Value::String(message) = self.registers[base + 3] else {
+                        unreachable!("search diagnostics")
+                    };
+                    let index = slot_index(message.0);
+                    let prefix = b"\n\tno file '";
+                    let needed = self.strings.bytes[index]
+                        .len()
+                        .checked_add(filename.len())
+                        .and_then(|n| n.checked_add(prefix.len() + 1))
+                        .ok_or_else(|| self.memory_failure())?;
+                    let mut bytes = self.try_take_buffer(needed)?;
+                    bytes.extend_from_slice(&self.strings.bytes[index]);
+                    bytes.extend_from_slice(prefix);
+                    bytes.extend_from_slice(&filename);
+                    bytes.push(b'\'');
+                    self.recycle_buffer(filename);
+                    self.registers[base + 3] = self.try_finish_buffer(bytes)?;
                 }
             }
             3 => {
@@ -607,8 +636,7 @@ impl Vm {
         if bytes.len() == full.len() {
             return Ok(Value::String(id));
         }
-        let bytes = bytes.try_to_vec().map_err(|_| self.memory_failure())?;
-        self.try_intern(&bytes)
+        self.string_slice(id, 0..bytes.len())
     }
     fn package_named_error(&mut self, prefix: &[u8], name: Value, suffix: &[u8]) -> Error {
         let mut build = || -> Result<Value, Error> {
