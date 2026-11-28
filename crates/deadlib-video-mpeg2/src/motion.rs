@@ -88,7 +88,7 @@ mod x86 {
                     (0, 0) => a,
                     (1, 0) => _mm_avg_epu8(a, load::<W>(src.add(1))),
                     (0, 1) => _mm_avg_epu8(a, load::<W>(src.add(src_stride))),
-                    _ => bilinear::<W>(
+                    _ => bilinear(
                         a,
                         load::<W>(src.add(1)),
                         load::<W>(src.add(src_stride)),
@@ -119,25 +119,18 @@ mod x86 {
     }
 
     #[inline(always)]
-    unsafe fn bilinear<const W: usize>(a: __m128i, b: __m128i, c: __m128i, d: __m128i) -> __m128i {
+    unsafe fn bilinear(a: __m128i, b: __m128i, c: __m128i, d: __m128i) -> __m128i {
         unsafe {
-            let zero = _mm_setzero_si128();
-            let bias = _mm_set1_epi16(2);
-            let low = _mm_add_epi16(
-                _mm_add_epi16(_mm_unpacklo_epi8(a, zero), _mm_unpacklo_epi8(b, zero)),
-                _mm_add_epi16(_mm_unpacklo_epi8(c, zero), _mm_unpacklo_epi8(d, zero)),
+            let ab = _mm_avg_epu8(a, b);
+            let cd = _mm_avg_epu8(c, d);
+            // Rounded byte averages overcount by one exactly when their sum is
+            // odd and at least one original pair sum is odd.
+            let odd_pairs = _mm_or_si128(_mm_xor_si128(a, b), _mm_xor_si128(c, d));
+            let correction = _mm_and_si128(
+                _mm_and_si128(_mm_xor_si128(ab, cd), odd_pairs),
+                _mm_set1_epi8(1),
             );
-            let low = _mm_srli_epi16::<2>(_mm_add_epi16(low, bias));
-            let high = if W == 16 {
-                let high = _mm_add_epi16(
-                    _mm_add_epi16(_mm_unpackhi_epi8(a, zero), _mm_unpackhi_epi8(b, zero)),
-                    _mm_add_epi16(_mm_unpackhi_epi8(c, zero), _mm_unpackhi_epi8(d, zero)),
-                );
-                _mm_srli_epi16::<2>(_mm_add_epi16(high, bias))
-            } else {
-                zero
-            };
-            _mm_packus_epi16(low, high)
+            _mm_sub_epi8(_mm_avg_epu8(ab, cd), correction)
         }
     }
 }
@@ -145,6 +138,33 @@ mod x86 {
 #[cfg(all(test, target_arch = "x86_64", target_feature = "sse2"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bilinear_rounding_matches_every_pair_of_byte_sums() {
+        let mut src = [0; 17 * 17];
+        let mut wide = [0; 16 * 16];
+        let mut narrow = [0; 8 * 8];
+        // The arithmetic depends only on pair sums and their parity.
+        for first in 0..=510u16 {
+            for second in 0..=510u16 {
+                let a = first.min(255) as u8;
+                let b = (first - u16::from(a)) as u8;
+                let c = second.min(255) as u8;
+                let d = (second - u16::from(c)) as u8;
+                let pixels = [[a, b], [c, d]];
+                for (y, row) in src.chunks_exact_mut(17).enumerate() {
+                    for (x, pixel) in row.iter_mut().enumerate() {
+                        *pixel = pixels[y & 1][x & 1];
+                    }
+                }
+                let expected = ((first + second + 2) >> 2) as u8;
+                predict::<16>(&mut wide, 16, &src, 17, 3, false);
+                predict::<8>(&mut narrow, 8, &src, 17, 3, false);
+                assert_eq!(wide, [expected; 16 * 16]);
+                assert_eq!(narrow, [expected; 8 * 8]);
+            }
+        }
+    }
 
     #[test]
     fn vector_prediction_matches_scalar_for_each_mode() {
