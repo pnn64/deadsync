@@ -1,5 +1,6 @@
 use deadlib_audio_decode_wav::{
-    Container, Error, RawChunk, Reader, SampleFormat, Spec, Stream, Wave, WriteOptions, Writer,
+    Container, Error, ForwardReader, RawChunk, Reader, SampleFormat, Spec, Stream, Wave,
+    WriteOptions, Writer,
 };
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 
@@ -87,6 +88,48 @@ fn native_integer_roundtrip_all_containers_and_packing() {
             assert_eq!(r.position(), 3);
             assert_eq!(r.read_frames(&mut raw).unwrap(), 0);
             assert!(r.seek_frame(4).is_err());
+        }
+    }
+}
+
+#[test]
+fn streaming_i24_widening_preserves_all_short_group_tails_and_channels() {
+    for container in [Container::Riff, Container::Rifx] {
+        for channels in [1u16, 2, 3, 7] {
+            for frames in 1..=23 {
+                let expected: Vec<i32> = (0..frames * usize::from(channels))
+                    .map(|index| match index % 7 {
+                        0 => -8_388_608,
+                        1 => 8_388_607,
+                        2 => -1,
+                        3 => 0,
+                        4 => 1,
+                        _ => ((index as u32).wrapping_mul(419_431) as i32) << 8 >> 8,
+                    })
+                    .collect();
+                let mut writer = Writer::new(
+                    Cursor::new(Vec::new()),
+                    Spec::new(SampleFormat::I24, channels, 48_000),
+                    options(container),
+                    &[],
+                )
+                .unwrap();
+                writer.write_integers(&expected).unwrap();
+                let bytes = writer.finish().unwrap().into_inner();
+
+                let mut read = Reader::new(Cursor::new(&bytes)).unwrap();
+                let mut buffer = vec![0x7171_7171; expected.len() + 3];
+                assert_eq!(read.read_integers(&mut buffer).unwrap(), expected.len());
+                assert_eq!(&buffer[..expected.len()], expected);
+                assert_eq!(&buffer[expected.len()..], &[0x7171_7171; 3]);
+                assert_eq!(read.read_integers(&mut buffer).unwrap(), 0);
+
+                let mut forward = ForwardReader::new(bytes.as_slice()).unwrap();
+                buffer.fill(0x7171_7171);
+                assert_eq!(forward.read_integers(&mut buffer).unwrap(), expected.len());
+                assert_eq!(&buffer[..expected.len()], expected);
+                assert_eq!(&buffer[expected.len()..], &[0x7171_7171; 3]);
+            }
         }
     }
 }
