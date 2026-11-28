@@ -92,7 +92,10 @@ impl<'a> Bits<'a> {
     }
 
     pub(crate) fn flag(&mut self) -> Result<bool> {
-        Ok(self.read(1)? != 0)
+        let byte = *self.bytes.get(self.position / 8).ok_or(Error::Truncated)?;
+        let value = byte & (0x80 >> (self.position % 8)) != 0;
+        self.position = self.position.checked_add(1).ok_or(Error::Truncated)?;
+        Ok(value)
     }
 
     pub(crate) fn marker(&mut self) -> Result<()> {
@@ -157,7 +160,23 @@ pub(crate) const fn vlc_table<const N: usize>(codes: &[(u16, u8)]) -> [u16; N] {
 
 #[cfg(test)]
 mod tests {
-    use super::find_prefix;
+    use super::{find_prefix, Bits};
+
+    #[test]
+    fn flag_matches_one_bit_read_including_truncation() {
+        for byte in 0..=u8::MAX {
+            let bytes = [byte, !byte, byte, !byte];
+            for len in 0..=bytes.len() {
+                for position in 0..=len * 8 {
+                    let mut expected = Bits::new(&bytes[..len]);
+                    expected.skip(position as u8).unwrap();
+                    let mut actual = expected;
+                    assert_eq!(actual.flag(), expected.read(1).map(|v| v != 0));
+                    assert_eq!(actual.position, expected.position);
+                }
+            }
+        }
+    }
 
     #[test]
     fn prefix_matches_bytewise_search_at_every_offset() {
