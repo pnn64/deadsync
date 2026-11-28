@@ -159,17 +159,16 @@ fn dc_scale(q: i32, plane: usize) -> i32 {
 }
 
 fn dc_difference<const MP42: bool>(bits: &mut Bits<'_>, plane: usize) -> Result<i32> {
-    if MP42 {
-        let short = if plane == 0 {
-            &MP42_DC_LUMA
-        } else {
-            &MP42_DC_CHROMA
-        };
-        let entry = short[bits.peek(DC_BITS) as usize];
-        if entry != 0 {
-            bits.skip((entry & 31) as u8)?;
-            return Ok(i32::from((entry as i16) >> 5));
-        }
+    let short = match (MP42, plane == 0) {
+        (false, true) => &VISUAL_DC_LUMA,
+        (false, false) => &VISUAL_DC_CHROMA,
+        (true, true) => &MP42_DC_LUMA,
+        (true, false) => &MP42_DC_CHROMA,
+    };
+    let entry = short[bits.peek(DC_BITS) as usize];
+    if entry != 0 {
+        bits.skip((entry & 31) as u8)?;
+        return Ok(i32::from((entry as i16) >> 5));
     }
     let size = match (MP42, plane == 0) {
         (false, true) => bits.vlc(&tables::DC_LUMA)?,
@@ -201,16 +200,23 @@ const fn signed_dc(value: i32, size: u8) -> i32 {
 
 const DC_BITS: u8 = 10;
 const DC_ENTRIES: usize = 1 << DC_BITS;
-static MP42_DC_LUMA: [u16; DC_ENTRIES] = mp42_short_dc(&tables::DC_LUMA);
-static MP42_DC_CHROMA: [u16; DC_ENTRIES] = mp42_short_dc(&tables::DC_CHROMA);
+static VISUAL_DC_LUMA: [u16; DC_ENTRIES] = short_dc(&tables::DC_LUMA, false);
+static VISUAL_DC_CHROMA: [u16; DC_ENTRIES] = short_dc(&tables::DC_CHROMA, false);
+static MP42_DC_LUMA: [u16; DC_ENTRIES] = short_dc(&tables::DC_LUMA, true);
+static MP42_DC_CHROMA: [u16; DC_ENTRIES] = short_dc(&tables::DC_CHROMA, true);
 
-// Decode the inverted size prefix together with its signed DC difference.
-const fn mp42_short_dc<const N: usize>(codes: &[u16; N]) -> [u16; DC_ENTRIES] {
+// Decode the size prefix together with its signed DC difference.
+// Microsoft MPEG-4 uses an inverted size prefix.
+const fn short_dc<const N: usize>(codes: &[u16; N], invert: bool) -> [u16; DC_ENTRIES] {
     let mut short = [0; DC_ENTRIES];
     let mut prefix = 0;
     while prefix < DC_ENTRIES {
-        let inverted = (DC_ENTRIES - 1) ^ prefix;
-        let entry = codes[inverted << (N.trailing_zeros() - DC_BITS as u32)];
+        let code = if invert {
+            (DC_ENTRIES - 1) ^ prefix
+        } else {
+            prefix
+        };
+        let entry = codes[code << (N.trailing_zeros() - DC_BITS as u32)];
         let size = (entry >> 5) as u8;
         let bits = (entry & 31) as u8 + size;
         if entry != 0 && bits <= DC_BITS {
@@ -416,6 +422,40 @@ mod tests {
             assert_eq!(state.vertical, [0; 7]);
             assert_eq!(state.horizontal, [0; 7]);
             assert_eq!(state.quantizer, 1);
+        }
+    }
+
+    #[test]
+    fn visual_dc_lookup_matches_size_then_magnitude() {
+        fn reference(bits: &mut Bits<'_>, plane: usize) -> Result<i32> {
+            let size = if plane == 0 {
+                bits.vlc(&tables::DC_LUMA)?
+            } else {
+                bits.vlc(&tables::DC_CHROMA)?
+            } as u8;
+            if size == 0 {
+                return Ok(0);
+            }
+            let value = bits.read(size)? as i32;
+            if size > 8 {
+                bits.marker()?;
+            }
+            Ok(signed_dc(value, size))
+        }
+        for prefix in 0..=u16::MAX {
+            let bytes = prefix.to_be_bytes();
+            for input in [&bytes[..1], &bytes[..]] {
+                for plane in 0..=1 {
+                    let mut a = Bits::new(input);
+                    let mut b = a;
+                    let expected = reference(&mut a, plane);
+                    assert_eq!(dc_difference::<false>(&mut b, plane), expected);
+                    if expected.is_ok() {
+                        assert_eq!(a.peek(16), b.peek(16));
+                        assert_eq!(a.alignment_stuffing(), b.alignment_stuffing());
+                    }
+                }
+            }
         }
     }
 }
