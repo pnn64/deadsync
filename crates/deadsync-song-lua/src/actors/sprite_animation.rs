@@ -13,14 +13,14 @@ pub(super) struct State {
     texture_size: [f32; 2],
     render_uses_backing_coords: bool,
     resource: Option<String>,
-    movie: bool,
+    movie: Option<Arc<Mutex<Movie>>>,
     skip_movie_update: bool,
     pub(super) use_effect_clock_for_texcoords: bool,
 }
 
 impl State {
     pub(super) fn is_movie(&self) -> bool {
-        self.movie
+        self.movie.is_some()
     }
 
     pub(super) fn reset(&mut self) {
@@ -83,6 +83,85 @@ impl State {
             .collect();
         self.states = states.into();
         self.index = self.index.min(self.states.len().saturating_sub(1));
+    }
+}
+
+pub(super) struct Movie {
+    position: f32,
+    rate: f32,
+    looping: bool,
+}
+
+// RageTextureManager gives sprites with the same texture ID one movie clock.
+// Sprites keep individual animate and decode flags. Loop and rate belong to
+// the shared texture, including when set through a sprite that never updates.
+fn bind_movie(
+    store: &mut Store,
+    actor: TableId,
+    resource: Option<&str>,
+) -> Option<Arc<Mutex<Movie>>> {
+    let Some(resource) = resource else {
+        store.movie_sprites.remove(&actor);
+        return None;
+    };
+    store.movie_sprites.insert(actor);
+    if let Some(movie) = store
+        .movie_textures
+        .get(resource)
+        .and_then(std::sync::Weak::upgrade)
+    {
+        return Some(movie);
+    }
+    store
+        .movie_textures
+        .retain(|_, movie| movie.strong_count() != 0);
+    let movie = Arc::new(Mutex::new(Movie {
+        position: 0.0,
+        rate: 1.0,
+        looping: true,
+    }));
+    store
+        .movie_textures
+        .insert(resource.to_owned(), Arc::downgrade(&movie));
+    Some(movie)
+}
+
+impl Movie {
+    fn for_actor(actor: &Actor) -> Option<std::sync::MutexGuard<'_, Self>> {
+        Some(
+            actor
+                .sprite_animation
+                .as_ref()?
+                .movie
+                .as_ref()?
+                .lock()
+                .unwrap(),
+        )
+    }
+}
+
+pub(super) fn movie_sample(actor: &Actor) -> Option<(f32, bool)> {
+    let movie = Movie::for_actor(actor)?;
+    Some((movie.position, movie.looping))
+}
+
+pub(super) fn movie_render_state(actor: &Actor, render: &mut crate::SongLuaOverlayState) {
+    if let Some(movie) = Movie::for_actor(actor) {
+        render.movie_position_seconds = movie.position;
+        render.sprite_loop = movie.looping;
+        render.sprite_playback_rate = movie.rate;
+    }
+}
+
+pub(super) fn movie_loop(actor: &Actor, looping: bool) {
+    if let Some(mut movie) = Movie::for_actor(actor) {
+        movie.looping = looping;
+    }
+}
+
+pub(super) fn movie_rate(actor: &Actor, rate: f32) {
+    if let Some(mut movie) = Movie::for_actor(actor) {
+        movie.rate = rate;
     }
 }
 
@@ -168,14 +247,19 @@ pub(super) fn initialize(
     template: bool,
 ) -> Result<(), Error> {
     let movie = sprites::is_video(call, actor)?;
-    if (!call
+    if !call
         .store()
         .clock
         .live
         .load(std::sync::atomic::Ordering::Relaxed)
-        && !movie)
-        || (template && call.store().actors[&actor].sprite_animation.is_some())
+        && !movie
     {
+        return Ok(());
+    }
+    if template && let Some(state) = &call.store().actors[&actor].sprite_animation {
+        if state.is_movie() {
+            call.store().movie_sprites.insert(actor);
+        }
         return Ok(());
     }
     let sheet = sprites::sheet(call, actor)?.unwrap_or((1, 1));
@@ -193,6 +277,7 @@ pub(super) fn initialize(
         Vec::new()
     };
     let (image_to_texture, texture_size, render_uses_backing_coords) = texture_size(call, actor)?;
+    let movie = bind_movie(call.store(), actor, resource.as_deref().filter(|_| movie));
     let mut state = State {
         states: Arc::from([]),
         rects: Arc::from([]),
@@ -227,7 +312,9 @@ pub(super) fn load(call: &mut HostCall<'_>, actor: TableId, preserve: bool) -> R
     let movie = sprites::is_video(call, actor)?;
     let (image_to_texture, texture_size, render_uses_backing_coords) = texture_size(call, actor)?;
     let sheet = sprites::sheet(call, actor)?.unwrap_or((1, 1));
-    let instance = call.store().actors.get_mut(&actor).unwrap();
+    let store = call.store();
+    let movie = bind_movie(store, actor, resource.as_deref().filter(|_| movie));
+    let instance = store.actors.get_mut(&actor).unwrap();
     let state = instance.sprite_animation.as_mut().unwrap();
     // Unloading an existing, different texture calls SetState(0). Reloading
     // the same texture preserves the current frame's accumulated time.
@@ -267,6 +354,7 @@ pub(super) fn set_states(
 }
 
 pub(super) fn render(actor: &Actor, render: &mut crate::SongLuaOverlayState) {
+    movie_render_state(actor, render);
     let Some(state) = &actor.sprite_animation else {
         return;
     };
@@ -329,7 +417,7 @@ pub(super) fn set_seconds(
     };
     state.set_state(0);
     state.seconds = seconds;
-    let movie = state.movie;
+    let movie = state.is_movie();
     if movie {
         seek_movie(call, actor, seconds)?;
     }
@@ -355,13 +443,11 @@ pub(super) fn seek_movie(
         "__songlua_state_movie_position_seconds",
         Value::Number(seconds as f64),
     )?;
-    call.store()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .state
-        .render
-        .movie_position_seconds = seconds;
+    let instance = call.store().actors.get_mut(&actor).unwrap();
+    instance.state.render.movie_position_seconds = seconds;
+    if let Some(mut movie) = Movie::for_actor(instance) {
+        movie.position = seconds;
+    }
     capture::write(
         call,
         actor,
@@ -371,7 +457,6 @@ pub(super) fn seek_movie(
         },
         true,
     );
-    publish_movie_position(call, actor);
     Ok(())
 }
 
@@ -385,58 +470,23 @@ pub(super) fn enable_animation(call: &mut HostCall<'_>, actor: TableId, enabled:
     }
 }
 
-// Movie progression is a native update result, not a queued Actor tween. In
-// finite preparation retain every sample, including paused intervals; playback
-// then reads the same clock without running a decoder during compilation.
-fn publish_movie_position(call: &mut HostCall<'_>, actor: TableId) {
-    let guard = call.store();
-    let Some((owner, index)) = song_immediate::context(&guard, actor) else {
-        return;
-    };
-    let seconds = guard.actors[&actor].state.render.movie_position_seconds;
-    guard
-        .scenes
-        .get_mut(&owner)
-        .unwrap()
-        .song_session
-        .as_mut()
-        .unwrap()
-        .messages
-        .as_mut()
-        .unwrap()
-        .immediate
-        .record(
-            index,
-            crate::SongLuaOverlayUpdateTarget::MoviePositionSeconds,
-            crate::SongLuaOverlayUpdateValue::F32(seconds),
-            None,
-        );
-}
-
 pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Result<(), Error> {
     let Some(instance) = call.store().actors.get_mut(&actor) else {
         return Ok(());
     };
     let effect_delta = effects::delta(instance);
-    let movie = if let Some(state) = &mut instance.sprite_animation {
+    if let Some(state) = &mut instance.sprite_animation {
         let skip = std::mem::replace(&mut state.skip_movie_update, false);
-        if state.movie
-            && !skip
+        if !skip
             && instance.state.render.sprite_animate
             && instance.state.render.sprite_texture
             && instance.state.render.decode_movie
+            && let Some(movie) = &state.movie
         {
-            instance.state.render.movie_position_seconds +=
-                effect_delta.max(0.0) * instance.state.render.sprite_playback_rate;
+            let mut movie = movie.lock().unwrap();
+            movie.position += effect_delta.max(0.0) * movie.rate;
         }
-        state.movie
-    } else {
-        false
-    };
-    if movie {
-        publish_movie_position(call, actor);
     }
-    let instance = call.store().actors.get_mut(&actor).unwrap();
     if !instance.state.render.sprite_animate || !instance.state.render.sprite_texture {
         return Ok(());
     }

@@ -148,6 +148,101 @@ return Def.ActorFrame{{
 }
 
 #[test]
+fn baked_sprites_sharing_a_movie_publish_one_texture_clock() {
+    crate::tests::init_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let video = dir.path().join("shared.mpg");
+    let mut bytes = b"YUV4MPEG2 W2 H2 F30:1 Ip A1:1 C420jpeg\nFRAME\n".to_vec();
+    bytes.extend([128; 6]);
+    std::fs::write(&video, bytes).unwrap();
+    let entry = dir.path().join("default.lua");
+    std::fs::write(
+        &entry,
+        r#"
+local first, second
+local frame=0
+return Def.ActorFrame{
+    Def.ActorFrame{OnCommand=function(self) self:SetUpdateFunction(function()
+        frame=frame+1
+        if frame==3 then second:animate(true) end
+        if frame==5 then
+            first:animate(false)
+            second:animate(false):SetSecondsIntoAnimation(0):loop(true)
+        end
+    end) end},
+    LoadActor('shared.mpg')..{Name='First',
+        InitCommand=function(self) first=self end},
+    LoadActor('shared.mpg')..{Name='Second',
+        InitCommand=function(self)
+            second=self
+            self:animate(false):loop(false):rate(2):visible(false)
+        end},
+}
+"#,
+    )
+    .unwrap();
+    let mut context = crate::SongLuaCompileContext::new(dir.path(), "shared movie clock");
+    context.music_length_seconds = 2.0;
+    context.players[1].enabled = false;
+    context.compile_clock_inputs = (0..6)
+        .map(|frame| {
+            let time = f64::from(frame) * 0.25;
+            [time, time * 2.0, if frame == 0 { 0.0 } else { 0.25 }]
+        })
+        .collect();
+    let compiled = deadsync_assets::song_lua::compile_song_lua(&entry, &context).unwrap();
+    assert!(compiled.live_scene.is_none());
+    let timing = deadsync_rules::timing::TimingData::from_segments(
+        0.0,
+        0.0,
+        &deadsync_rules::timing::TimingSegments {
+            bpms: vec![(0.0, 120.0)],
+            ..Default::default()
+        },
+        &[],
+    );
+    let tracks = crate::gameplay::build_song_lua_overlay_update_tracks(&compiled, &timing, 0.0);
+    let mut overlays = compiled.overlays;
+    overlays.push(SongLuaOverlayActor {
+        kind: SongLuaOverlayKind::UpdateTracks {
+            tracks,
+            draw_frames: Arc::from([]),
+        },
+        name: None,
+        parent_index: None,
+        initial_state: Default::default(),
+        message_commands: Vec::new(),
+    });
+    let layer = deadsync_gameplay::build_song_lua_visual_layer_runtime(
+        0.0,
+        compiled.screen_width,
+        compiled.screen_height,
+        overlays,
+        Vec::new(),
+        Vec::new(),
+        compiled.song_foreground,
+        Vec::new(),
+    );
+    let mut sampler = Layer::new(&layer.overlays);
+    for (frame, position) in [0.0, 0.5, 1.0, 2.0, 0.0, 0.0].into_iter().enumerate() {
+        let mut samples = Vec::new();
+        sampler.sample(
+            frame as f32 * 0.25,
+            &layer.overlays,
+            &layer.overlay_events,
+            &layer.overlay_eases,
+            &layer.overlay_ease_ranges,
+            &mut |path, seconds, looping| samples.push((path, seconds, looping)),
+        );
+        assert_eq!(
+            samples,
+            vec![(video.as_path(), position, frame >= 4); 2],
+            "frame {frame}",
+        );
+    }
+}
+
+#[test]
 fn baked_movie_advances_without_authored_update_callbacks() {
     crate::tests::init_paths();
     let dir = tempfile::tempdir().unwrap();

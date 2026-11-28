@@ -248,6 +248,7 @@ pub(super) fn clone_actor(
         instance.offline_instance = true;
         instance.pending_init = true;
         instance.registered = false;
+        instance.sprite_animation = previous.sprite_animation;
         instance.capture = previous.capture;
         let registry = table(call, call.captures()[0])?;
         retirement::retain(call, scene, actor, registry)?;
@@ -257,6 +258,13 @@ pub(super) fn clone_actor(
             let owner = guard.scenes.get_mut(&scene).unwrap();
             owner.root = Some(actor);
             owner.actors.push(actor);
+            if instance
+                .sprite_animation
+                .as_ref()
+                .is_some_and(sprite_animation::State::is_movie)
+            {
+                guard.movie_sprites.insert(actor);
+            }
             guard.actors.insert(actor, instance);
         }
         initialize_resources(call, scene, actor, class, ResourceMode::OfflineClone)?;

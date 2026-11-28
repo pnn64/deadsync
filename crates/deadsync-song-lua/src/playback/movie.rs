@@ -64,14 +64,14 @@ impl Layer {
         }
     }
 
-    fn sample<S: NoteskinSlot + Clone>(
+    fn sample<'a, S: NoteskinSlot + Clone>(
         &mut self,
         now: f32,
-        overlays: &[SongLuaOverlayActor<S>],
+        overlays: &'a [SongLuaOverlayActor<S>],
         events: &[Vec<SongLuaOverlayMessageRuntime>],
         eases: &[SongLuaOverlayEaseWindowRuntime],
         ease_ranges: &[std::ops::Range<usize>],
-        visit: &mut impl FnMut(&Path, f32, bool),
+        visit: &mut impl FnMut(&'a Path, f32, bool),
     ) {
         // Live chart loads may add actors. Baked scenes keep the prepared plan.
         if self.actor_count != overlays.len() {
@@ -139,6 +139,13 @@ impl Movies {
     ) {
         let visuals = gameplay.song_lua_visuals();
         let now = gameplay.current_music_time_display();
+        let mut seen: SmallVec<[&Path; 4]> = SmallVec::new();
+        let mut visit = |path, position, looping| {
+            if !seen.contains(&path) {
+                seen.push(path);
+                visit(path, position, looping);
+            }
+        };
         self.root.sample(
             now,
             &visuals.overlays,

@@ -72,7 +72,11 @@ fn read_with_metadata(
     let mut reader = Reader::new(call, actor)?;
     let state = read_fields(call, actor, &mut reader, metadata, live);
     reader.finish(call);
-    state
+    let mut state = state?;
+    if !live && let Some(actor) = call.store().actors.get(&actor) {
+        sprite_animation::movie_render_state(actor, &mut state);
+    }
+    Ok(state)
 }
 fn read_fields(
     call: &mut HostCall<'_>,

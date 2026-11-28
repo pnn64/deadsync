@@ -263,7 +263,7 @@ fn captured_screen_and_draw_clocks_rebase_only_the_calibration_difference() {
             } else {
                 &compiled
             };
-            let overlays = song_lua_runtime_overlays(source, &timing, runtime_offset);
+            let overlays = song_lua_runtime_overlays(source, &timing, runtime_offset, 0.0);
             let SongLuaOverlayKind::UpdateTracks {
                 tracks,
                 draw_frames,

@@ -371,6 +371,8 @@ struct Store {
     fixture_pose_observer: Option<song_messages::Capture>,
     sounds: Vec<crate::SongLuaActorSound>,
     prepared_sounds: Vec<crate::SongLuaSoundEvent>,
+    movie_textures: FxHashMap<String, std::sync::Weak<Mutex<sprite_animation::Movie>>>,
+    movie_sprites: FxHashSet<TableId>,
     sprite_textures: Vec<(u64, crate::SongLuaSpriteTexture)>,
     judgment_textures: Vec<(usize, crate::SongLuaJudgmentTexture)>,
     sound_capture: Option<bool>,
@@ -1857,6 +1859,7 @@ fn release(call: &mut HostCall<'_>, id: u64) -> Result<bool, Error> {
         call.raw_table_set(registry, Value::Table(actor), Value::Nil)?;
         let store = call.store();
         store.actors.remove(&actor);
+        store.movie_sprites.remove(&actor);
         store.retired_subscriptions.remove(&actor);
         #[cfg(feature = "test-support")]
         store.message_ranks.remove(&actor);

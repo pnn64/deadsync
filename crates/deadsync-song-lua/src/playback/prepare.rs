@@ -695,7 +695,10 @@ fn build_song_lua_compiled_visual_layer_runtime<S: Clone + std::fmt::Debug>(
         &compiled.song_foreground.message_commands,
     );
     let update_offset = if compiled.foreground_beats.is_some()
-        && crate::legacy_xml::is_xml(&compiled.entry_path)
+        && compiled
+            .entry_path
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("xml"))
     {
         // The legacy On and queue commands are compiled on the initial actor
         // clock. Native Foreground starts that clock when the entry is shown.

@@ -182,6 +182,10 @@ fn media(
         )?;
     }
     if class == "Sprite" {
+        if !theme && crate::is_song_lua_video_path(Path::new(&path)) {
+            sprites::initialize(call, actor, false)?;
+            return Ok(Value::Table(actor));
+        }
         call.store()
             .actors
             .get_mut(&actor)
@@ -190,7 +194,7 @@ fn media(
             .render
             .sprite_texture = true;
         if !theme {
-            sprites::decode(call, actor, crate::is_song_lua_video_path(Path::new(&path)))?;
+            sprites::decode(call, actor, false)?;
             sprites::movie_size(call, actor)?;
         }
         sprites::refresh_size(call, actor)?;

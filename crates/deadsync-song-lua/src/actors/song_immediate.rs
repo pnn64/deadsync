@@ -337,17 +337,37 @@ impl Actors {
         if store.replay_frame?.0 != screen.id {
             return None;
         }
-        Some(
-            store
-                .scenes
-                .get_mut(&screen.id)?
-                .song_session
-                .as_mut()?
-                .messages
-                .as_mut()?
-                .immediate
-                .drain(include_empty),
-        )
+        let capture = store
+            .scenes
+            .get_mut(&screen.id)?
+            .song_session
+            .as_mut()?
+            .messages
+            .as_mut()?;
+        // Sample after all Sprite::Update calls. Each sprite can advance the
+        // same movie, and later siblings can apply rate, loop or rewind.
+        for actor in &store.movie_sprites {
+            if let Some(&index) = capture.indices.get(actor)
+                && let Some((position, looping)) = store
+                    .actors
+                    .get(actor)
+                    .and_then(sprite_animation::movie_sample)
+            {
+                capture.immediate.record(
+                    index,
+                    Target::MoviePositionSeconds,
+                    UpdateValue::F32(position),
+                    None,
+                );
+                capture.immediate.record(
+                    index,
+                    Target::SpriteLoop,
+                    UpdateValue::Bool(looping),
+                    None,
+                );
+            }
+        }
+        Some(capture.immediate.drain(include_empty))
     }
 
     pub(crate) fn chronological_song_capture(&self, vm: &Vm) -> bool {

@@ -928,13 +928,9 @@ pub(super) fn texture_parameter(
             "__songlua_state_sprite_loop",
             Value::Boolean(value),
         )?;
-        call.store()
-            .actors
-            .get_mut(&actor)
-            .unwrap()
-            .state
-            .render
-            .sprite_loop = value;
+        let instance = call.store().actors.get_mut(&actor).unwrap();
+        instance.state.render.sprite_loop = value;
+        sprite_animation::movie_loop(instance, value);
         song_media::record(call, actor, "sprite_loop");
     } else if let Some(value) = float_scalar(call, value, false) {
         action_capture::prepare_write(call, actor)?;
@@ -944,13 +940,9 @@ pub(super) fn texture_parameter(
             "__songlua_state_sprite_playback_rate",
             Value::Number(value as f64),
         )?;
-        call.store()
-            .actors
-            .get_mut(&actor)
-            .unwrap()
-            .state
-            .render
-            .sprite_playback_rate = value;
+        let instance = call.store().actors.get_mut(&actor).unwrap();
+        instance.state.render.sprite_playback_rate = value;
+        sprite_animation::movie_rate(instance, value);
         song_media::record(call, actor, "sprite_playback_rate");
     }
     Ok(())

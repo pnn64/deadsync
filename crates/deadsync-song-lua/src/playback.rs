@@ -14994,8 +14994,14 @@ impl SongMedia {
         gameplay: &GameplayCoreState<P, S>,
         mut visit: impl FnMut(&Path, f32, bool),
     ) {
-        self.movies.sample(gameplay, &mut visit);
+        let foreground_path = self.current_foreground_path.as_deref();
+        let mut foreground_sampled = false;
+        self.movies.sample(gameplay, |path, position, looping| {
+            foreground_sampled |= Some(path) == foreground_path;
+            visit(path, position, looping);
+        });
         if let Some(path) = self.current_foreground_path.as_deref()
+            && !foreground_sampled
             && crate::is_song_lua_video_path(path)
             && let Some(change) = self
                 .next_foreground_change_ix

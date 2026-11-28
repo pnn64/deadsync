@@ -81,6 +81,7 @@ pub(super) fn sweep(store: &mut Store) {
                 }
             } else {
                 guard.actors.remove(&actor);
+                guard.movie_sprites.remove(&actor);
                 guard.retired_subscriptions.remove(&actor);
                 guard.actor_order.retain(|candidate| *candidate != actor);
                 if let Some(queued) = &mut guard.startup_queues {

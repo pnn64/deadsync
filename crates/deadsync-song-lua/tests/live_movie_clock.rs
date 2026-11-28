@@ -12,17 +12,14 @@ struct Movie {
 }
 
 impl Movie {
-    fn new(case: &Json) -> Self {
+    fn new(case: &Json, definition: &str) -> Self {
         let directory = tempfile::tempdir().unwrap();
         let mut context = SongLuaCompileContext::new(directory.path(), "native movie clock");
         context.live = true;
         let mut runtime = SongRuntime::new(&context).unwrap();
         // This fixture observes native Sprite calls, so no decoder or video
         // pixels are needed. The movie extension selects the retained clock.
-        let definition = Self::execute(
-            &mut runtime,
-            "return Def.ActorFrame{Def.Sprite{Texture='clock.mpg'}}",
-        )[0];
+        let definition = Self::execute(&mut runtime, definition)[0];
         let scene = runtime.instantiate_actor(definition).unwrap();
         let root = runtime.actor_scene_root(scene).unwrap();
         runtime.vm_mut().set_global(b"root", root).unwrap();
@@ -110,7 +107,10 @@ fn live_movie_clock_matches_native_sprite_updates() {
     assert_eq!(native["oracle"], "itgmania_native_sprite_movie_clock");
     for case in native["cases"].as_array().unwrap() {
         let name = case["name"].as_str().unwrap();
-        let mut movie = Movie::new(case);
+        let mut movie = Movie::new(
+            case,
+            "return Def.ActorFrame{Def.Sprite{Texture='clock.mpg'}}",
+        );
         let mut position = 0.0_f32;
         let mut rate = 1.0_f32;
         let mut looping = true;
@@ -145,4 +145,41 @@ fn live_movie_clock_matches_native_sprite_updates() {
         }
         movie.finish();
     }
+}
+
+#[test]
+fn live_movie_sprites_share_rate_loop_and_rewind_with_paused_siblings() {
+    let mut movie = Movie::new(
+        &Json::Null,
+        "return Def.ActorFrame{Def.Sprite{Texture='clock.mpg'}, Def.Sprite{Texture='clock.mpg'}}",
+    );
+    let second = Movie::execute(&mut movie.runtime, "second=root[2]; return second")[0];
+    movie.script("second:animate(false):loop(false):rate(2):visible(false)");
+    for (index, (script, position, looping)) in [
+        ("", 0.0, false),
+        ("", 0.5, false),
+        ("second:animate(true)", 1.0, false),
+        ("", 2.0, false),
+        (
+            "sprite:animate(false); second:animate(false):SetSecondsIntoAnimation(0):loop(true)",
+            0.0,
+            true,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        movie.script(script);
+        movie.update(
+            &serde_json::json!({"elapsed": index as f64 * 0.25, "delta": 0.25}),
+            index,
+        );
+        for sprite in [movie.sprite, second] {
+            let state = test_support::read_live_actor_state(&mut movie.runtime, sprite).unwrap();
+            assert_eq!(state.movie_position_seconds, position, "update {index}");
+            assert_eq!(state.sprite_playback_rate, 2.0, "update {index}");
+            assert_eq!(state.sprite_loop, looping, "update {index}");
+        }
+    }
+    movie.finish();
 }

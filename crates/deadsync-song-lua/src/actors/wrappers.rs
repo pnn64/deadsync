@@ -93,6 +93,7 @@ fn remove(call: &mut HostCall<'_>, owner: TableId) -> Result<(), Error> {
         // Removing metadata stops the queue and invalidates bound methods on a
         // retained Lua table; ordinary raw fields on that table remain readable.
         store.actors.remove(&actor);
+        store.movie_sprites.remove(&actor);
         store.retired_subscriptions.remove(&actor);
         #[cfg(feature = "test-support")]
         store.message_ranks.remove(&actor);
