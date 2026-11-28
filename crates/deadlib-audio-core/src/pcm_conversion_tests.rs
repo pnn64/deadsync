@@ -99,3 +99,81 @@ fn pcm_conversion_matches_every_f32_bit_pattern() {
         assert_eq!(actual, expected, "starting at float bits {base:08x}");
     }
 }
+
+// CPU cycles are sampled on the pinned benchmark thread. All inputs and
+// allocations are outside the timed interval, and output stays observable.
+#[cfg(windows)]
+#[test]
+#[allow(
+    unsafe_code,
+    reason = "Windows thread-cycle counter and thread affinity for benchmark"
+)]
+#[ignore = "manual release benchmark; compare immutable baseline/candidate binaries"]
+fn pcm_conversion_thread_cycles() {
+    use std::ffi::c_void;
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetCurrentThread() -> *mut c_void;
+        fn SetThreadAffinityMask(thread: *mut c_void, mask: usize) -> usize;
+        fn QueryThreadCycleTime(thread: *mut c_void, cycles: *mut u64) -> i32;
+    }
+    fn cycles(thread: *mut c_void) -> u64 {
+        let mut value = 0;
+        assert_ne!(unsafe { QueryThreadCycleTime(thread, &raw mut value) }, 0);
+        value
+    }
+
+    let thread = unsafe { GetCurrentThread() };
+    assert_ne!(unsafe { SetThreadAffinityMask(thread, 1) }, 0);
+    let iterations: usize = std::env::var("DEAD_PCM_BENCH_ITERS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(12000);
+    let size = 4096;
+    let mut random = 0x1234_5678u32;
+    let normal: Vec<f32> = (0..size)
+        .map(|_| {
+            random ^= random << 13;
+            random ^= random >> 17;
+            random ^= random << 5;
+            (random as f32 / u32::MAX as f32) * 2.0 - 1.0
+        })
+        .collect();
+    let clipped: Vec<f32> = (0..size)
+        .map(|i| (i as i32 % 17 - 8) as f32 / 3.0)
+        .collect();
+    let special: Vec<f32> = (0..size)
+        .map(|i| match i % 16 {
+            0 => f32::NAN,
+            1 => f32::NEG_INFINITY,
+            2 => f32::INFINITY,
+            3 => -0.0,
+            _ => f32::from_bits((i as u32).wrapping_mul(0x9e37_79b9)),
+        })
+        .collect();
+
+    let mut output = vec![0i16; size];
+    for (name, samples) in [
+        ("normal", &normal),
+        ("clipped", &clipped),
+        ("special", &special),
+    ] {
+        let input = black_box(samples.as_slice());
+        // Warm both instruction and data caches before starting the counter.
+        for _ in 0..64 {
+            write_i16_samples(input, black_box(output.as_mut_slice()), true);
+        }
+        let before = cycles(thread);
+        for _ in 0..iterations {
+            write_i16_samples(input, black_box(output.as_mut_slice()), true);
+        }
+        let total = cycles(thread) - before;
+        println!(
+            "PCM_CYCLES {name} total={total} samples={} iterations={iterations} cycles_per_sample={:.5} result={}",
+            size,
+            total as f64 / (size * iterations) as f64,
+            black_box(output[0]),
+        );
+    }
+}

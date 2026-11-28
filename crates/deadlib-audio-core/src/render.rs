@@ -169,13 +169,56 @@ fn write_i16_samples(src: &[f32], dst: &mut [i16], has_audio: bool) {
         dst.fill(0);
         return;
     }
+    #[cfg(target_arch = "x86_64")]
+    let offset = if src.len().min(dst.len()) >= 128 && std::is_x86_feature_detected!("avx2") {
+        // SAFETY: the AVX2 check covers the whole SIMD kernel, and its loads
+        // and stores process only complete eight-sample slices.
+        unsafe { pcm_avx2::convert(src, dst) }
+    } else {
+        0
+    };
+    #[cfg(not(target_arch = "x86_64"))]
+    let offset = 0;
     // Explicit saturation lets LLVM use packed float-to-integer conversions.
-    for (dst, &src) in dst.iter_mut().zip(src) {
+    for (dst, &src) in dst[offset..].iter_mut().zip(&src[offset..]) {
         let scaled = (src * 32768.0).clamp(-32768.0, 32767.0);
         let bounded = if scaled.is_nan() { 0.0 } else { scaled };
         // SAFETY: clamping maps infinities and out-of-range values to i16 bounds;
         // the explicit NaN case leaves only finite, representable values.
         *dst = unsafe { bounded.to_int_unchecked::<i16>() };
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[allow(
+    unsafe_code,
+    reason = "AVX2 SIMD loads/stores bounded to complete sample groups"
+)]
+mod pcm_avx2 {
+    use std::arch::x86_64::*;
+
+    #[target_feature(enable = "avx2")]
+    pub(super) unsafe fn convert(src: &[f32], dst: &mut [i16]) -> usize {
+        let count = src.len().min(dst.len()) / 8;
+        let scale = _mm256_set1_ps(32768.0);
+        let low = _mm256_set1_ps(-32768.0);
+        let high = _mm256_set1_ps(32767.0);
+        for i in 0..count {
+            // SAFETY: count is bounded by both slices; each iteration reads
+            // and writes eight initialized, non-overlapping elements.
+            unsafe {
+                let samples = _mm256_loadu_ps(src.as_ptr().add(i * 8));
+                let scaled = _mm256_mul_ps(samples, scale);
+                let not_nan = _mm256_cmp_ps(scaled, scaled, _CMP_ORD_Q);
+                let limited = _mm256_max_ps(low, _mm256_min_ps(high, scaled));
+                let integers = _mm256_cvttps_epi32(_mm256_and_ps(limited, not_nan));
+                let low_half = _mm256_castsi256_si128(integers);
+                let high_half = _mm256_extracti128_si256(integers, 1);
+                let packed = _mm_packs_epi32(low_half, high_half);
+                _mm_storeu_si128(dst.as_mut_ptr().add(i * 8).cast(), packed);
+            }
+        }
+        count * 8
     }
 }
 
