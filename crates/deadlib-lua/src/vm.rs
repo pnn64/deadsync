@@ -261,25 +261,37 @@ impl Strings {
                 Ok(id)
             }
             Err(vacant) => {
-                // Once the string table is warm, short strings can share
-                // a page. Small bare states avoid reserving a page up front.
-                let string = if self.bytes.memory().uses_global_allocator()
-                    && self.bytes.live_len() >= 32
-                    && ShortStrings::fits(bytes)
-                {
-                    let (storage, growth) = self.short.insert(bytes)?;
-                    self.bytes.note_alloc(growth);
-                    ByteString {
-                        storage: StringStorage::Short(storage),
-                        hash,
-                    }
-                } else {
-                    ByteString::try_new(bytes, hash, self.bytes.memory().clone())?
-                };
+                let (string, growth) = Self::copy_bytes(&self.bytes, &mut self.short, bytes, hash)?;
+                self.bytes.note_alloc(growth);
                 self.try_add(string, vacant)
             }
         }
     }
+    fn copy_bytes(
+        arena: &Arena<ByteString>,
+        short: &mut ShortStrings,
+        bytes: &[u8],
+        hash: usize,
+    ) -> Result<(ByteString, usize), Error> {
+        // Once the string table is warm, short strings can share a page.
+        // Small bare states avoid reserving a page up front.
+        if arena.memory().uses_global_allocator()
+            && arena.live_len() >= 32
+            && ShortStrings::fits(bytes)
+        {
+            let (storage, growth) = short.insert(bytes)?;
+            Ok((
+                ByteString {
+                    storage: StringStorage::Short(storage),
+                    hash,
+                },
+                growth,
+            ))
+        } else {
+            Ok((ByteString::try_new(bytes, hash, arena.memory().clone())?, 0))
+        }
+    }
+
     fn try_intern_owned(&mut self, mut bytes: Buffer<u8>) -> Result<StringId, Error> {
         let hash = Self::hash(&bytes);
         match self.probe(&bytes, hash) {
@@ -320,8 +332,9 @@ impl Strings {
                 Ok(id)
             }
             Err(vacant) => {
-                let owned = ByteString::try_new(bytes, hash, self.bytes.memory().clone())?;
-                self.try_add(owned, vacant)
+                let (string, growth) = Self::copy_bytes(&self.bytes, &mut self.short, bytes, hash)?;
+                self.bytes.note_alloc(growth);
+                self.try_add(string, vacant)
             }
         }
     }

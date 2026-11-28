@@ -123,7 +123,6 @@ impl Io {
 }
 impl Vm {
     fn open_stream(
-        &mut self,
         path: Option<&[u8]>,
         mode: &[u8],
         pipe_file: bool,
@@ -573,14 +572,12 @@ impl Vm {
             let path = if id == TMPFILE {
                 None
             } else {
-                let s = self.string_argument(base, count, 0)?;
-                Some(self.strings.bytes[slot_index(s.0)].try_to_vec()?)
+                Some(self.string_argument(base, count, 0)?)
             };
             let mode = if id == TMPFILE || self.argument(base, count, 1) == Value::Nil {
-                b"r".try_to_vec()?
+                None
             } else {
-                let s = self.string_argument(base, count, 1)?;
-                self.strings.bytes[slot_index(s.0)].try_to_vec()?
+                Some(self.string_argument(base, count, 1)?)
             };
             // Lua roots a closed userdata before attempting the OS open.
             let value = self.try_file_value(Stream::closed(), self.builtin_environment(id))?;
@@ -588,7 +585,13 @@ impl Vm {
             self.reserve_registers(pending + 1)?;
             self.resize_registers(self.registers.len().max(pending + 1));
             self.registers[pending] = value;
-            let result = self.open_stream(path.as_deref(), &mode, id == POPEN)?;
+            // Both operands still occupy the native argument slots. Borrow
+            // their bytes after any userdata and register allocations.
+            let result = Self::open_stream(
+                path.map(|s| self.strings.bytes[slot_index(s.0)].as_ref()),
+                mode.map_or(b"r", |s| self.strings.bytes[slot_index(s.0)].as_ref()),
+                id == POPEN,
+            )?;
             return Ok(match result {
                 Ok(file) => {
                     let key = self.file_key(value, false).expect("new file userdata");
@@ -596,7 +599,13 @@ impl Vm {
                     self.registers[base] = value;
                     1
                 }
-                Err(code) => self.io_failure(base, code, path.as_deref())?,
+                Err(code) => {
+                    let path = path
+                        .filter(|_| code != 12)
+                        .map(|s| self.strings.bytes[slot_index(s.0)].try_to_vec())
+                        .transpose()?;
+                    self.io_failure(base, code, path.as_deref())?
+                }
             });
         }
         if matches!(id, INPUT | OUTPUT) {
@@ -605,13 +614,16 @@ impl Vm {
             if arg != Value::Nil {
                 let value = if matches!(arg, Value::String(_) | Value::Number(_)) {
                     let s = self.string_argument(base, count, 0)?;
-                    let path = self.strings.bytes[slot_index(s.0)].try_to_vec()?;
-                    let file = self
-                        .open_stream(Some(&path), if id == INPUT { b"r" } else { b"w" }, false)?
-                        .map_err(|code| {
-                            ERRNO.set(code);
-                            self.file_argument_error(&path, code)
-                        })?;
+                    let path = self.strings.bytes[slot_index(s.0)].as_ref();
+                    let file = Self::open_stream(
+                        Some(path),
+                        if id == INPUT { b"r" } else { b"w" },
+                        false,
+                    )?
+                    .map_err(|code| {
+                        ERRNO.set(code);
+                        self.file_argument_error(path, code)
+                    })?;
                     self.try_file_value(file, env)?
                 } else {
                     self.checked_file(arg, true)?;
@@ -624,13 +636,11 @@ impl Vm {
         }
         if id == LINES && arg != Value::Nil {
             let s = self.string_argument(base, count, 0)?;
-            let path = self.strings.bytes[slot_index(s.0)].try_to_vec()?;
-            let file = self
-                .open_stream(Some(&path), b"r", false)?
-                .map_err(|code| {
-                    ERRNO.set(code);
-                    self.file_argument_error(&path, code)
-                })?;
+            let path = self.strings.bytes[slot_index(s.0)].as_ref();
+            let file = Self::open_stream(Some(path), b"r", false)?.map_err(|code| {
+                ERRNO.set(code);
+                self.file_argument_error(path, code)
+            })?;
             let Value::Userdata(file) = self.try_file_value(file, self.builtin_environment(id))?
             else {
                 unreachable!()
