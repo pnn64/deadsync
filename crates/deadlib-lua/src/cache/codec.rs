@@ -231,7 +231,9 @@ impl Writer {
             w.u32(call.temporaries.start)?;
             w.u32(call.temporaries.end)
         })?;
-        self.list(&p.active_lines, |w, line| w.u32(p.adjust_line(*line)))?;
+        self.list(p.debug.active_lines(), |w, line| {
+            w.u32(p.adjust_line(*line))
+        })?;
         self.list(&p.metadata, |w, metadata| {
             w.u32(p.adjust_hook_line(metadata.hook_line))
         })?;
@@ -418,7 +420,10 @@ impl<'a> Reader<'a> {
         let active_lines = self.words()?;
         self.metadata_words(&mut metadata, |m, value| m.hook_line = value)?;
         let temporaries = self.bytes()?;
-        self.charge(temporaries.len().next_multiple_of(size_of::<usize>()))?;
+        let line_bytes = std::mem::size_of_val(active_lines.as_ref());
+        self.charge(
+            (line_bytes + temporaries.len()).next_multiple_of(size_of::<usize>()) - line_bytes,
+        )?;
         let native = if self.boolean()? {
             self.charge(size_of::<NativeDebug>())?;
             Some(Box::new(NativeDebug {
@@ -440,7 +445,14 @@ impl<'a> Reader<'a> {
         };
         let mut storage = PackedDebug::default();
         storage
-            .try_replace(&mut names, &mut locals, &mut calls, &[], temporaries)
+            .try_replace(
+                &mut names,
+                &mut locals,
+                &mut calls,
+                &active_lines,
+                &[],
+                temporaries,
+            )
             .ok()?;
         Some(Prototype::new(
             PrototypeBody {
@@ -463,7 +475,6 @@ impl<'a> Reader<'a> {
             },
             metadata,
             defined,
-            active_lines,
         ))
     }
 }
@@ -487,7 +498,6 @@ fn decoded_bytes(data: &ProgramOwner) -> usize {
             // Each pooled debug name occupies its own range. Decoding these
             // names into separate boxes uses the same byte payload.
             + p.debug.heap_bytes()
-            + size_of_val(p.active_lines.as_ref())
             + p.bindings
                 .iter()
                 .map(|b| size_of_val(b.upvalues.as_ref()))

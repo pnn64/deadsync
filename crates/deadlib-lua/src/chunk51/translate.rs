@@ -451,7 +451,14 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
         }
     }
     let mut storage = PackedDebug::default();
-    storage.try_replace(&mut names, &mut locals, &mut calls, &[], &temporaries)?;
+    storage.try_replace(
+        &mut names,
+        &mut locals,
+        &mut calls,
+        &active_lines,
+        &[],
+        &temporaries,
+    )?;
     Ok(Prototype::new(
         PrototypeBody {
             gc_maps: RegisterMaps::Owned(masks.try_into_boxed_slice()?),
@@ -487,7 +494,6 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
         },
         out.metadata.try_into_boxed_slice()?,
         p.defined,
-        active_lines.try_into_boxed_slice()?,
     ))
 }
 

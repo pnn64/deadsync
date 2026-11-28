@@ -7,12 +7,13 @@ use std::{fmt, marker::PhantomData, mem::MaybeUninit, ptr, slice};
 
 type Word = MaybeUninit<usize>;
 
-// The three record arrays precede both byte arrays. Each record leaves the
-// next array suitably aligned without padding between arrays.
+// The record arrays precede the active lines and byte pools. Each record
+// leaves the next array suitably aligned without padding.
 const _: () = {
     assert!(align_of::<DebugName>() <= align_of::<Word>());
     assert!(align_of::<DebugLocal>() <= align_of::<Word>());
     assert!(align_of::<DebugCall>() <= align_of::<Word>());
+    assert!(align_of::<u32>() <= align_of::<Word>());
     assert!(size_of::<DebugName>() % align_of::<Word>() == 0);
     assert!(size_of::<DebugLocal>() % align_of::<Word>() == 0);
     assert!(size_of::<DebugCall>() % align_of::<Word>() == 0);
@@ -23,6 +24,7 @@ struct Ends {
     upvalues: usize,
     locals: usize,
     calls: usize,
+    lines: usize,
     names: usize,
     temporaries: usize,
 }
@@ -43,6 +45,7 @@ impl PackedDebug {
         upvalues: &mut Vec<DebugName>,
         locals: &mut Vec<DebugLocal>,
         calls: &mut Vec<DebugCall>,
+        lines: &[u32],
         names: &[u8],
         temporaries: &[u8],
     ) -> Result<(), Error> {
@@ -56,7 +59,8 @@ impl PackedDebug {
         let upvalue_end = end::<DebugName>(0, upvalues.len())?;
         let local_end = end::<DebugLocal>(upvalue_end, locals.len())?;
         let call_end = end::<DebugCall>(local_end, calls.len())?;
-        let name_end = end::<u8>(call_end, names.len())?;
+        let line_end = end::<u32>(call_end, lines.len())?;
+        let name_end = end::<u8>(line_end, names.len())?;
         let temporary_end = end::<u8>(name_end, temporaries.len())?;
         let capacity = temporary_end.div_ceil(size_of::<Word>());
         if capacity > self.words.capacity() {
@@ -68,21 +72,23 @@ impl PackedDebug {
         }
 
         let base = self.words.as_mut_ptr().cast::<u8>();
-        // SAFETY: checked lengths and the reserved capacity cover all five
-        // disjoint ranges. The three record starts satisfy their alignments.
+        // SAFETY: checked lengths and the reserved capacity cover all six
+        // disjoint ranges. The record and line ranges satisfy their alignments.
         // The buffers are borrowed separately from this allocation. Moving
         // their records leaves the scratch allocations empty and reusable.
         unsafe {
             Self::move_records(upvalues, base.cast());
             Self::move_records(locals, base.add(upvalue_end).cast());
             Self::move_records(calls, base.add(local_end).cast());
-            ptr::copy_nonoverlapping(names.as_ptr(), base.add(call_end), names.len());
+            ptr::copy_nonoverlapping(lines.as_ptr(), base.add(call_end).cast(), lines.len());
+            ptr::copy_nonoverlapping(names.as_ptr(), base.add(line_end), names.len());
             ptr::copy_nonoverlapping(temporaries.as_ptr(), base.add(name_end), temporaries.len());
         }
         self.ends = Ends {
             upvalues: upvalue_end,
             locals: local_end,
             calls: call_end,
+            lines: line_end,
             names: name_end,
             temporaries: temporary_end,
         };
@@ -111,8 +117,16 @@ impl PackedDebug {
         self.view(self.ends.locals, self.ends.calls)
     }
 
+    pub(crate) fn active_lines(&self) -> &[u32] {
+        self.view(self.ends.calls, self.ends.lines)
+    }
+
+    pub(crate) fn active_lines_mut(&mut self) -> &mut [u32] {
+        self.view_mut(self.ends.calls, self.ends.lines)
+    }
+
     pub(crate) fn names(&self) -> &[u8] {
-        self.view(self.ends.calls, self.ends.names)
+        self.view(self.ends.lines, self.ends.names)
     }
 
     pub(crate) fn temporaries(&self) -> &[u8] {
@@ -139,7 +153,7 @@ impl PackedDebug {
 
     fn clear(&mut self) {
         // SAFETY: the three initialized record ranges each have sole ownership
-        // of their elements. The other two ranges contain bytes.
+        // of their elements. The line and byte ranges need no drop.
         unsafe {
             ptr::drop_in_place(self.view_mut::<DebugName>(0, self.ends.upvalues));
             ptr::drop_in_place(self.view_mut::<DebugLocal>(self.ends.upvalues, self.ends.locals));
@@ -180,6 +194,7 @@ impl Clone for PackedDebug {
             &mut self.upvalues().to_vec(),
             &mut self.locals().to_vec(),
             &mut self.calls().to_vec(),
+            self.active_lines(),
             self.names(),
             self.temporaries(),
         )
@@ -194,6 +209,7 @@ impl fmt::Debug for PackedDebug {
             .field("upvalues", &self.upvalues())
             .field("locals", &self.locals())
             .field("calls", &self.calls())
+            .field("active_lines", &self.active_lines())
             .field("names", &self.names())
             .field("temporaries", &self.temporaries())
             .finish()
@@ -222,13 +238,20 @@ mod tests {
         }];
         let mut packed = PackedDebug::default();
         packed
-            .try_replace(&mut upvalues, &mut locals, &mut calls, b"name", &[1, 2])
+            .try_replace(
+                &mut upvalues,
+                &mut locals,
+                &mut calls,
+                &[3, 17],
+                b"name",
+                &[1, 2],
+            )
             .unwrap();
         assert!(upvalues.is_empty() && locals.is_empty() && calls.is_empty());
         let copy = packed.clone();
         let capacity = packed.heap_bytes();
         packed
-            .try_replace(&mut upvalues, &mut locals, &mut calls, b"other", &[])
+            .try_replace(&mut upvalues, &mut locals, &mut calls, &[9], b"other", &[])
             .unwrap();
         assert_eq!(packed.heap_bytes(), capacity);
         assert!(
@@ -243,6 +266,8 @@ mod tests {
         ] {
             assert!(matches!(name, DebugName::Owned(bytes) if bytes.as_ref() == expected));
         }
+        assert_eq!(packed.active_lines(), [9]);
+        assert_eq!(copy.active_lines(), [3, 17]);
         assert_eq!(copy.names(), b"name");
         assert_eq!(copy.temporaries(), [1, 2]);
     }

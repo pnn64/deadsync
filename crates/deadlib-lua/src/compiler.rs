@@ -525,6 +525,7 @@ impl<'a> Compiler<'a> {
             &mut f.debug_upvalues,
             &mut f.debug_locals,
             &mut f.debug_calls,
+            &f.active_lines,
             &f.debug_names,
             &f.debug_temporaries,
         )?;
@@ -563,7 +564,6 @@ impl<'a> Compiler<'a> {
             },
             metadata.try_into_boxed_slice()?,
             f.defined,
-            copy_boxed(&f.active_lines, old_body.map(|p| p.active_lines))?,
         ))?;
         f.reset();
         Ok((id, name_storage))

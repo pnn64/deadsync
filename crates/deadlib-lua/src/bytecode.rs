@@ -442,7 +442,6 @@ impl std::ops::DerefMut for RegisterMaps {
 pub(crate) struct PrototypeBody {
     pub code: Box<[Instruction]>,
     pub metadata: Box<[InstructionMetadata]>,
-    pub active_lines: Box<[u32]>,
     pub gc_maps: RegisterMaps,
     /// The pool of the original body. Use `Prototype::constants` for an instance.
     pub original_constants: Box<[Constant]>,
@@ -522,10 +521,8 @@ impl Prototype {
         mut body: PrototypeBody,
         metadata: Box<[InstructionMetadata]>,
         defined: [u32; 2],
-        active_lines: Box<[u32]>,
     ) -> Self {
         body.metadata = metadata;
-        body.active_lines = active_lines;
         Self {
             storage: PrototypeStorage::Owned(body),
             defined,
@@ -543,7 +540,7 @@ impl Prototype {
                 metadata.hook_line = metadata.hook_line.wrapping_add(bias);
             }
         }
-        for line in &mut *body.active_lines {
+        for line in body.debug.storage.active_lines_mut() {
             *line = line.wrapping_add(bias);
         }
     }
@@ -588,7 +585,8 @@ impl Prototype {
                     && (m.hook_line == 0 || lines.contains(&self.adjust_line(m.hook_line)))
             })
             && self
-                .active_lines
+                .debug
+                .active_lines()
                 .iter()
                 .all(|&line| lines.contains(&self.adjust_line(line)))
     }
@@ -845,7 +843,6 @@ impl ProgramData {
             }
             bytes += std::mem::size_of_val(prototype.code.as_ref())
                 + std::mem::size_of_val(prototype.metadata.as_ref())
-                + std::mem::size_of_val(prototype.active_lines.as_ref())
                 + prototype.debug.heap_bytes()
                 + prototype.gc_maps.heap_bytes()
                 + std::mem::size_of_val(prototype.upvalues.as_ref())
@@ -1194,8 +1191,8 @@ impl Prototype {
                 .iter()
                 .any(|name| name.bytes(self.debug.names()).is_none())
             || self.defined[0] > self.defined[1]
-            || self.active_lines.first() == Some(&0)
-            || self.active_lines.windows(2).any(|l| l[0] >= l[1])
+            || self.debug.active_lines().first() == Some(&0)
+            || self.debug.active_lines().windows(2).any(|l| l[0] >= l[1])
             || self.debug.locals().iter().any(|l| {
                 l.start > l.end
                     || l.end as usize > self.code.len()
@@ -1703,7 +1700,6 @@ mod tests {
                 3 => proto.debug.storage.calls_mut()[0].pc = u32::MAX,
                 4 => proto.debug.storage.calls_mut()[0].pc = 0,
                 5 => proto.debug.storage.calls_mut()[1].pc = proto.debug.calls()[0].pc,
-                6 => proto.active_lines = Box::new([3, 2]),
                 7 => {
                     data.prototypes
                         .iter_mut()
@@ -1713,18 +1709,31 @@ mod tests {
                         .storage = PackedDebug::default()
                 }
                 8 => proto.debug.storage.calls_mut()[0].temporaries = 0..u32::MAX,
-                9 => {
+                6 | 9 => {
                     let debug = &proto.debug;
                     let mut upvalues = debug.upvalues().to_vec();
                     let mut locals = debug.locals().to_vec();
                     let mut calls = debug.calls().to_vec();
                     let names = debug.names().to_vec();
-                    let register = proto.code[calls[0].pc as usize].a;
-                    calls[0].temporaries = 0..1;
+                    let mut lines = debug.active_lines().to_vec();
+                    let mut temporaries = debug.temporaries().to_vec();
+                    if corrupt == 6 {
+                        lines = vec![3, 2];
+                    } else {
+                        temporaries = vec![proto.code[calls[0].pc as usize].a];
+                        calls[0].temporaries = 0..1;
+                    }
                     proto
                         .debug
                         .storage
-                        .try_replace(&mut upvalues, &mut locals, &mut calls, &names, &[register])
+                        .try_replace(
+                            &mut upvalues,
+                            &mut locals,
+                            &mut calls,
+                            &lines,
+                            &names,
+                            &temporaries,
+                        )
                         .unwrap();
                 }
                 10 => {

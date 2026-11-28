@@ -440,7 +440,7 @@ impl NativeStack<'_, '_> {
             let lines = if let Some((_, p, data)) = &code {
                 let table = self.call.vm.new_table();
                 let prototype = &data.prototypes[*p];
-                for &raw in &prototype.active_lines {
+                for &raw in prototype.debug.active_lines() {
                     let line = prototype.adjust_line(raw);
                     self.call.vm.raw_set(
                         table,

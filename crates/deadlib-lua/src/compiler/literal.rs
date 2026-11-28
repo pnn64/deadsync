@@ -111,6 +111,16 @@ pub(crate) fn compile_literal_return(
     ];
     let lines = [value_line, final_line];
     let active = &lines[..1 + usize::from(value_line != final_line)];
+    let mut debug = reused.debug;
+    debug.stack = 2;
+    debug.storage.try_replace(
+        &mut Vec::new(),
+        &mut Vec::new(),
+        &mut Vec::new(),
+        active,
+        &[],
+        &[],
+    )?;
     prototypes.push(Prototype::new(
         PrototypeBody {
             code: copy_boxed(&instructions, Some(reused.code))?,
@@ -119,15 +129,11 @@ pub(crate) fn compile_literal_return(
             constant_strings: strings,
             registers: 2,
             vararg: true,
-            debug: DebugInfo {
-                stack: 2,
-                ..DebugInfo::default()
-            },
+            debug,
             ..PrototypeBody::default()
         },
         copy_boxed(&metadata, Some(reused.metadata))?,
         [0; 2],
-        copy_boxed(active, Some(reused.active_lines))?,
     ));
     let program = Program::try_new_reusing_name(prototypes, 0, name, name_storage)?;
     program.verify()?;
@@ -157,7 +163,11 @@ fn fixed_literal_prototypes_match_general_compilation() {
         let actual = &direct.data.prototypes[0];
         assert_eq!(actual.registers, expected.registers, "{source:?}");
         assert_eq!(actual.debug.stack, expected.debug.stack, "{source:?}");
-        assert_eq!(actual.active_lines, expected.active_lines, "{source:?}");
+        assert_eq!(
+            actual.debug.active_lines(),
+            expected.debug.active_lines(),
+            "{source:?}"
+        );
         assert_eq!(&*actual.gc_maps, &*expected.gc_maps, "{source:?}");
         for (i, j) in actual.code.iter().zip(expected.code.iter()) {
             assert_eq!((i.op, i.a, i.b, i.c), (j.op, j.a, j.b, j.c), "{source:?}");
