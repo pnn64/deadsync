@@ -693,7 +693,7 @@ impl Parser {
     }
 
     fn discharge_last_field(&mut self, mark: usize, line: u32) {
-        if let Some((None, value)) = self.last_field(mark) {
+        if let Some(value) = self.last_list_field(mark) {
             self.ast.exprs[value].1.discharge = line;
         }
     }
@@ -741,7 +741,7 @@ impl Parser {
             };
             let value = self.rexpr(input, 0)?;
             self.raccount(input, |r, cx| r.field(key, value, cx))?;
-            self.scratch.fields.try_push((key, value))?;
+            self.scratch.fields.try_push(TableField::new(key, value))?;
             if matches!(self.kind(), Kind::Comma | Kind::Semi) {
                 let separator = self.bump(input)?;
                 self.discharge_last_field(mark, separator.end_line);

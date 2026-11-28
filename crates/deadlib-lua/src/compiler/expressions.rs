@@ -140,11 +140,11 @@ impl<'a> Compiler<'a> {
                 // Lua 5.1 reserves constructor slots before evaluating fields.
                 // Those hints affect collision placement and thus pairs order.
                 let fields = self.ast.fields(*fields);
-                let records = fields.iter().filter(|(key, _)| key.is_some()).count();
+                let records = fields.iter().filter(|field| field.key().is_some()).count();
                 let mut array = fields.len() - records;
                 if fields
                     .last()
-                    .is_some_and(|(key, value)| key.is_none() && self.multiple(*value))
+                    .is_some_and(|field| field.key().is_none() && self.multiple(field.value))
                 {
                     array -= 1;
                 }
@@ -558,8 +558,9 @@ impl<'a> Compiler<'a> {
             unreachable!()
         };
         let fields = self.ast.fields(*fields);
-        while let Some(&(key, value)) = fields.get(state.index) {
-            if let Some(key) = key {
+        while let Some(&field) = fields.get(state.index) {
+            let value = field.value;
+            if let Some(key) = field.key() {
                 if let Some(constant) = self.constant_operand(key)? {
                     let reg = self.alloc(1)?;
                     const RK_LAST: u32 = u16::MAX as u32 - RK;
@@ -666,7 +667,7 @@ impl<'a> Compiler<'a> {
                 unreachable!()
             };
             let fields = self.ast.fields(*fields);
-            self.line = self.ast.exprs[fields[state.index].0.expect("constant key")]
+            self.line = self.ast.exprs[fields[state.index].key().expect("constant key")]
                 .1
                 .discharge;
             self.emit(Op::Load, key, 0, constant)?;

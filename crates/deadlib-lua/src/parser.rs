@@ -185,6 +185,27 @@ const _: () = assert!(
     size_of::<SourceSpan>() == 16 && size_of::<(Expr, SourceSpan)>() == size_of::<Expr>() + 16
 );
 
+/// A constructor field in the AST. The largest usize cannot index an
+/// expression arena and denotes a value with an implicit array index.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TableField {
+    key: ExprId,
+    pub(crate) value: ExprId,
+}
+
+impl TableField {
+    pub(crate) fn new(key: Option<ExprId>, value: ExprId) -> Self {
+        Self {
+            key: key.unwrap_or(usize::MAX),
+            value,
+        }
+    }
+
+    pub(crate) fn key(self) -> Option<ExprId> {
+        (self.key != usize::MAX).then_some(self.key)
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct Ast {
     pub exprs: Vec<(Expr, SourceSpan)>,
@@ -192,7 +213,7 @@ pub(crate) struct Ast {
     /// Statement and expression identifier lists.
     pub ids: Vec<usize>,
     pub names: Vec<Lexeme>,
-    pub fields: Vec<(Option<ExprId>, ExprId)>,
+    pub fields: Vec<TableField>,
     pub arms: Vec<(ExprId, Block)>,
     pub body: Block,
     pub end_line: u32,
@@ -226,7 +247,7 @@ impl Ast {
     pub(crate) fn names(&self, span: Span) -> &[Lexeme] {
         &self.names[span.range()]
     }
-    pub(crate) fn fields(&self, span: Span) -> &[(Option<ExprId>, ExprId)] {
+    pub(crate) fn fields(&self, span: Span) -> &[TableField] {
         &self.fields[span.range()]
     }
     pub(crate) fn arms(&self, span: Span) -> &[(ExprId, Block)] {
@@ -248,7 +269,7 @@ impl Ast {
         self.ids.capacity() * size_of::<usize>()
             + self.names.capacity() * size_of::<Lexeme>()
             + self.names.iter().map(|n| n.heap_bytes()).sum::<usize>()
-            + self.fields.capacity() * size_of::<(Option<ExprId>, ExprId)>()
+            + self.fields.capacity() * size_of::<TableField>()
             + self.arms.capacity() * size_of::<(ExprId, Block)>()
     }
 }

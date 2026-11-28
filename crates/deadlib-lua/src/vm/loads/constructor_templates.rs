@@ -99,13 +99,14 @@ fn visit_constructor(
     }
     match ast.exprs[id].0 {
         Expr::Table(fields, _) => {
-            for &(key, value) in ast.fields(fields) {
-                if key
+            for field in ast.fields(fields) {
+                if field
+                    .key()
                     .is_some_and(|id| !matches!(ast.exprs[id].0, Expr::String(_) | Expr::Number(_)))
                 {
                     return None;
                 }
-                visit_constructor(ast, value, callbacks, depth + 1)?;
+                visit_constructor(ast, field.value, callbacks, depth + 1)?;
             }
         }
         Expr::Call(target, args, _) if named_constructor(ast, target) => {

@@ -133,7 +133,7 @@ impl Spare {
 struct Scratch {
     ids: Vec<usize>,
     names: Vec<Lexeme>,
-    fields: Vec<(Option<ExprId>, ExprId)>,
+    fields: Vec<TableField>,
     arms: Vec<(ExprId, Block)>,
 }
 impl Scratch {
@@ -141,7 +141,7 @@ impl Scratch {
         self.ids.capacity() * size_of::<usize>()
             + self.names.capacity() * size_of::<Lexeme>()
             + self.names.iter().map(|n| n.heap_bytes()).sum::<usize>()
-            + self.fields.capacity() * size_of::<(Option<ExprId>, ExprId)>()
+            + self.fields.capacity() * size_of::<TableField>()
             + self.arms.capacity() * size_of::<(ExprId, Block)>()
     }
 }
@@ -423,9 +423,10 @@ impl Parser {
     fn publish_names(&mut self, mark: usize) -> Result<Span, Error> {
         publish(&mut self.ast.names, &mut self.scratch.names, mark)
     }
-    /// The most recent field of the innermost open table constructor.
-    fn last_field(&self, mark: usize) -> Option<(Option<ExprId>, ExprId)> {
-        self.scratch.fields[mark..].last().copied()
+    /// The last field of an open constructor if it has an implicit index.
+    fn last_list_field(&self, mark: usize) -> Option<ExprId> {
+        let field = self.scratch.fields[mark..].last()?;
+        field.key().is_none().then_some(field.value)
     }
     /// Declare published local names in order.
     fn declare_names(&mut self, input: &[u8], names: Span) -> Result<(), Error> {
@@ -1705,7 +1706,7 @@ impl Parser {
                 }
                 Task::TableNext(line, fields) => {
                     if self.kind() == Kind::RBrace {
-                        if let Some((None, value)) = self.last_field(fields) {
+                        if let Some(value) = self.last_list_field(fields) {
                             self.ast.exprs[value].1.discharge = self.current().end_line;
                         }
                         self.take();
@@ -1744,18 +1745,20 @@ impl Parser {
                 Task::TableValue(line, fields, key) => {
                     let value = self.expr;
                     self.account(input, |r, cx| r.field(key, value, cx))?;
-                    self.scratch.fields.try_push((key, self.expr))?;
+                    self.scratch
+                        .fields
+                        .try_push(TableField::new(key, self.expr))?;
                     self.tasks.try_push(Task::TableSeparator(line, fields))?;
                 }
                 Task::TableSeparator(line, fields) => {
                     if matches!(self.kind(), Kind::Comma | Kind::Semi) {
                         let separator = self.take();
-                        if let Some((None, value)) = self.last_field(fields) {
+                        if let Some(value) = self.last_list_field(fields) {
                             self.ast.exprs[value].1.discharge = separator.end_line;
                         }
                         self.tasks.try_push(Task::TableNext(line, fields))?;
                     } else {
-                        if let Some((None, value)) = self.last_field(fields) {
+                        if let Some(value) = self.last_list_field(fields) {
                             self.ast.exprs[value].1.discharge = self.current().end_line;
                         }
                         self.close(Kind::RBrace, Kind::LBrace, line[0])?;

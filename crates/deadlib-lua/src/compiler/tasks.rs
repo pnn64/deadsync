@@ -482,7 +482,7 @@ impl<'a> Compiler<'a> {
                     };
                     let fields = self.ast.fields(*fields);
                     let key = self.result;
-                    let value = fields[state.index].1;
+                    let value = fields[state.index].value;
                     let value_reg = self.right_register(value, key, regs, false)?;
                     self.tasks.try_push(Task::TableValue(state, regs, key))?;
                     self.operand(value, value_reg)?;

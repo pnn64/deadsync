@@ -74,11 +74,11 @@ impl Value {
 }
 #[derive(Clone, Copy, Debug)]
 struct Key {
-    hash: u64,
+    // High bits identify the payload, leaving 61 bits of the original hash.
+    hash_and_kind: u64,
     data: u64,
-    // 0 number, 1 nil, 2 false, 3 true, 4 AST string, 5 interned name.
-    kind: u8,
 }
+const _: () = assert!(size_of::<Key>() == 16);
 #[derive(Debug, Default)]
 struct Pool {
     entries: Vec<Key>,
@@ -92,16 +92,35 @@ pub(super) struct Context<'a> {
 }
 
 impl Key {
+    const KIND_SHIFT: u32 = 61;
+    const HASH_MASK: u64 = (1 << Self::KIND_SHIFT) - 1;
+
+    // Kinds are 0 number, 1 nil, 2 false, 3 true, 4 AST string, 5 interned name.
+    fn new(hash: u64, data: u64, kind: u8) -> Self {
+        Self {
+            hash_and_kind: (hash & Self::HASH_MASK) | (u64::from(kind) << Self::KIND_SHIFT),
+            data,
+        }
+    }
+
+    fn hash(self) -> u64 {
+        self.hash_and_kind & Self::HASH_MASK
+    }
+
+    fn kind(self) -> u8 {
+        (self.hash_and_kind >> Self::KIND_SHIFT) as u8
+    }
+
     fn native_event(self, cx: &Context<'_>, negative_zero: bool) -> Result<NativeRootEvent, Error> {
         use crate::bytecode::Constant;
-        let constant = match self.kind {
+        let constant = match self.kind() {
             0 => Constant::Number(if negative_zero && self.data == 0 {
                 -0.0
             } else {
                 f64::from_bits(self.data)
             }),
             1 => Constant::Nil,
-            2 | 3 => Constant::Boolean(self.kind == 3),
+            2 | 3 => Constant::Boolean(self.kind() == 3),
             4 => {
                 let text = RootText::from_lexeme(self.string(cx.ast))?;
                 return Ok(NativeRootEvent::ConstantText(text));
@@ -121,29 +140,29 @@ impl Key {
         bytes
     }
     fn scalar(kind: u8, data: u64) -> Self {
-        Self {
-            hash: hash(&data.to_le_bytes()) ^ u64::from(kind),
-            data,
-            kind,
-        }
+        Self::new(hash(&data.to_le_bytes()) ^ u64::from(kind), data, kind)
     }
     fn number(n: f64) -> Self {
         Self::scalar(0, if n == 0.0 { 0 } else { n.to_bits() })
     }
     fn bytes<'a>(self, cx: &Context<'a>) -> &'a [u8] {
-        if self.kind == 5 {
+        if self.kind() == 5 {
             cx.bindings.bytes(cx.input, self.data as u32)
         } else {
             self.string(cx.ast).bytes(cx.input)
         }
     }
     fn matches(self, other: Self, cx: &Context<'_>) -> bool {
-        self.hash == other.hash
-            && if self.kind >= 4 && other.kind >= 4 && (self.kind != 5 || other.kind != 5) {
-                self.bytes(cx) == other.bytes(cx)
-            } else {
-                self.kind == other.kind && self.data == other.data
-            }
+        if self.hash_and_kind == other.hash_and_kind && self.data == other.data {
+            return true;
+        }
+        let kind = self.kind();
+        let other_kind = other.kind();
+        self.hash() == other.hash()
+            && kind >= 4
+            && other_kind >= 4
+            && (kind != 5 || other_kind != 5)
+            && self.bytes(cx) == other.bytes(cx)
     }
 }
 impl Pool {
@@ -153,30 +172,46 @@ impl Pool {
         self.first_number_reused = false;
     }
 
+    // The table holds at most half as many entries as buckets. A compact
+    // index leaves a hash tag in the same word, so a probe usually rejects
+    // collisions without loading the entry.
+    fn bucket_index_mask(bucket_count: usize) -> u32 {
+        const INDEX_BITS: u32 = if cfg!(test) { 8 } else { 24 };
+        if bucket_count <= 1 << INDEX_BITS {
+            (1 << INDEX_BITS) - 1
+        } else {
+            u32::MAX
+        }
+    }
+
     fn insert(&mut self, key: Key, cx: &Context<'_>) -> Result<u32, Error> {
         const INDEX_AT: usize = 8;
         let mut slot = 0;
+        let mut index_mask = Self::bucket_index_mask(self.buckets.len());
         let found = if self.buckets.is_empty() {
             self.entries
                 .iter()
                 .position(|&entry| entry.matches(key, cx))
         } else {
             let mask = self.buckets.len() - 1;
-            slot = key.hash as usize & mask;
+            let tag = key.hash() as u32 & !index_mask;
+            slot = key.hash() as usize & mask;
             loop {
                 let encoded = self.buckets[slot];
                 if encoded == 0 {
                     break None;
                 }
-                let index = (encoded - 1) as usize;
-                if self.entries[index].matches(key, cx) {
-                    break Some(index);
+                if encoded & !index_mask == tag {
+                    let index = ((encoded & index_mask) - 1) as usize;
+                    if self.entries[index].matches(key, cx) {
+                        break Some(index);
+                    }
                 }
                 slot = (slot + 1) & mask;
             }
         };
         if let Some(index) = found {
-            if index == 0 && key.kind == 0 {
+            if index == 0 && key.kind() == 0 {
                 self.first_number_reused = true;
             }
             return Ok(index as u32);
@@ -190,20 +225,21 @@ impl Pool {
             let size = (self.buckets.len() * 2).max(16);
             self.buckets.clear();
             self.buckets.try_resize(size, 0)?;
+            index_mask = Self::bucket_index_mask(size);
             for (index, entry) in self.entries.iter().enumerate() {
-                let mut slot = entry.hash as usize & (size - 1);
+                let mut slot = entry.hash() as usize & (size - 1);
                 while self.buckets[slot] != 0 {
                     slot = (slot + 1) & (size - 1);
                 }
-                self.buckets[slot] = index as u32 + 1;
+                self.buckets[slot] = (index as u32 + 1) | (entry.hash() as u32 & !index_mask);
             }
-            slot = key.hash as usize & (size - 1);
+            slot = key.hash() as usize & (size - 1);
             while self.buckets[slot] != 0 {
                 slot = (slot + 1) & (size - 1);
             }
         }
         self.entries.try_push(key)?;
-        self.buckets[slot] = index + 1;
+        self.buckets[slot] = (index + 1) | (key.hash() as u32 & !index_mask);
         Ok(index)
     }
     fn heap_bytes(&self) -> usize {
@@ -239,13 +275,15 @@ impl Resources {
     pub(super) fn initializer_numbers(&self, first: f64) -> Option<impl Iterator<Item = f64> + '_> {
         let pool = &self.function.pool;
         let (initializer, rest) = pool.entries.split_first()?;
-        if pool.first_number_reused || initializer.kind != 0 || initializer.data != first.to_bits()
+        if pool.first_number_reused
+            || initializer.kind() != 0
+            || initializer.data != first.to_bits()
         {
             return None;
         }
         Some(
             rest.iter()
-                .filter(|key| key.kind == 0)
+                .filter(|key| key.kind() == 0)
                 .map(|key| f64::from_bits(key.data)),
         )
     }
@@ -427,7 +465,7 @@ impl Resources {
             return Ok(());
         }
         let key = self.function.pool.entries[usize::from(operand - RK)];
-        let constant = match key.kind {
+        let constant = match key.kind() {
             0 => {
                 let number = f64::from_bits(key.data);
                 ConstantOperand::Number(
@@ -440,7 +478,7 @@ impl Resources {
                 )
             }
             1 => ConstantOperand::Nil,
-            2 | 3 => ConstantOperand::Boolean(key.kind == 3),
+            2 | 3 => ConstantOperand::Boolean(key.kind() == 3),
             4 => ConstantOperand::String(key.data as ExprId),
             _ => unreachable!("a constant string operand has an AST literal"),
         };
@@ -559,11 +597,7 @@ impl Resources {
             Reference::Upvalue => Value::new(Form::Upvalue, 0),
             Reference::Global(symbol) => {
                 let index = self.function.pool.insert(
-                    Key {
-                        hash: cx.bindings.symbol_hash(symbol),
-                        data: u64::from(symbol),
-                        kind: 5,
-                    },
+                    Key::new(cx.bindings.symbol_hash(symbol), u64::from(symbol), 5),
                     cx,
                 )?;
                 Value::new(Form::Global, index)
@@ -725,11 +759,7 @@ impl Resources {
     }
     pub(super) fn method(&mut self, id: ExprId, symbol: u32, cx: &Context<'_>) -> Check<u32> {
         let index = self.function.pool.insert(
-            Key {
-                hash: cx.bindings.symbol_hash(symbol),
-                data: u64::from(symbol),
-                kind: 5,
-            },
+            Key::new(cx.bindings.symbol_hash(symbol), u64::from(symbol), 5),
             cx,
         )?;
         let mut v = self.values[id];
@@ -901,18 +931,14 @@ impl Resources {
         Ok(())
     }
     fn string_constant(&mut self, id: ExprId, text: &Lexeme, cx: &Context<'_>) -> Check<u32> {
-        let slot = self.function.pool.insert(
-            Key {
-                hash: hash(text.bytes(cx.input)),
-                data: id as u64,
-                kind: 4,
-            },
-            cx,
-        )?;
+        let slot = self
+            .function
+            .pool
+            .insert(Key::new(hash(text.bytes(cx.input)), id as u64, 4), cx)?;
         // An identifier or method may have interned these bytes first.
         // Retain this literal as an allocation-free compiler source.
-        self.function.pool.entries[slot as usize].kind = 4;
-        self.function.pool.entries[slot as usize].data = id as u64;
+        let entry = &mut self.function.pool.entries[slot as usize];
+        *entry = Key::new(entry.hash(), id as u64, 4);
         Ok(slot)
     }
 
@@ -1028,6 +1054,14 @@ mod tests {
         assert_eq!(pool.insert(Key::number(8.0), &cx).unwrap(), 8);
         assert!(!pool.buckets.is_empty());
         for n in 0..9 {
+            assert_eq!(pool.insert(Key::number(f64::from(n)), &cx).unwrap(), n);
+        }
+        assert_ne!(Pool::bucket_index_mask(pool.buckets.len()), u32::MAX);
+        for n in 9..200 {
+            assert_eq!(pool.insert(Key::number(f64::from(n)), &cx).unwrap(), n);
+        }
+        assert_eq!(Pool::bucket_index_mask(pool.buckets.len()), u32::MAX);
+        for n in (0..200).rev() {
             assert_eq!(pool.insert(Key::number(f64::from(n)), &cx).unwrap(), n);
         }
     }
