@@ -79,10 +79,10 @@ pub(crate) fn compile_direct(
     }
     spare.functions.try_push(compiler.function)?;
     spare.names = compiler.names;
-    let Some(entry) = entry else {
+    let Some((entry, name_storage)) = entry else {
         return Ok(None);
     };
-    let program = Program::try_new(compiler.prototypes, entry, name)?;
+    let program = Program::try_new_reusing_name(compiler.prototypes, entry, name, name_storage)?;
     match program.verify() {
         Ok(()) => Ok(Some(program)),
         Err(error) if error.kind() != ErrorKind::Memory => Ok(None),
@@ -129,7 +129,7 @@ struct Frontend<'a> {
 }
 
 impl Frontend<'_> {
-    fn compile(&mut self, pool: &mut buffers::Pool) -> Result<u32, Error> {
+    fn compile(&mut self, pool: &mut buffers::Pool) -> Result<(u32, Box<[u8]>), Error> {
         self.block(0)?;
         let function = &self.compiler.function;
         if self.token.kind != Kind::Eof

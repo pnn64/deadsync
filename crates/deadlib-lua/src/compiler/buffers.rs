@@ -108,7 +108,7 @@ fn recycles_buffers_only_after_the_last_program_owner_drops() {
     assert!(pool.take(count).is_none());
     pool.collect(|| drop(retained));
 
-    let (slot, body) = pool.take(count).unwrap().into_parts();
+    let (slot, body, _) = pool.take(count).unwrap().into_parts();
     assert!(slot.is_empty());
     assert_eq!(slot.capacity(), 1);
     assert_eq!(body.code.as_ptr(), code_address);
@@ -125,11 +125,14 @@ fn ordinary_vm_compilation_reuses_retired_short_code() {
     assert!(prototype.code.len() < 32);
     let code = prototype.code.as_ptr();
     let metadata = prototype.metadata.as_ptr();
+    let name = first.data.name.as_ptr();
     assert_eq!(vm.execute(&first).unwrap(), &[crate::Value::Number(11.0)]);
     drop(first);
     vm.collect_garbage().unwrap();
 
-    let second = vm.compile_source(b"return 47", b"=second").unwrap();
+    let second = vm.compile_source(b"return 47", b"=other").unwrap();
+    assert_eq!(second.data.name.as_ref(), b"=other");
+    assert_eq!(second.data.name.as_ptr(), name);
     let prototype = &second.data.prototypes[0];
     assert_eq!(prototype.code.as_ptr(), code);
     assert_eq!(prototype.metadata.as_ptr(), metadata);

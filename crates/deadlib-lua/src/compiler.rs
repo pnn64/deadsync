@@ -346,7 +346,7 @@ fn compile_with_templates(
     c.line = ast.end_line;
     c.emit(Op::Return, 0, 0, 0)?;
     let pool = recycle_root.then_some(&mut spare.code);
-    let entry = c.finish_with_buffers(pool)?;
+    let (entry, name_storage) = c.finish_with_buffers(pool)?;
     c.spare.try_push(c.function)?;
     spare.functions = c.spare;
     debug_assert!(c.parents.is_empty());
@@ -356,7 +356,7 @@ fn compile_with_templates(
     spare.tasks = recycle(c.tasks);
     debug_assert!(c.assignment_targets.is_empty());
     spare.assignment_targets = c.assignment_targets;
-    let p = Program::try_new(c.prototypes, entry, name)?;
+    let p = Program::try_new_reusing_name(c.prototypes, entry, name, name_storage)?;
     p.verify()?;
     spare.templates = c.templates;
     spare.numeric_templates = c.numeric_templates;
@@ -372,10 +372,12 @@ impl<'a> Compiler<'a> {
         }
     }
     fn finish(&mut self) -> Result<u32, Error> {
-        self.finish_with_buffers(None)
+        self.finish_with_buffers(None).map(|(entry, _)| entry)
     }
-
-    fn finish_with_buffers(&mut self, pool: Option<&mut buffers::Pool>) -> Result<u32, Error> {
+    fn finish_with_buffers(
+        &mut self,
+        pool: Option<&mut buffers::Pool>,
+    ) -> Result<(u32, Box<[u8]>), Error> {
         let f = &mut *self.function;
         boolean::thread_jumps(&mut f.code, &mut f.jump_targets, &mut f.jump_path)?;
         for &pc in &f.logical_tests {
@@ -406,10 +408,12 @@ impl<'a> Compiler<'a> {
             )?);
             upvalues.push(value);
         }
+        let mut name_storage = Box::default();
         let mut old_body = if let Some(pool) = pool {
             if let Some(saved) = pool.take(f.code.len()) {
-                let (slot, body) = saved.into_parts();
+                let (slot, body, name) = saved.into_parts();
                 self.prototypes = slot;
+                name_storage = name;
                 Some(body)
             } else {
                 self.prototypes = fallible::with_capacity(1)?;
@@ -567,7 +571,7 @@ impl<'a> Compiler<'a> {
             copy_boxed(&f.active_lines, old_body.map(|p| p.active_lines))?,
         ))?;
         f.reset();
-        Ok(id)
+        Ok((id, name_storage))
     }
     fn intern_name(&mut self, name: &[u8]) -> Result<Name, Error> {
         let start = u32::try_from(self.names.len()).map_err(|_| Error::memory())?;

@@ -718,16 +718,17 @@ pub(crate) struct ProgramData {
 
 pub(crate) struct RecycledPrototype {
     slot: Vec<Prototype>,
+    name: Box<[u8]>,
     pub bytes: usize,
 }
 
 impl RecycledPrototype {
-    pub(crate) fn into_parts(mut self) -> (Vec<Prototype>, PrototypeBody) {
+    pub(crate) fn into_parts(mut self) -> (Vec<Prototype>, PrototypeBody, Box<[u8]>) {
         let prototype = self.slot.pop().expect("one retired prototype");
         let PrototypeStorage::Owned(body) = prototype.storage else {
             unreachable!("retired prototype owns its payload");
         };
-        (self.slot, body)
+        (self.slot, body, self.name)
     }
 }
 
@@ -768,8 +769,18 @@ impl ProgramData {
         if bytes > room {
             return None;
         }
+        // Keep ordinary chunk names without displacing reusable bytecode.
+        let name = if self.name.len() <= 512 && self.name.len() <= room - bytes {
+            std::mem::take(&mut self.name)
+        } else {
+            Box::default()
+        };
         let slot = std::mem::take(&mut self.prototypes).into_vec();
-        Some(RecycledPrototype { slot, bytes })
+        Some(RecycledPrototype {
+            slot,
+            bytes: bytes + name.len(),
+            name,
+        })
     }
 
     pub(crate) fn new(
@@ -920,12 +931,22 @@ impl Program {
         entry: u32,
         name: &[u8],
     ) -> Result<Self, Error> {
-        Self::try_from_data(ProgramData::new(
-            prototypes.try_into_boxed_slice()?,
-            entry,
-            name.try_boxed()?,
-            Box::default(),
-        ))
+        Self::try_new_reusing_name(prototypes, entry, name, Box::default())
+    }
+
+    pub(crate) fn try_new_reusing_name(
+        prototypes: Vec<Prototype>,
+        entry: u32,
+        name: &[u8],
+        mut storage: Box<[u8]>,
+    ) -> Result<Self, Error> {
+        let prototypes = prototypes.try_into_boxed_slice()?;
+        if storage.len() == name.len() {
+            storage.copy_from_slice(name);
+        } else {
+            storage = name.try_boxed()?;
+        }
+        Self::try_from_data(ProgramData::new(prototypes, entry, storage, Box::default()))
     }
 
     pub(crate) fn try_from_data(data: ProgramData) -> Result<Self, Error> {

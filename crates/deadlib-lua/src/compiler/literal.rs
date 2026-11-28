@@ -46,9 +46,13 @@ pub(crate) fn compile_literal_return(
         Err(error) if error.kind() == ErrorKind::Memory => return Err(error),
         _ => return Ok(None),
     };
-    let (mut prototypes, mut reused) = match spare.code.take(3) {
+    let (mut prototypes, mut reused, name_storage) = match spare.code.take(3) {
         Some(saved) => saved.into_parts(),
-        None => (fallible::with_capacity(1)?, PrototypeBody::default()),
+        None => (
+            fallible::with_capacity(1)?,
+            PrototypeBody::default(),
+            Box::default(),
+        ),
     };
     let (constant, strings) = match literal {
         Literal::Scalar(value) => (value, Box::default()),
@@ -125,7 +129,7 @@ pub(crate) fn compile_literal_return(
         [0; 2],
         copy_boxed(active, Some(reused.active_lines))?,
     ));
-    let program = Program::try_new(prototypes, 0, name)?;
+    let program = Program::try_new_reusing_name(prototypes, 0, name, name_storage)?;
     program.verify()?;
     Ok(Some(program))
 }
