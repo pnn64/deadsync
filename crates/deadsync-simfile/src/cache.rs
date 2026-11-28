@@ -2893,10 +2893,12 @@ fn cached_song_paths_exist(song: &CachedSong) -> bool {
             .background_lua_changes
             .iter()
             .all(|change| cached_path_exists(Some(&change.path)))
-        && data
-            .charts
-            .iter()
-            .all(|chart| cached_path_exists(chart.music_path.as_deref()))
+        && data.charts.iter().all(|chart| {
+            // Most charts inherit the song's music. Its path is checked
+            // below, so only distinct overrides need another file query.
+            chart.music_path.as_deref() == data.music_path.as_deref()
+                || cached_path_exists(chart.music_path.as_deref())
+        })
         && cached_path_exists(data.banner_path.as_deref())
         && cached_path_exists(data.background_path.as_deref())
         && cached_path_exists(data.cdtitle_path.as_deref())
