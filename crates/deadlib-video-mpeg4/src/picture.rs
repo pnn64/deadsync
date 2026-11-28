@@ -356,20 +356,38 @@ fn motion_vectors(
     mb: &Macroblock,
     code: u8,
 ) -> Result<[Vector; 4]> {
+    if mb.skipped || !mb.four_vectors {
+        let vector = if mb.skipped {
+            [0; 2]
+        } else {
+            let predicted = median_vector(grid, x as i32, y as i32, 0);
+            [
+                motion_component(bits, predicted[0], code)?,
+                motion_component(bits, predicted[1], code)?,
+            ]
+        };
+        // All four subblocks share the first vector. Preserve the packet
+        // boundary rule used by Grid::get for the three repeated entries.
+        let repeated = if (y >> grid.shift, x >> grid.shift) >= grid.packet {
+            vector
+        } else {
+            [0; 2]
+        };
+        let first = y * grid.width + x;
+        grid.cells[first..first + 2].copy_from_slice(&[vector, repeated]);
+        let second = first + grid.width;
+        grid.cells[second..second + 2].fill(repeated);
+        return Ok([vector, repeated, repeated, repeated]);
+    }
+
     let mut out = [[0; 2]; 4];
     for (index, vector) in out.iter_mut().enumerate() {
         let [x, y] = [x + index % 2, y + index / 2];
-        if !mb.skipped {
-            *vector = if index == 0 || mb.four_vectors {
-                let predicted = median_vector(grid, x as i32, y as i32, index);
-                [
-                    motion_component(bits, predicted[0], code)?,
-                    motion_component(bits, predicted[1], code)?,
-                ]
-            } else {
-                grid.get((x & !1) as i32, (y & !1) as i32)
-            };
-        }
+        let predicted = median_vector(grid, x as i32, y as i32, index);
+        *vector = [
+            motion_component(bits, predicted[0], code)?,
+            motion_component(bits, predicted[1], code)?,
+        ];
         grid.set(x, y, *vector);
     }
     Ok(out)
@@ -496,6 +514,70 @@ pub(crate) fn predict(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_motion_vectors_match_individual_grid_updates() {
+        fn reference(
+            bits: &mut Bits<'_>,
+            grid: &mut Grid<Vector>,
+            [x, y]: [usize; 2],
+            mb: &Macroblock,
+        ) -> Result<[Vector; 4]> {
+            let mut out = [[0; 2]; 4];
+            for (index, vector) in out.iter_mut().enumerate() {
+                let [x, y] = [x + index % 2, y + index / 2];
+                if !mb.skipped {
+                    *vector = if index == 0 || mb.four_vectors {
+                        let predicted = median_vector(grid, x as i32, y as i32, index);
+                        [
+                            motion_component(bits, predicted[0], 1)?,
+                            motion_component(bits, predicted[1], 1)?,
+                        ]
+                    } else {
+                        grid.get((x & !1) as i32, (y & !1) as i32)
+                    };
+                }
+                grid.set(x, y, *vector);
+            }
+            Ok(out)
+        }
+        for y in 0..3 {
+            for x in 0..4 {
+                for packet in [(0, 0), (y, x), (y, x + 1)] {
+                    for (skipped, four_vectors) in [(true, false), (false, false), (false, true)] {
+                        let mb = Macroblock {
+                            intra: false,
+                            skipped,
+                            four_vectors,
+                            predict_ac: false,
+                            separate_dc: false,
+                            pattern: 0,
+                        };
+                        let grid = || {
+                            let mut grid = Grid::default();
+                            grid.reset(4, 3, 1);
+                            grid.packet = packet;
+                            for (i, vector) in grid.cells.iter_mut().enumerate() {
+                                *vector = [i as i32 % 31, -(i as i32 % 17)];
+                            }
+                            grid
+                        };
+                        let mut a = grid();
+                        let mut b = grid();
+                        let mut bits = Bits::new(&[0x4f, 0xff, 0xff]);
+                        let mut other = bits;
+                        assert_eq!(
+                            motion_vectors(&mut bits, &mut a, [2 * x, 2 * y], &mb, 1),
+                            reference(&mut other, &mut b, [2 * x, 2 * y], &mb)
+                        );
+                        assert_eq!(a.cells, b.cells);
+                        assert_eq!(bits.peek(16), other.peek(16));
+                        assert_eq!(bits.alignment_stuffing(), other.alignment_stuffing());
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn short_motion_codes_match_the_long_decoder() {
