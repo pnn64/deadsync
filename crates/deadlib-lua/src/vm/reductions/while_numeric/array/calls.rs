@@ -662,6 +662,12 @@ impl Vm {
         program: usize,
         prototype: usize,
     ) -> Option<Reduction> {
+        if matches!(body, [_, get, _, _, _, ..] if body.len() <= 6 && get.op == Op::GetTable)
+            && let Some(reduction) =
+                self.reduce_indexed_comparisons(base, control, body, program, prototype)
+        {
+            return Some(reduction);
+        }
         if control + 3 >= 256
             || !self.sort_fast_context()
             || !self.open_upvalues.is_empty()

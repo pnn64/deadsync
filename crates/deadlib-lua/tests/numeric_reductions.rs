@@ -171,6 +171,55 @@ fn strided_scalar_stores_match_dispatch_across_hash_growth() {
 }
 
 #[test]
+fn indexed_comparison_loops_preserve_failures_and_observable_calls() {
+    let program = compile(
+        br#"
+        local t = {}
+        for i = -20, 41 do t[i] = i end
+        for i = -19, 41, 3 do assert(t[i] == i) end
+        local check, lower = assert, -20
+        for i = 41, -19, -3 do check(lower < t[i]) end
+        for i = 20, 40 do assert(not (t[i] < 20)) end
+
+        local reads = 0
+        local proxy = setmetatable({}, {__index = function(_, i)
+            reads = reads + 1
+            return i
+        end})
+        for i = 1, 12 do assert(proxy[i] == i) end
+
+        local calls = 0
+        assert = function(ok)
+            check(ok)
+            calls = calls + 1
+        end
+        for i = 1, 10 do assert(t[i] == i) end
+        assert = check
+        return reads, calls
+        "#,
+    )
+    .unwrap();
+    let mut fast = Vm::new();
+    let mut ordinary = Vm::new();
+    ordinary.set_instruction_limit(Some(1_000_000));
+    let expected = [Value::Number(12.0), Value::Number(10.0)];
+    assert_eq!(fast.execute(&program).unwrap(), expected);
+    assert_eq!(ordinary.execute(&program).unwrap(), expected);
+
+    for (key, value) in [(13, "false"), (41, "900")] {
+        let source = format!(
+            "local t = {{}}\nfor i = 1, 41 do t[i] = i end\n\
+             t[{key}] = {value}\nfor i = 1, 41 do assert(t[i] == i) end"
+        );
+        let program = compile(source.as_bytes()).unwrap();
+        let fast_error = fast.execute(&program).unwrap_err();
+        let ordinary_error = ordinary.execute(&program).unwrap_err();
+        assert!(fast_error.to_string().contains("assertion failed"));
+        assert_eq!(fast_error.to_string(), ordinary_error.to_string());
+    }
+}
+
+#[test]
 fn dense_sequences_keep_independent_tables_when_mutated() {
     assert_eq!(
         numbers(

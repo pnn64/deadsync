@@ -1,6 +1,6 @@
 use super::{
-    Cell, EXACT_INTEGER, FrameKind, Instruction, Op, Prototype, RK, Reduction, Value, Vm, integer,
-    slot_index,
+    Cell, FrameKind, Instruction, Op, Prototype, RK, Reduction, Value, Vm, integer,
+    integer_loop_bounds, slot_index,
 };
 use crate::bytecode::Constant;
 use crate::table::Table;
@@ -12,19 +12,7 @@ fn write_reserved_indices(
     step: i128,
     repeated: Option<Value>,
 ) -> Option<(i128, u64, bool)> {
-    let first = previous + step;
-    let count = if step > 0 && first <= limit {
-        (limit - first) / step + 1
-    } else if step < 0 && first >= limit {
-        (first - limit) / -step + 1
-    } else {
-        return None;
-    };
-    // Check the values in the loop as well as the final backedge addition.
-    let after_last = first + count * step;
-    if count < 2 || first.abs() > EXACT_INTEGER || after_last.abs() > EXACT_INTEGER {
-        return None;
-    }
+    let (first, count) = integer_loop_bounds(previous, limit, step)?;
     let written =
         table.write_reserved_number_span(first as i64, step as i64, count as u64, repeated)?;
     Some((

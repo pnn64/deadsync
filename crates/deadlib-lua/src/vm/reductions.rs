@@ -14,6 +14,7 @@ mod dense_array;
 pub(super) use dense_array::dense_loop_store;
 mod filtered_string_keys;
 mod fresh_array;
+mod indexed_comparisons;
 mod pairs_count;
 mod periodic;
 mod substring;
@@ -44,6 +45,21 @@ fn integer(value: Value) -> Option<i128> {
         return None;
     };
     (value.abs() <= EXACT_INTEGER as f64 && value.fract() == 0.0).then(|| i128::from(value as i64))
+}
+
+fn integer_loop_bounds(previous: i128, limit: i128, step: i128) -> Option<(i128, i128)> {
+    let first = previous + step;
+    let count = if step > 0 && first <= limit {
+        (limit - first) / step + 1
+    } else if step < 0 && first >= limit {
+        (first - limit) / -step + 1
+    } else {
+        return None;
+    };
+    // Check the values in the loop as well as the final backedge addition.
+    let after_last = first + count * step;
+    (count >= 2 && first.abs() <= EXACT_INTEGER && after_last.abs() <= EXACT_INTEGER)
+        .then_some((first, count))
 }
 
 /// The endpoints of an affine sequence over the loop's actual indices.
