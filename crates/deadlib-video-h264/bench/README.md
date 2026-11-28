@@ -4,6 +4,8 @@ The [2026-11-28 revision comparison](results/windows-x86_64-20261128/README.md) 
 
 The [second 2026-11-28 comparison](results/windows-x86_64-20261128-entropy/README.md) covers CAVLC allocation and entropy decoding changes on ten inputs, including five independent internet streams. Its [reproduction harness](entropy-pass/README.md) keeps downloaded media and sampled traces outside the repository.
 
+The [third 2026-11-28 comparison](results/windows-x86_64-20261128-reconstruction/README.md) covers CABAC screening and reconstruction changes on eleven inputs, including custom scaling matrices. Its [reproduction harness](reconstruction-pass/README.md) keeps all media and coefficient traces outside Git.
+
 This Windows x64 benchmark compares the crate with ITGmania's software FFmpeg H.264 decoder. The harness and FFmpeg imports live here, outside the decoder library.
 
 Run from a Visual Studio x64 developer shell with Cargo, FFmpeg and Python on the path. Point the script to a checkout with ITGmania's bundled x64 FFmpeg 62 headers, DLLs and import libraries.
