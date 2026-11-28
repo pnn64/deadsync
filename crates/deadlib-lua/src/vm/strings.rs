@@ -1418,8 +1418,22 @@ impl Vm {
             return Ok(1);
         }
         let mut scratch = crate::format::Scratch::new(self.registers.memory().clone());
+        if self.registers.memory().uses_global_allocator() {
+            let before = self.buffers.capacity();
+            if self
+                .buffers
+                .try_reserve(2usize.saturating_sub(self.buffers.len()))
+                .is_ok()
+            {
+                self.gc_note_control((self.buffers.capacity() - before) * size_of::<Buffer<u8>>());
+                scratch.reuse([self.buffers.pop(), self.buffers.pop()]);
+            }
+        }
         let result = self.string_format_inner(base, count, &mut scratch);
         self.gc_note_control(scratch.allocated);
+        for bytes in scratch.into_buffers() {
+            self.recycle_buffer(bytes);
+        }
         result
     }
 
@@ -1496,6 +1510,22 @@ impl Vm {
         let id = self.string_argument(base, count, 0)?;
         let slot = slot_index(id.0);
         let mut output = crate::format::buffer(scratch, self.strings.bytes[slot].len())?;
+        let string = self
+            .append_format(base, count, slot, &mut output, scratch)
+            .and_then(|()| self.strings.try_intern(&output));
+        scratch.recycle(output);
+        self.registers[base] = Value::String(string?);
+        Ok(1)
+    }
+
+    fn append_format(
+        &mut self,
+        base: usize,
+        count: usize,
+        slot: usize,
+        output: &mut Buffer<u8>,
+        scratch: &mut crate::format::Scratch,
+    ) -> Result<(), Error> {
         let mut pos = 0;
         let mut arg = 0;
         while pos < self.strings.bytes[slot].len() {
@@ -1505,7 +1535,7 @@ impl Vm {
                 let room = (output.capacity() - output.len()).max(1);
                 let literal = &bytes[pos..pos + room.min(bytes.len() - pos)];
                 let len = find_byte(&literal[1..], b'%').map_or(literal.len(), |at| at + 1);
-                scratch.reserve(&mut output, len)?;
+                scratch.reserve(output, len)?;
                 output.extend_from_slice(&literal[..len]);
                 pos += len;
                 continue;
@@ -1524,7 +1554,7 @@ impl Vm {
                         continue;
                     }
                 }
-                scratch.reserve(&mut output, 1)?;
+                scratch.reserve(output, 1)?;
                 output.push(b'%');
                 pos += 1;
                 continue;
@@ -1539,14 +1569,15 @@ impl Vm {
                     let text = self.string_argument(base, count, arg)?;
                     let bytes = &self.strings.bytes[slot_index(text.0)];
                     if spec.conversion == b'q' {
-                        crate::format::quote(bytes, &mut output, scratch)?;
+                        crate::format::quote(bytes, output, scratch)?;
                     } else if let Some(bytes) = spec.plain_string_bytes(bytes) {
-                        scratch.reserve(&mut output, bytes.len())?;
+                        scratch.reserve(output, bytes.len())?;
                         output.extend_from_slice(bytes);
                     } else {
                         let bytes = spec.string(bytes, scratch)?;
-                        scratch.reserve(&mut output, bytes.len())?;
+                        scratch.reserve(output, bytes.len())?;
                         output.extend_from_slice(&bytes);
+                        scratch.recycle(bytes);
                     }
                 }
                 b'c' | b'd' | b'i' | b'o' | b'u' | b'x' | b'X' | b'e' | b'E' | b'f' | b'g'
@@ -1559,8 +1590,9 @@ impl Vm {
                         b'd' | b'i' | b'o' | b'u' | b'x' | b'X' => spec.integer(n, scratch)?,
                         _ => spec.float(n, scratch)?,
                     };
-                    scratch.reserve(&mut output, bytes.len())?;
+                    scratch.reserve(output, bytes.len())?;
                     output.extend_from_slice(&bytes);
+                    scratch.recycle(bytes);
                 }
                 c => {
                     let mut message = b"invalid option '%".to_vec();
@@ -1574,8 +1606,7 @@ impl Vm {
                 }
             }
         }
-        self.registers[base] = Value::String(self.strings.try_intern(&output)?);
-        Ok(1)
+        Ok(())
     }
 
     pub(super) fn dump_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {

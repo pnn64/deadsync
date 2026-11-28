@@ -113,6 +113,7 @@ impl Spec {
             out.resize(extra, b' ');
             out.extend_from_slice(&bytes);
         }
+        memory.recycle(bytes);
         Ok(out)
     }
     /// The bytes Lua 5.1's unmodified `%s` would copy, without a temporary buffer.
@@ -516,9 +517,19 @@ fn quoted_byte_runs_preserve_escapes_at_block_boundaries() {
 }
 
 pub(crate) fn buffer(memory: &mut Scratch, capacity: usize) -> Result<Buffer<u8>, Error> {
-    let mut bytes = Buffer::new_in(memory.memory.clone());
-    bytes.try_reserve_exact(capacity)?;
-    memory.allocated = memory.allocated.saturating_add(bytes.capacity());
+    let mut bytes = memory
+        .spare
+        .as_mut()
+        .and_then(|slots| slots.iter_mut().find_map(Option::take))
+        .unwrap_or_else(|| Buffer::new_in(memory.memory.clone()));
+    bytes.clear();
+    let previous = bytes.capacity();
+    let result = bytes.try_reserve_exact(capacity);
+    memory.allocated = memory.allocated.saturating_add(bytes.capacity() - previous);
+    if let Err(error) = result {
+        memory.recycle(bytes);
+        return Err(error);
+    }
     Ok(bytes)
 }
 fn copy(memory: &mut Scratch, source: &[u8]) -> Result<Buffer<u8>, Error> {
@@ -572,13 +583,28 @@ impl std::fmt::Write for Text {
 pub(crate) struct Scratch {
     memory: Memory,
     pub(crate) allocated: usize,
+    spare: Option<[Option<Buffer<u8>>; 2]>,
 }
 impl Scratch {
     pub(crate) fn new(memory: Memory) -> Self {
         Self {
             memory,
             allocated: 0,
+            spare: None,
         }
+    }
+    pub(crate) fn reuse(&mut self, slots: [Option<Buffer<u8>>; 2]) {
+        self.spare = Some(slots);
+    }
+    pub(crate) fn recycle(&mut self, bytes: Buffer<u8>) {
+        if let Some(slots) = &mut self.spare
+            && let Some(slot) = slots.iter_mut().find(|slot| slot.is_none())
+        {
+            *slot = Some(bytes);
+        }
+    }
+    pub(crate) fn into_buffers(self) -> impl Iterator<Item = Buffer<u8>> {
+        self.spare.into_iter().flatten().flatten()
     }
     pub(crate) fn reserve(
         &mut self,
