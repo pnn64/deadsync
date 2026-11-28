@@ -42,8 +42,8 @@ impl Plane {
         for (row, coeff) in block.as_chunks::<8>().0.iter().enumerate() {
             let start = (y + row) * self.stride + x;
             for (pixel, &residual) in self.samples[start..start + 8].iter_mut().zip(coeff) {
-                let base = if intra { 0 } else { i32::from(*pixel) };
-                *pixel = (base + i32::from(residual)).clamp(0, 255) as u8;
+                let base = if intra { 0 } else { i16::from(*pixel) };
+                *pixel = residual.saturating_add(base).clamp(0, 255) as u8;
             }
         }
     }
@@ -201,5 +201,30 @@ impl Frame {
             && self.height() == sequence.height
             && self.planes[0].samples.len()
                 == self.planes[0].stride * 16 * sequence.macroblock_rows()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Plane;
+
+    #[test]
+    fn block_clips_wide_residuals_for_intra_and_prediction() {
+        let mut plane = Plane::new(8, 8, 8, 8);
+        let residuals = [i16::MIN, -257, -255, -1, 0, 1, 255, i16::MAX];
+        for base in 0..=u8::MAX {
+            let block = core::array::from_fn(|i| residuals[i % 8]);
+            for intra in [false, true] {
+                plane.samples.fill(base);
+                plane.block(0, 0, &block, intra);
+                for (&pixel, residual) in plane.samples.iter().zip(block) {
+                    let prediction = if intra { 0 } else { i32::from(base) };
+                    assert_eq!(
+                        pixel,
+                        (prediction + i32::from(residual)).clamp(0, 255) as u8
+                    );
+                }
+            }
+        }
     }
 }
