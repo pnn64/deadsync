@@ -84,15 +84,30 @@ impl<'a> BitstreamReader<'a> {
 
     /// Read an unsigned Exp-Golomb coded value (ue(v)).
     pub fn read_ue(&mut self) -> Result<u32, &'static str> {
-        let mut leading_zeros: u32 = 0;
+        if self.read_bit()? != 0 {
+            return Ok(0);
+        }
+        // After the first zero, a four-byte window can hold the remaining
+        // prefix and suffix of every code with at most 12 leading zeros.
+        if let Some(bytes) = self
+            .data
+            .get(self.byte_offset..)
+            .and_then(|tail| tail.first_chunk::<4>())
+        {
+            let word = u32::from_be_bytes(*bytes) << self.bit_offset;
+            let zeros = word.leading_zeros();
+            if zeros < 12 {
+                let width = 2 * (zeros + 1);
+                self.skip_bits(width as u8);
+                return Ok((word >> (32 - width)) - 1);
+            }
+        }
+        let mut leading_zeros: u32 = 1;
         while self.read_bit()? == 0 {
             leading_zeros += 1;
             if leading_zeros > 31 {
                 return Err("exp-golomb overflow");
             }
-        }
-        if leading_zeros == 0 {
-            return Ok(0);
         }
         let suffix = self.read_bits(leading_zeros as u8)?;
         Ok((1 << leading_zeros) - 1 + suffix)
@@ -217,6 +232,41 @@ mod tests {
         assert_eq!(r.read_ue().unwrap(), 1);
         assert_eq!(r.read_ue().unwrap(), 2);
         assert_eq!(r.read_ue().unwrap(), 3);
+    }
+
+    #[test]
+    fn exp_golomb_matches_scalar_values_errors_and_positions() {
+        fn scalar(r: &mut BitstreamReader) -> Result<u32, &'static str> {
+            let mut zeros = 0u32;
+            while r.read_bit()? == 0 {
+                zeros += 1;
+                if zeros > 31 {
+                    return Err("exp-golomb overflow");
+                }
+            }
+            if zeros == 0 {
+                return Ok(0);
+            }
+            Ok((1 << zeros) - 1 + r.read_bits(zeros as u8)?)
+        }
+        for leading in 0..=32 {
+            for offset in 0..8 {
+                for suffix in [0u32, 0x5555_5555, u32::MAX] {
+                    let mut writer = BitWriter::default();
+                    writer.u(offset, 0).u(leading, 0).u(1, 1);
+                    writer.u(leading, suffix).u(8, 0xA6);
+                    let data = writer.finish();
+                    for len in 0..=data.len() {
+                        let mut a = BitstreamReader::new(&data[..len]);
+                        let mut b = BitstreamReader::new(&data[..len]);
+                        a.skip_bits(offset as u8);
+                        b.skip_bits(offset as u8);
+                        assert_eq!(a.read_ue(), scalar(&mut b));
+                        assert_eq!(a.position(), b.position());
+                    }
+                }
+            }
+        }
     }
 
     #[test]
