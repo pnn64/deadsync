@@ -310,6 +310,15 @@ fn resolve_path(path: &Path, optional: bool) -> Result<Option<PathBuf>, String> 
         if default.is_file() {
             return Ok(Some(default));
         }
+        // DeadSync: a 3.95-style folder loads through its BGAnimation.ini.
+        if let Some(ini) = fs::read_dir(&resolved).ok().and_then(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .find(|path| path.is_file() && crate::bganimation_ini::is_ini(path))
+        }) {
+            return Ok(Some(ini));
+        }
     }
     for _ in 0..100 {
         if !resolved.extension().is_some_and(|ext| ext == "redir") {
