@@ -3,6 +3,7 @@ use super::*;
 use crate::lexer::{DirectScanner, DirectToken};
 
 const MAX_DEPTH: u8 = 48;
+const MAX_LOCAL_NAMES: usize = 8;
 // Leave headroom below the Lua 5.1 logical register limit. The direct emitter
 // reuses registers sooner than the full parser's resource model.
 const MAX_DIRECT_REGISTERS: u16 = 96;
@@ -20,6 +21,18 @@ pub(crate) fn compile_direct(
     spare: &mut Spare,
 ) -> Result<Option<Program>, Error> {
     if source.len() > u32::MAX as usize {
+        return Ok(None);
+    }
+    let short_locals = source.len() < 256
+        && source
+            .trim_ascii_start()
+            .strip_prefix(b"local")
+            .and_then(|tail| tail.first())
+            .is_some_and(u8::is_ascii_whitespace)
+        && source
+            .iter()
+            .any(|&byte| matches!(byte, b'+' | b'-' | b'*' | b'/' | b'%' | b'^'));
+    if source.len() < 128 && !short_locals {
         return Ok(None);
     }
     let mut scanner = DirectScanner::default();
@@ -64,6 +77,8 @@ pub(crate) fn compile_direct(
         },
         scanner,
         token,
+        short_locals,
+        debug_stack: 0,
         previous_line: 1,
         last_label: None,
         nil_run: None,
@@ -94,6 +109,8 @@ pub(crate) fn compile_direct(
 enum Value {
     Nil(u32),
     Constant(u32, bool),
+    Number(f64),
+    Binary(Op, u16, u16, u32),
     Local(u8),
     Global(u32),
     Register(u8),
@@ -123,6 +140,8 @@ struct Frontend<'a> {
     compiler: Compiler<'a>,
     scanner: DirectScanner,
     token: DirectToken,
+    short_locals: bool,
+    debug_stack: u16,
     previous_line: u32,
     last_label: Option<usize>,
     nil_run: Option<(usize, u8, u8)>,
@@ -139,9 +158,15 @@ impl Frontend<'_> {
             return Err(self.unsupported());
         }
         self.compiler.line = self.previous_line;
-        self.compiler.function.debug_stack = self.compiler.function.max;
+        self.compiler.function.debug_stack = self.debug_stack;
         self.compiler.emit(Op::Return, 0, 0, 0)?;
         self.compiler.finish_with_buffers(Some(pool))
+    }
+
+    fn alloc(&mut self) -> Result<u8, Error> {
+        let register = self.compiler.alloc(1)?;
+        self.debug_stack = self.debug_stack.max(self.compiler.function.next);
+        Ok(register)
     }
 
     fn unsupported(&self) -> Error {
@@ -198,9 +223,30 @@ impl Frontend<'_> {
     }
 
     fn write_value(&mut self, value: Value, dst: u8) -> Result<(), Error> {
+        if let Value::Number(number) = value {
+            let index = self.number_constant(number)?;
+            return self.compiler.emit(Op::Load, dst, 0, index).map(|_| ());
+        }
         let c = &mut self.compiler;
         match value {
             Value::Nil(_) => self.load_nil(dst)?,
+            Value::Binary(op, left, right, line) => {
+                let discharge = c.line;
+                c.line = line;
+                if comparison(op) {
+                    // The predicate is outside the Lua-visible stack. A count
+                    // hook between the comparison and materialization must
+                    // still observe the previous value of the destination.
+                    let saved = c.function.next;
+                    let predicate = c.alloc(1)?;
+                    c.emit(op, predicate, left, u32::from(right))?;
+                    c.reset(saved);
+                    c.line = discharge;
+                    c.emit(Op::Bool, dst, u16::from(predicate), 0)?;
+                } else {
+                    c.emit(op, dst, left, u32::from(right))?;
+                }
+            }
             Value::Constant(index, _) => {
                 c.emit(Op::Load, dst, 0, index)?;
             }
@@ -221,6 +267,14 @@ impl Frontend<'_> {
             _ => {}
         }
         Ok(())
+    }
+
+    fn number_constant(&mut self, number: f64) -> Result<u32, Error> {
+        let c = &mut self.compiler;
+        if number == 0.0 && c.function.zero_sign.is_none() {
+            c.function.zero_sign = Some(number.is_sign_negative());
+        }
+        c.constant(Constant::Number(number))
     }
 
     fn load_nil(&mut self, dst: u8) -> Result<(), Error> {
@@ -258,6 +312,8 @@ impl Frontend<'_> {
         }
         Ok(match expression.value {
             Value::Nil(index) | Value::Constant(index, _) => (RK + index) as u16,
+            Value::Number(number) => (RK + self.number_constant(number)?) as u16,
+            Value::Binary(..) => return Err(self.unsupported()),
             Value::Local(reg) | Value::Register(reg) | Value::Call(reg, _) => u16::from(reg),
             Value::Global(_) | Value::Comparison(..) | Value::Not(..) => {
                 self.write_value(expression.value, dst)?;
@@ -457,8 +513,9 @@ impl Frontend<'_> {
         let mut argc = 0;
         if !self.take(Kind::RParen)? {
             loop {
-                let arg = self.compiler.alloc(1)?;
+                let arg = self.alloc()?;
                 let value = self.expression(arg, 0, depth + 1)?;
+                let argument_end = self.previous_line;
                 argc += 1;
                 if self.take(Kind::Comma)? {
                     self.compiler.line = self.previous_line;
@@ -470,7 +527,11 @@ impl Frontend<'_> {
                     self.compiler.function.code[pc].c = OPEN;
                     argc = OPEN_ARGS;
                 } else {
-                    self.compiler.line = self.previous_line;
+                    self.compiler.line = if self.short_locals {
+                        argument_end
+                    } else {
+                        self.previous_line
+                    };
                     self.write(value, arg)?;
                 }
                 break;
@@ -506,6 +567,11 @@ impl Frontend<'_> {
                 self.advance()?;
                 let mut expression = self.expression(dst, 0, depth + 1)?;
                 self.expect(Kind::RParen)?;
+                if matches!(expression.value, Value::Binary(op, ..) if comparison(op)) {
+                    // Parentheses give the inner comparison its own debug
+                    // line, even when an outer consumer changes that line.
+                    return Err(self.unsupported());
+                }
                 if let Value::Call(reg, _) = expression.value {
                     expression.value = Value::Register(reg);
                 }
@@ -516,11 +582,12 @@ impl Frontend<'_> {
                 let mut expression = self.expression(dst, 7, depth + 1)?;
                 expression.value = match expression.value {
                     Value::Comparison(reg, negate) => Value::Comparison(reg, !negate),
+                    Value::Binary(..) => return Err(self.unsupported()),
                     Value::Nil(_) | Value::Constant(_, false) => {
                         let id = self.compiler.constant(Constant::Boolean(true))?;
                         Value::Constant(id, true)
                     }
-                    Value::Constant(_, true) => {
+                    Value::Constant(_, true) | Value::Number(_) => {
                         let id = self.compiler.constant(Constant::Boolean(false))?;
                         Value::Constant(id, false)
                     }
@@ -542,6 +609,23 @@ impl Frontend<'_> {
                 }
                 std::mem::swap(&mut expression.no, &mut expression.yes);
                 return Ok(expression);
+            }
+            Kind::Minus if self.short_locals => {
+                self.advance()?;
+                let value = self.expression(dst, 7, depth + 1)?;
+                return match value.value {
+                    Value::Number(number) => Ok(Value::Number(-number).into()),
+                    _ => Err(self.unsupported()),
+                };
+            }
+            Kind::Number if self.short_locals => {
+                let number = self.token.number();
+                if number.is_nan() {
+                    return Err(self.unsupported());
+                }
+                self.advance()?;
+                self.compiler.line = self.previous_line;
+                return Ok(Value::Number(number).into());
             }
             Kind::Nil => self.compiler.constant(Constant::Nil)?,
             Kind::True => self.compiler.constant(Constant::Boolean(true))?,
@@ -570,15 +654,38 @@ impl Frontend<'_> {
             return Err(self.unsupported());
         }
         let mut left = self.primary(dst, depth)?;
-        while let Some((precedence, op)) = binary(self.token.kind) {
+        while let Some((precedence, right_power, op)) = binary(self.token.kind) {
             if precedence <= limit {
                 break;
             }
+            let kind = self.token.kind;
             self.advance()?;
-            if matches!(op, Op::JumpFalse | Op::JumpTrue) {
+            if matches!(
+                op,
+                Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow
+            ) {
+                if !self.short_locals {
+                    return Err(self.unsupported());
+                }
+                let right = self.expression(dst, right_power, depth + 1)?;
+                if let (Value::Number(x), Value::Number(y)) = (left.value, right.value) {
+                    let number = crate::optimizer::fold_arithmetic(kind, x, y)
+                        .ok_or_else(|| self.unsupported())?;
+                    left = Value::Number(number).into();
+                } else {
+                    // Keeping a register operation pending lets the consumer
+                    // emit straight into its assignment destination.
+                    let right = self.arithmetic_operand(right)?;
+                    let lhs = self.arithmetic_operand(left)?;
+                    left = Value::Binary(op, lhs, right, self.previous_line).into();
+                }
+            } else if matches!(op, Op::JumpFalse | Op::JumpTrue) {
+                if self.short_locals {
+                    return Err(self.unsupported());
+                }
                 let taken_when = op == Op::JumpTrue;
                 let pending = self.branch(left, dst, taken_when, self.previous_line)?;
-                let mut right = self.expression(dst, precedence, depth + 1)?;
+                let mut right = self.expression(dst, right_power, depth + 1)?;
                 self.compiler.list_join(
                     if taken_when {
                         &mut right.yes
@@ -591,15 +698,21 @@ impl Frontend<'_> {
                     right.value = Value::Register(reg);
                 }
                 left = right;
+            } else if self.short_locals {
+                let lhs = self.arithmetic_operand(left)?;
+                let right = self.expression(dst, right_power, depth + 1)?;
+                let rhs = self.arithmetic_operand(right)?;
+                self.compiler.line = self.previous_line;
+                left = Value::Binary(op, lhs, rhs, self.previous_line).into();
             } else {
                 let lhs = self.operand(left, dst)?;
                 let saved = self.compiler.function.next;
                 let temp = if lhs == u16::from(dst) {
-                    self.compiler.alloc(1)?
+                    self.alloc()?
                 } else {
                     dst
                 };
-                let right = self.expression(temp, precedence, depth + 1)?;
+                let right = self.expression(temp, right_power, depth + 1)?;
                 let rhs = self.operand(right, temp)?;
                 let c = &mut self.compiler;
                 c.line = self.previous_line;
@@ -611,6 +724,14 @@ impl Frontend<'_> {
         Ok(left)
     }
 
+    fn arithmetic_operand(&mut self, expression: Expression) -> Result<u16, Error> {
+        match expression.value {
+            Value::Local(register) => Ok(u16::from(register)),
+            Value::Number(number) => Ok((RK + self.number_constant(number)?) as u16),
+            _ => Err(self.unsupported()),
+        }
+    }
+
     fn block(&mut self, depth: u8) -> Result<(), Error> {
         if depth >= MAX_DEPTH {
             return Err(self.unsupported());
@@ -620,6 +741,9 @@ impl Frontend<'_> {
             Kind::Eof | Kind::End | Kind::Else | Kind::ElseIf | Kind::Until
         ) {
             self.compiler.line = self.token.line;
+            if self.short_locals && !matches!(self.token.kind, Kind::Local | Kind::Name) {
+                return Err(self.unsupported());
+            }
             let terminal = match self.token.kind {
                 Kind::Local => {
                     self.local(depth)?;
@@ -671,7 +795,10 @@ impl Frontend<'_> {
     fn local(&mut self, depth: u8) -> Result<(), Error> {
         self.advance()?;
         let name = self.name()?;
-        let dst = self.compiler.alloc(1)?;
+        if self.short_locals && self.token.kind == Kind::Comma {
+            return self.local_list(name, depth);
+        }
+        let dst = self.alloc()?;
         if self.take(Kind::Assign)? {
             let value = self.expression(dst, 0, depth)?;
             self.write(value, dst)?;
@@ -681,11 +808,38 @@ impl Frontend<'_> {
         self.compiler.bind(name.bytes(self.compiler.source), dst)
     }
 
+    fn local_list(&mut self, first: Lexeme, depth: u8) -> Result<(), Error> {
+        let mut names = [const { None }; MAX_LOCAL_NAMES];
+        names[0] = Some(first);
+        let mut count = 1;
+        while self.take(Kind::Comma)? {
+            let slot = names.get_mut(count).ok_or_else(|| self.unsupported())?;
+            *slot = Some(self.name()?);
+            count += 1;
+        }
+        self.expect(Kind::Assign)?;
+        let base = self.compiler.function.next;
+        for index in 0..count {
+            if index != 0 {
+                self.expect(Kind::Comma)?;
+            }
+            let dst = self.alloc()?;
+            let value = self.expression(dst, 0, depth)?;
+            self.write(value, dst)?;
+        }
+        for (index, name) in names[..count].iter().enumerate() {
+            let name = name.as_ref().expect("all local names were read");
+            self.compiler
+                .bind(name.bytes(self.compiler.source), base as u8 + index as u8)?;
+        }
+        Ok(())
+    }
+
     fn assignment_or_call(&mut self, depth: u8) -> Result<(), Error> {
         let name = self.name()?;
         let target = self.lookup(&name)?;
         let saved = self.compiler.function.next;
-        let temp = self.compiler.alloc(1)?;
+        let temp = self.alloc()?;
         if self.take(Kind::Assign)? {
             let value = self.expression(temp, 0, depth)?;
             if let Value::Local(dst) = target {
@@ -722,7 +876,7 @@ impl Frontend<'_> {
 
     fn condition(&mut self, depth: u8) -> Result<boolean::List, Error> {
         let saved = self.compiler.function.next;
-        let temp = self.compiler.alloc(1)?;
+        let temp = self.alloc()?;
         let mut value = self.expression(temp, 0, depth)?;
         if matches!(value.value, Value::Nil(_)) {
             let id = self.compiler.constant(Constant::Boolean(false))?;
@@ -805,16 +959,85 @@ fn edges(expression: Expression, truth: bool) -> (boolean::List, boolean::List) 
     }
 }
 
-fn binary(kind: Kind) -> Option<(u8, Op)> {
+fn comparison(op: Op) -> bool {
+    matches!(op, Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge)
+}
+
+fn binary(kind: Kind) -> Option<(u8, u8, Op)> {
     Some(match kind {
-        Kind::Or => (1, Op::JumpTrue),
-        Kind::And => (2, Op::JumpFalse),
-        Kind::Eq => (3, Op::Eq),
-        Kind::Ne => (3, Op::Ne),
-        Kind::Lt => (3, Op::Lt),
-        Kind::Le => (3, Op::Le),
-        Kind::Gt => (3, Op::Gt),
-        Kind::Ge => (3, Op::Ge),
+        Kind::Or => (1, 1, Op::JumpTrue),
+        Kind::And => (2, 2, Op::JumpFalse),
+        Kind::Eq => (3, 3, Op::Eq),
+        Kind::Ne => (3, 3, Op::Ne),
+        Kind::Lt => (3, 3, Op::Lt),
+        Kind::Le => (3, 3, Op::Le),
+        Kind::Gt => (3, 3, Op::Gt),
+        Kind::Ge => (3, 3, Op::Ge),
+        Kind::Plus => (5, 5, Op::Add),
+        Kind::Minus => (5, 5, Op::Sub),
+        Kind::Star => (6, 6, Op::Mul),
+        Kind::Slash => (6, 6, Op::Div),
+        Kind::Percent => (6, 6, Op::Mod),
+        Kind::Caret => (9, 8, Op::Pow),
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn direct_arithmetic_matches_the_general_compiler() {
+        let inputs: &[&[u8]] = &[
+            b"local x=1;x=x+\n 3;\nf(x==2^2)",
+            b"local x=1+2; f(\n x==\n 3\n )",
+            b"local x=-1; x=x-3; f(x==-2^2)",
+            b"local x,y=0,-1; x=y-3; f(x==-2^2)",
+            b"local x,y=-0,0; x=y+0; f(x)",
+            b"local x,y=4,2; x=y%4; f(x==2)",
+            b"local x=3^-1; f(x==1/3)",
+            b"local x=(2+1)^3^2; f(x==19683)",
+            b"local x=1; f(x+2, x-1, (x*2), -40)",
+            b"local x=1; x=3*x; f(x)",
+            b"local x=1; x=x/0; f(x)",
+        ];
+        let name = b"=arithmetic";
+        let mut spare = Spare::default();
+        for &source in inputs {
+            let general = crate::compile_named(source, name).unwrap();
+            let direct = compile_direct(source, name, &mut spare).unwrap().unwrap();
+            let dump = |program: &Program| {
+                crate::chunk51::dump(&program.data, program.data.entry as usize).unwrap()
+            };
+            assert_eq!(dump(&direct), dump(&general), "{source:?}");
+            let direct = &direct.data.prototypes[0];
+            let general = &general.data.prototypes[0];
+            assert_eq!(direct.debug.stack, general.debug.stack, "{source:?}");
+            assert!(
+                direct
+                    .code
+                    .iter()
+                    .filter(|i| i.op == Op::Bool)
+                    .all(|i| { i.b >= direct.debug.stack }),
+                "comparison predicates must be outside the Lua-visible stack"
+            );
+        }
+    }
+
+    #[test]
+    fn direct_arithmetic_falls_back_for_unmodeled_lowering() {
+        for source in [
+            b"local x=0/0; f(x)".as_slice(),
+            b"local x=2%0; f(x)",
+            b"local x=(-2)^0.5; f(x)",
+            b"local x=1+2; f(\n(x==3\n)\n)",
+        ] {
+            assert!(
+                compile_direct(source, b"=unfolded", &mut Spare::default())
+                    .unwrap()
+                    .is_none()
+            );
+        }
+    }
 }

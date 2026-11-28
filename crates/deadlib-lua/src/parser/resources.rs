@@ -688,23 +688,12 @@ impl Resources {
             op,
             Kind::Eq | Kind::Ne | Kind::Lt | Kind::Le | Kind::Gt | Kind::Ge
         );
-        if !comparison && a.numeral() && b.numeral() {
-            let x = a.number;
-            let y = b.number;
-            let folded = match op {
-                Kind::Plus => Some(x + y),
-                Kind::Minus => Some(x - y),
-                Kind::Star => Some(x * y),
-                Kind::Slash if y != 0.0 => Some(x / y),
-                Kind::Percent if y != 0.0 => Some(x - (x / y).floor() * y),
-                Kind::Caret => Some(x.powf(y)),
-                _ => None,
-            };
-            if let Some(n) = folded
-                && !n.is_nan()
-            {
-                return Ok(Value::number(n));
-            }
+        if !comparison
+            && a.numeral()
+            && b.numeral()
+            && let Some(number) = crate::optimizer::fold_arithmetic(op, a.number, b.number)
+        {
+            return Ok(Value::number(number));
         }
         let folded_left =
             (a.numeral() && !matches!(cx.ast.exprs[left].0, Expr::Number(_))).then_some(a.number);

@@ -348,8 +348,8 @@ pub(super) fn compile(
         return program;
     }
     // Bound the work of trying direct emission before a full parse.
-    if (128..=2048).contains(&source.len())
-        && depth <= 96
+    if depth <= 96
+        && source.len() <= 2048
         && let Some(program) = crate::compiler::compile_direct(source, name, &mut spare.compiler)?
     {
         return Ok(program);
