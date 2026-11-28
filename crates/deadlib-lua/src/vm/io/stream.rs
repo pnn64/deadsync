@@ -412,24 +412,15 @@ impl Stream {
         self.lookahead = None;
         Ok(())
     }
-    pub fn write(&mut self, bytes: &[u8]) -> Result<(), i32> {
-        if bytes.is_empty() {
-            return Ok(());
-        }
-        if !self.writable {
-            return Err(9);
-        }
-        self.reconcile()?;
-        if matches!(self.resource, Some(Resource::Output)) {
-            return super::stdout_write(bytes).map_err(errno);
-        }
-        let newlines = if cfg!(windows) && self.text {
+    fn write_newlines(&self, bytes: &[u8]) -> usize {
+        if cfg!(windows) && self.text {
             bytes.iter().filter(|&&byte| byte == b'\n').count()
         } else {
             0
-        };
-        let additional = bytes.len().checked_add(newlines).ok_or(12)?;
-        self.write.try_reserve(additional).map_err(|_| 12)?;
+        }
+    }
+
+    fn append_write_bytes(&mut self, bytes: &[u8], newlines: usize) {
         if newlines > bytes.len() / 8 {
             for &byte in bytes {
                 if byte == b'\n' {
@@ -447,6 +438,60 @@ impl Stream {
             }
             self.write.extend_from_slice(remaining);
         }
+    }
+
+    pub(super) fn try_write_buffered<T: AsRef<[u8]>>(
+        &mut self,
+        parts: impl IntoIterator<Item = Option<T>>,
+    ) -> bool {
+        if !self.writable
+            || self.buffering != 1
+            || !matches!(self.resource, Some(Resource::File(_) | Resource::Pipe(_)))
+            || !self.read.is_empty()
+            || self.position != 0
+            || self.peek.is_some()
+            || self.control_eof
+            || self.raw_len != 0
+            || self.lookahead.is_some()
+        {
+            return false;
+        }
+        let start = self.write.len();
+        let limit = self.write.capacity().min(self.size.saturating_sub(1));
+        let appended = parts.into_iter().all(|part| {
+            let Some(part) = part else { return false };
+            let bytes = part.as_ref();
+            let newlines = self.write_newlines(bytes);
+            let room = limit.saturating_sub(self.write.len());
+            if bytes.len() > room || newlines > room - bytes.len() {
+                return false;
+            }
+            self.append_write_bytes(bytes, newlines);
+            true
+        });
+        if !appended {
+            // No flush or allocation took place. Restore the prefix before
+            // ordinary dispatch handles the first failing argument.
+            self.write.truncate(start);
+        }
+        appended
+    }
+
+    pub fn write(&mut self, bytes: &[u8]) -> Result<(), i32> {
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        if !self.writable {
+            return Err(9);
+        }
+        self.reconcile()?;
+        if matches!(self.resource, Some(Resource::Output)) {
+            return super::stdout_write(bytes).map_err(errno);
+        }
+        let newlines = self.write_newlines(bytes);
+        let additional = bytes.len().checked_add(newlines).ok_or(12)?;
+        self.write.try_reserve(additional).map_err(|_| 12)?;
+        self.append_write_bytes(bytes, newlines);
         if matches!(self.resource, Some(Resource::Error)) {
             super::stdio::write_all(2, &self.write).map_err(errno)?;
             self.write.clear();

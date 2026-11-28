@@ -49,14 +49,14 @@ const POPEN: u64 = 134;
 const READ: u64 = 135;
 pub(super) const TMPFILE: u64 = 136;
 const TYPE: u64 = 137;
-const WRITE: u64 = 138;
+pub(super) const WRITE: u64 = 138;
 const FCLOSE: u64 = 139;
 const FFLUSH: u64 = 140;
 const FLINES: u64 = 141;
 const FREAD: u64 = 142;
 const SEEK: u64 = 143;
 const SETVBUF: u64 = 144;
-const FWRITE: u64 = 145;
+pub(super) const FWRITE: u64 = 145;
 const GC: u64 = 146;
 const TO_STRING: u64 = 147;
 const REAL_CLOSE: u64 = 148;
@@ -73,6 +73,20 @@ pub(super) fn callback(id: u64) -> Option<HostFunction> {
     }
 }
 thread_local! { static ERRNO:ErrnoCell<i32>=const {ErrnoCell::new(0)}; }
+
+enum WritePart<'a> {
+    String(&'a [u8]),
+    Number(native::NumberText),
+}
+
+impl AsRef<[u8]> for WritePart<'_> {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Self::String(bytes) => bytes,
+            Self::Number(number) => number.as_bytes(),
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 pub(super) struct Io {
@@ -537,6 +551,46 @@ impl Vm {
             Err(code) => self.io_failure(base, code, None),
         }
     }
+
+    /// Complete an unobserved write when all arguments fit in the file's
+    /// current buffer and entering the native frame would require no storage.
+    #[inline(never)]
+    pub(super) fn try_buffered_io_write(
+        &mut self,
+        id: u64,
+        call: usize,
+        count: usize,
+    ) -> Option<usize> {
+        let first = usize::from(id == FWRITE);
+        if count <= first
+            || self.registers.capacity() - self.registers.len() <= count
+            || !self.sort_fast_context()
+        {
+            return None;
+        }
+        let file = if id == WRITE {
+            let env = self.builtin_environment(id);
+            self.tables[slot_index(env.0)].get_integer(2)
+        } else {
+            self.registers[call + 1]
+        };
+        let key = self.file_key(file, id == FWRITE)?;
+        let strings = &self.strings.bytes;
+        let args = &self.registers[call + 1 + first..call + 1 + count];
+        let parts = args.iter().map(|&value| match value {
+            Value::String(id) => Some(WritePart::String(strings.get(id.0)?.as_ref())),
+            Value::Number(number) if &*crate::locale::decimal() == b"." => {
+                Some(WritePart::Number(native::number_text(number)))
+            }
+            _ => None,
+        });
+        if !self.io.files.get_mut(key)?.try_write_buffered(parts) {
+            return None;
+        }
+        self.registers[call] = Value::Boolean(true);
+        Some(1)
+    }
+
     pub(super) fn io_native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
         debug_assert!(callback(id).is_none());
         let arg = self.argument(base, count, 0);

@@ -59,3 +59,27 @@ fn numeric_text_preserves_rounding_without_temporary_allocations() {
         assert_eq!(text.as_bytes(), expected.as_bytes());
     }
 }
+
+#[test]
+fn buffered_writes_restore_the_prefix_before_retrying() {
+    let mut vm = Vm::new();
+    let setup = crate::compile(
+        b"local f=assert(io.tmpfile()); assert(f:write(string.rep('p',64))); assert(f:flush()); return f",
+    )
+    .unwrap();
+    let file = vm.execute(&setup).unwrap()[0];
+    let key = vm.file_key(file, true).unwrap();
+    let stream = vm.io.files.get_mut(key).unwrap();
+    stream.set_buffering(1, 8).unwrap();
+    assert!(stream.try_write_buffered([Some(b"ab".as_slice())]));
+    assert!(!stream.try_write_buffered([Some(b"bad".as_slice()), None]));
+    assert!(!stream.try_write_buffered([Some(b"def".as_slice()), Some(b"ghi")]));
+    stream.write(b"c").unwrap();
+
+    vm.set_global(b"f", file).unwrap();
+    let check = crate::compile(
+        b"assert(not pcall(f.write,f,'!',true)); assert(f:seek('set',64)==64); assert(f:read('*a')=='abc!'); return f:close()",
+    )
+    .unwrap();
+    assert_eq!(vm.execute(&check).unwrap(), &[Value::Boolean(true)]);
+}
