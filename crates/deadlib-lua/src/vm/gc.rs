@@ -1817,12 +1817,66 @@ impl Vm {
     }
     fn finish_gc_marking_work(&mut self, work: &mut Work, fresh_cycle: bool) -> Result<(), Error> {
         self.transfer_closed_work(work)?;
-        let mut refresh_threads = ThreadRefresh::new();
-        if fresh_cycle {
-            self.trace_some_with_refresh(work, usize::MAX, Some(&mut refresh_threads))?;
-        } else {
+        let unchanged_roots = fresh_cycle
+            && self.threads.live_len() == 1
+            && self.threads[slot_index(self.thread.0)]
+                .host_states
+                .is_empty()
+            && self.registers.memory().uses_global_allocator();
+        if unchanged_roots {
+            // The only thread and its open cells are reached in the fresh
+            // trace. With no allocator or root callbacks between scans, the
+            // only stack writes clear dead slots and cannot add roots.
             self.trace_graph(work)?;
+            // Preserve the logical call-limit shrink of a thread refresh.
+            self.shrink_thread_calls(self.thread);
+        } else {
+            let mut refresh_threads = ThreadRefresh::new();
+            if fresh_cycle {
+                self.trace_some_with_refresh(work, usize::MAX, Some(&mut refresh_threads))?;
+            } else {
+                self.trace_graph(work)?;
+            }
+            self.refresh_gc_roots(work, fresh_cycle, &mut refresh_threads)?;
         }
+        // Pending callbacks preserve their graphs only after discovering newly
+        // finalizable userdata, including graphs attached after a callback error.
+        self.separate_userdata(false);
+        self.reserve_trace_work(work, self.gc.finalizers.iter().len())?;
+        work.extend(
+            self.gc
+                .finalizers
+                .iter()
+                .copied()
+                .map(|id| Trace::Userdata(id, false)),
+        );
+        self.trace_graph(work)?;
+        let metatable_end = self.clear_weak_tables();
+        if self.threads.has_unmarked() {
+            for thread in self.threads.unmarked_values() {
+                for &cell in &thread.open_upvalues {
+                    if let Cell::Open(_, r) = self.upvalues[cell as usize] {
+                        self.upvalues[cell as usize] = Cell::Closed(thread.registers[r]);
+                    }
+                }
+            }
+        }
+        // Existing unmarked tables cannot survive sweep. Attaching a
+        // metatable to a new table extends the bound at the point of the write.
+        self.gc.metatable_table_end = metatable_end;
+        self.protect_new_allocations(true);
+        self.gc.phase = Phase::Sweep;
+        self.gc.sweep_arena = 0;
+        self.gc.sweep_cursor = self.tables.len() as u32;
+        Ok(())
+    }
+
+    fn refresh_gc_roots(
+        &mut self,
+        work: &mut Work,
+        fresh_cycle: bool,
+        refresh_threads: &mut ThreadRefresh,
+    ) -> Result<(), Error> {
         // Snapshot the already reached containers before refreshing roots;
         // newly reached threads/cells still receive their ordinary first scan.
         let small_refresh = fresh_cycle.then(|| refresh_threads.ordered()).flatten();
@@ -1891,37 +1945,7 @@ impl Vm {
             }
         }
         self.seed_gc_roots(work);
-        self.trace_graph(work)?;
-        // Pending callbacks preserve their graphs only after discovering newly
-        // finalizable userdata, including graphs attached after a callback error.
-        self.separate_userdata(false);
-        self.reserve_trace_work(work, self.gc.finalizers.iter().len())?;
-        work.extend(
-            self.gc
-                .finalizers
-                .iter()
-                .copied()
-                .map(|id| Trace::Userdata(id, false)),
-        );
-        self.trace_graph(work)?;
-        let metatable_end = self.clear_weak_tables();
-        if self.threads.has_unmarked() {
-            for thread in self.threads.unmarked_values() {
-                for &cell in &thread.open_upvalues {
-                    if let Cell::Open(_, r) = self.upvalues[cell as usize] {
-                        self.upvalues[cell as usize] = Cell::Closed(thread.registers[r]);
-                    }
-                }
-            }
-        }
-        // Existing unmarked tables cannot survive sweep. Attaching a
-        // metatable to a new table extends the bound at the point of the write.
-        self.gc.metatable_table_end = metatable_end;
-        self.protect_new_allocations(true);
-        self.gc.phase = Phase::Sweep;
-        self.gc.sweep_arena = 0;
-        self.gc.sweep_cursor = self.tables.len() as u32;
-        Ok(())
+        self.trace_graph(work)
     }
     fn clear_weak_tables(&mut self) -> u32 {
         let mut metatable_end = 0;
